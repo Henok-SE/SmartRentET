@@ -6,9 +6,9 @@ import {
   EyeOff,
   ShieldCheck,
 } from "lucide-react";
-import "../../App.css";
+import "../App.css";
 
-function AdminLogin() {
+function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -35,7 +35,7 @@ function AdminLogin() {
           </div>
 
           <h1>SmartRent ET</h1>
-          <p>Government officer</p>
+          <p>Government portal</p>
         </div>
 
         {/* Login Form */}
@@ -119,5 +119,5 @@ function AdminLogin() {
   );
 }
 
-export default AdminLogin;
+export default Login;
 

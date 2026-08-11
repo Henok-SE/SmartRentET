@@ -1,15 +1,12 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-
-import AdminLogin from "./pages/auth/AdminLogin";
-import OfficerLogin from "./pages/auth/OfficerLogin";
+import Login from "./pages/Login";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<AdminLogin />} />
-        <Route path="/admin-login" element={<AdminLogin />} />
-        <Route path="/officer-login" element={<OfficerLogin />} />
+        <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
       </Routes>
     </BrowserRouter>
   );
