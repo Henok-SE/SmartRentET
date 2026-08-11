@@ -1,0 +1,139 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f7f8;
+}
+
+.login-card {
+  width: 420px;
+  background-color: #ffffff;
+  padding: 40px;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.admin-icon {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: #e6f7f2;
+  color: #06B485;
+}
+
+.login-header h1 {
+  color: #06B485;
+  font-size: 30px;
+  margin: 0 0 8px;
+}
+
+.login-header p {
+  color: #666666;
+  margin: 0;
+  font-size: 16px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #333333;
+  font-weight: 600;
+}
+
+.input-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d9dfe3;
+  border-radius: 8px;
+  padding: 0 12px;
+  background-color: white;
+}
+
+.input-with-icon:focus-within {
+  border-color: #06B485;
+}
+
+.input-with-icon svg {
+  color: #06B485;
+  flex-shrink: 0;
+}
+
+.input-with-icon input {
+  border: none;
+  outline: none;
+  width: 100%;
+  padding: 13px 0;
+  font-size: 15px;
+  background: transparent;
+}
+
+.password-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #777777;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.password-toggle:hover {
+  color: #06B485;
+}
+
+.login-button {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 8px;
+  background-color: #06B485;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 5px;
+}
+
+.login-button:hover {
+  background-color: #059c74;
+}
+.forgot-password-container {
+  text-align: center;
+  margin: -8px 0 20px;
+}
+
+.forgot-password {
+  border: none;
+  background: none;
+  color: #06B485;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+
+.forgot-password:hover {
+  text-decoration: underline;
+}
+
+.authorization-notice {
+  text-align: center;
+  margin-top: 18px;
+  color: #777777;
+  font-size: 12px;
+}
