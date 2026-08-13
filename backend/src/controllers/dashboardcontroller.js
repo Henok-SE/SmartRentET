@@ -28,19 +28,9 @@ const getContracts = (req, res) => {
   });
 };
 
-const getCompliance = (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Compliance records retrieved successfully',
-    data: {
-      underpayments: [],
-      unauthorizedRentIncreases: [],
-    },
-  });
-};
+
   
 module.exports = {
   getSummary,
   getContracts,
-  getCompliance,
 };
