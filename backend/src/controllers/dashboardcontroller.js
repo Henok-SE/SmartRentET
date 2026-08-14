@@ -65,9 +65,24 @@ const getReports = (req, res) => {
   });
 };
 
+const getNotifications = (req, res) => {
+  const { userId, isRead } = req.query;
+
+  res.status(200).json({
+    success: true,
+    message: 'Notifications retrieved successfully',
+    filters: {
+      userId,
+      isRead,
+    },
+    data: [],
+  });
+};
+
 module.exports = {
   getSummary,
   getContracts,
   getAuditLogs,
   getReports,
+  getNotifications,
 };
