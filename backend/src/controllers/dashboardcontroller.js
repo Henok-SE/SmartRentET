@@ -44,8 +44,30 @@ const getAuditLogs = (req, res) => {
   });
 };
   
+const getReports = (req, res) => {
+  const { subCity, startDate, endDate } = req.query;
+
+  res.status(200).json({
+    success: true,
+    message: 'Dashboard reports retrieved successfully',
+    filters: {
+      subCity,
+      startDate,
+      endDate,
+    },
+    data: {
+      totalRegisteredAgreements: 0,
+      activeAgreements: 0,
+      endedAgreements: 0,
+      paymentComplianceRate: 0,
+      verifiedRentalIncome: 0,
+    },
+  });
+};
+
 module.exports = {
   getSummary,
   getContracts,
   getAuditLogs,
+  getReports,
 };
