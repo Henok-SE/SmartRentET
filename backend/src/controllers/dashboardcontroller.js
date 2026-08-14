@@ -79,10 +79,25 @@ const getNotifications = (req, res) => {
   });
 };
 
+const getOfficers = (req, res) => {
+  const { subCity, isActive } = req.query;
+
+  res.status(200).json({
+    success: true,
+    message: 'Officers retrieved successfully',
+    filters: {
+      subCity,
+      isActive,
+    },
+    data: [],
+  });
+};
+
 module.exports = {
   getSummary,
   getContracts,
   getAuditLogs,
   getReports,
   getNotifications,
+  getOfficers,
 };

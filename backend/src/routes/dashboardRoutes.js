@@ -7,5 +7,6 @@ router.get('/contracts', dashboardController.getContracts);
 router.get('/audit-logs', dashboardController.getAuditLogs);
 router.get('/reports', dashboardController.getReports);
 router.get('/notifications', dashboardController.getNotifications);
+router.get('/officers', dashboardController.getOfficers);
 
 module.exports = router;
