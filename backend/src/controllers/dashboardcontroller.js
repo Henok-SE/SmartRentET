@@ -28,9 +28,24 @@ const getContracts = (req, res) => {
   });
 };
 
+const getAuditLogs = (req, res) => {
+  const { action, userId, startDate, endDate } = req.query;
 
+  res.status(200).json({
+    success: true,
+    message: 'Audit logs retrieved successfully',
+    filters: {
+      action,
+      userId,
+      startDate,
+      endDate,
+    },
+    data: [],
+  });
+};
   
 module.exports = {
   getSummary,
   getContracts,
+  getAuditLogs,
 };
