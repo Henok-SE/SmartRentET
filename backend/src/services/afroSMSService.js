@@ -45,7 +45,7 @@ const sendUSSD50BirrPayment = async (tenantPhone, agreementId) => {
 };
 
 const sendReferenceNumberSMS = async (tenantPhone, landlordPhone, referenceNumber) => {
-  const msg = `SmartRent: Your Rental Agreement is approved. Reference: ${referenceNumber}`;
+  const msg = `SmartRent: Your Rental Agreement is approved Reference: ${referenceNumber}`;
   await sendSMS(tenantPhone, msg);
   await sendSMS(landlordPhone, msg);
   return { success: true };
