@@ -197,7 +197,9 @@ model GovernmentFeePayment {
   paymentId     Int       @id @default(autoincrement())
   agreementId   Int       @unique
   landlordId    Int
+  tenantId      Int?
   amount        Decimal   @default(50)
+  currency      String    @default("ETB")
   status        String    @default("PENDING")
   transactionId String?
   paymentDate   DateTime?
