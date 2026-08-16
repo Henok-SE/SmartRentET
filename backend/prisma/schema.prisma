@@ -41,11 +41,13 @@ enum ApprovalType {
 model User {
   userId       Int      @id @default(autoincrement())
   firstName    String
+  middleName   String?
   lastName     String
   phone        String
   nationalId   String   @unique
-  username     String   @unique
-  passwordHash String
+  finNumber    String?
+  username     String?  @unique
+  passwordHash String?
   role         UserRole
   mfaEnabled   Boolean  @default(false)
   isActive     Boolean  @default(true)
@@ -56,6 +58,7 @@ model User {
   tenant              Tenant?
   systemAdministrator SystemAdministrator?
   officer             Officer?
+  auditLogs           AuditLog[]
 }
 
 model Landlord {
@@ -163,11 +166,57 @@ model RentalAgreement {
   renewedAgreements RentalAgreement[] @relation("AgreementRenewal")
 
   agreementApprovals AgreementApproval[]
+  ussdConsent        USSDConsent?
+  feePayment         GovernmentFeePayment?
 
   @@index([unitId])
   @@index([landlordId])
   @@index([tenantId])
   @@index([paymentFrequencyId])
+}
+
+model USSDConsent {
+  consentId                Int       @id @default(autoincrement())
+  agreementId              Int       @unique
+  tenantPhone              String
+  landlordPhone            String
+  tenantConsent            Boolean   @default(false)
+  landlordConsent          Boolean   @default(false)
+  tenantConsentDate        DateTime?
+  landlordConsentDate      DateTime?
+  tenantVerificationCode   String?
+  landlordVerificationCode String?
+  consentType              String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  agreement RentalAgreement @relation(fields: [agreementId], references: [agreementId])
+}
+
+model GovernmentFeePayment {
+  paymentId     Int       @id @default(autoincrement())
+  agreementId   Int       @unique
+  landlordId    Int
+  tenantId      Int?
+  amount        Decimal   @default(50)
+  currency      String    @default("ETB")
+  status        String    @default("PENDING")
+  transactionId String?
+  paymentDate   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  agreement RentalAgreement @relation(fields: [agreementId], references: [agreementId])
+}
+
+model OTP {
+  otpId     Int      @id @default(autoincrement())
+  userId    Int
+  code      String
+  type      String   @default("LOGIN")
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
 model PaymentFrequency {
@@ -209,3 +258,18 @@ model AgreementApproval {
   @@index([agreementId])
   @@index([officerId])
 }
+
+model AuditLog {
+  logId      Int      @id @default(autoincrement())
+  userId     Int
+  actionType String
+  entityType String
+  entityId   Int?
+  newValues  Json?
+  oldValues  Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [userId])
+}
+

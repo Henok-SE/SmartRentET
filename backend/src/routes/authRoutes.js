@@ -1,15 +1,14 @@
 const express = require('express');
 const authController = require('../controllers/authController');
-const { authenticate } = require('../middleware/auth');
-
-const router = express.Router();
+const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 
 router.post('/register', authController.register);
 router.post('/login', authController.login);
+router.post('/verify-otp', authController.verifyOTP);
 
-router.get('/me', authenticate, authController.getMe);
-router.post('/logout', authenticate, authController.logout);
-router.post('/refresh', authenticate, authController.refreshToken);
-router.post('/change-password', authenticate, authController.changePassword);
+router.get('/me', authenticateToken, authController.getMe);
+
+router.post('/system-admin', authenticateToken, authorizeRoles('SUPER_ADMIN'), authController.createSystemAdmin);
+router.post('/officer', authenticateToken, authorizeRoles('SYSTEM_ADMIN', 'SUPER_ADMIN'), authController.createOfficer);
 
 module.exports = router;

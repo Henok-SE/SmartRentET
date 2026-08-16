@@ -5,233 +5,68 @@ const userService = require('../services/userService');
 
 const register = async (req, res) => {
   try {
-    const user = await userService.createUser(req.body);
-
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      data: user
-    });
-
+    const result = await authService.registerUser(req.body);
+    res.status(201).json({ success: true, message: 'User registered successfully', data: result });
   } catch (error) {
-    if (error.message.includes('already exists')) {
-      return res.status(409).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    if (error.message.includes('required') ||
-        error.message.includes('format') ||
-        error.message.includes('Invalid')) {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    console.error('Registration error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error during registration'
-    });
+    res.status(400).json({ success: false, error: error.message });
   }
 };
 
 const login = async (req, res) => {
   try {
     const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Username and password are required'
-      });
+    const result = await authService.loginUser(username, password);
+    if (result.requiresOTP) {
+      return res.status(200).json({ success: true, requiresOTP: true, userId: result.userId, message: result.message });
     }
-
-    const user = await userService.getUserByUsername(username);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid username or password'
-      });
-    }
-
-    if (!user.isActive) {
-      return res.status(401).json({
-        success: false,
-        message: 'Account is disabled. Please contact administrator.'
-      });
-    }
-
-    const isPasswordValid = await userService.verifyPassword(password, user.passwordHash);
-
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid username or password'
-      });
-    }
-
-    const token = jwt.sign(
-      {
-        userId: user.userId,
-        username: user.username,
-        role: user.role
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
-
-    const userData = {
-      userId: user.userId,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      username: user.username,
-      phone: user.phone,
-      nationalId: user.nationalId,
-      role: user.role,
-      isActive: user.isActive
-    };
-
-    res.json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        token: token,
-        user: userData
-      }
-    });
-
+    res.status(200).json({ success: true, message: 'Login successful', data: result });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error during login'
-    });
+    res.status(401).json({ success: false, error: error.message });
+  }
+};
+
+const verifyOTP = async (req, res) => {
+  try {
+    const { userId, code } = req.body;
+    const result = await authService.verifyOTP(userId, code);
+    res.status(200).json({ success: true, message: 'OTP verified successfully', data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
   }
 };
 
 const getMe = async (req, res) => {
   try {
-    const user = await userService.getUserById(req.user.userId);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: user
-    });
-
+    const user = await authService.getUserById(req.user.userId);
+    res.status(200).json({ success: true, message: 'User profile retrieved', data: user });
   } catch (error) {
-    console.error('GetMe error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(404).json({ success: false, error: error.message });
   }
 };
 
-const logout = async (req, res) => {
-  res.json({
-    success: true,
-    message: 'Logged out successfully'
-  });
-};
-
-const refreshToken = async (req, res) => {
+const createSystemAdmin = async (req, res) => {
   try {
-    const token = jwt.sign(
-      {
-        userId: req.user.userId,
-        username: req.user.username,
-        role: req.user.role
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
-
-    res.json({
-      success: true,
-      data: { token }
-    });
-
+    const admin = await authService.createSystemAdmin(req.body, req.user.userId);
+    res.status(201).json({ success: true, message: 'System Admin created successfully', data: admin });
   } catch (error) {
-    console.error('Refresh token error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Could not refresh token'
-    });
+    res.status(400).json({ success: false, error: error.message });
   }
 };
 
-const changePassword = async (req, res) => {
+const createOfficer = async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: 'Current password and new password are required'
-      });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { userId: req.user.userId }
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    const isPasswordValid = await userService.verifyPassword(
-      currentPassword,
-      user.passwordHash
-    );
-
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Current password is incorrect'
-      });
-    }
-
-    const saltRounds = 10;
-    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
-
-    await prisma.user.update({
-      where: { userId: req.user.userId },
-      data: { passwordHash: newPasswordHash }
-    });
-
-    res.json({
-      success: true,
-      message: 'Password changed successfully'
-    });
-
+    const officer = await authService.createOfficer(req.body, req.user.userId);
+    res.status(201).json({ success: true, message: 'Officer created successfully', data: officer });
   } catch (error) {
-    console.error('Change password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(400).json({ success: false, error: error.message });
   }
 };
 
 module.exports = {
   register,
   login,
+  verifyOTP,
   getMe,
-  logout,
-  refreshToken,
-  changePassword
+  createSystemAdmin,
+  createOfficer
 };
