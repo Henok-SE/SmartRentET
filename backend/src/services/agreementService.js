@@ -7,6 +7,12 @@ const generateReferenceNumber = () => {
   return `RES-${year}-${String(randomStr).padStart(5, '0')}`;
 };
 
+const generateVerificationCode = () => {
+  const part1 = Math.floor(1000 + Math.random() * 9000);
+  const part2 = Math.floor(1000 + Math.random() * 9000);
+  return `${part1}-${part2}`;
+};
+
 const createAgreement = async (data) => {
   const {
     landlordFirstName, landlordMiddleName, landlordLastName,
@@ -39,9 +45,8 @@ const createAgreement = async (data) => {
     const landlord = await tx.landlord.create({
       data: {
         userId: landlordUser.userId,
-        address: landlordAddress,
-        subCity: landlordSubCity,
-        houseNumber: landlordHouseNumber,
+        address: landlordAddress || 'N/A',
+        houseNumber: landlordHouseNumber || 'N/A',
         bankAccountNumber: landlordBankAccount || null
       }
     });
@@ -67,11 +72,11 @@ const createAgreement = async (data) => {
     const property = await tx.property.create({
       data: {
         landlordId: landlord.landlordId,
-        location: propertyLocation,
-        subCity: propertySubCity,
+        location: propertyLocation || 'Addis Ababa',
+        subCity: propertySubCity || 'N/A',
         woreda: propertyWoreda || null,
-        houseNumber: propertyHouseNumber,
-        propertyType: propertyType,
+        houseNumber: propertyHouseNumber || 'N/A',
+        propertyType: propertyType || 'RESIDENTIAL',
         numberOfUnits: 1,
         status: 'AVAILABLE'
       }
@@ -80,26 +85,26 @@ const createAgreement = async (data) => {
     const unit = await tx.unit.create({
       data: {
         propertyId: property.propertyId,
-        unitNumber: unitNumber,
-        floor: unitFloor || 1,
+        unitNumber: unitNumber || '101',
+        floor: unitFloor ? Number(unitFloor) : 1,
         sizeSqMeters: 0,
-        bedrooms: unitBedrooms || 0,
-        bathrooms: unitBathrooms || 0,
+        bedrooms: unitBedrooms ? Number(unitBedrooms) : 0,
+        bathrooms: unitBathrooms ? Number(unitBathrooms) : 0,
         status: 'AVAILABLE',
-        rentAmountFloor: monthlyRent
+        rentAmountFloor: monthlyRent ? String(monthlyRent) : '0'
       }
     });
 
     let paymentFrequencyRecord = await tx.paymentFrequency.findUnique({
-      where: { name: paymentFrequency }
+      where: { name: paymentFrequency || 'MONTHLY' }
     });
 
     if (!paymentFrequencyRecord) {
       paymentFrequencyRecord = await tx.paymentFrequency.create({
         data: {
-          name: paymentFrequency,
-          minimumInterval: paymentFrequency === 'MONTHLY' ? 30 : paymentFrequency === 'WEEKLY' ? 7 : 90,
-          description: paymentFrequency + ' rent payments'
+          name: paymentFrequency || 'MONTHLY',
+          minimumInterval: (paymentFrequency === 'MONTHLY' || !paymentFrequency) ? 30 : paymentFrequency === 'WEEKLY' ? 7 : 90,
+          description: (paymentFrequency || 'MONTHLY') + ' rent payments'
         }
       });
     }
@@ -110,87 +115,130 @@ const createAgreement = async (data) => {
         landlordId: landlord.landlordId,
         tenantId: tenant.tenantId,
         paymentFrequencyId: paymentFrequencyRecord.frequencyId,
-        monthlyRent: monthlyRent,
-        securityDeposit: securityDeposit || null,
-        effectiveDate: new Date(effectiveDate),
-        status: 'PENDING'
+        monthlyRent: String(monthlyRent),
+        securityDeposit: securityDeposit ? String(securityDeposit) : null,
+        effectiveDate: new Date(effectiveDate || Date.now()),
+        status: 'DRAFT'
       }
     });
 
+    // Generate unique verification codes for each party
+    const tenantCode = generateVerificationCode();
+    const landlordCode = generateVerificationCode();
+
+    // Create USSD Consent record with verification codes
     await tx.uSSDConsent.create({
       data: {
         agreementId: agreement.agreementId,
         tenantPhone: tenantUser.phone,
         landlordPhone: landlordUser.phone,
+        tenantVerificationCode: tenantCode,
+        landlordVerificationCode: landlordCode,
         consentType: 'INITIAL'
       }
     });
 
-    await afroSMSService.sendUSSDConsent(tenantUser.phone, landlordUser.phone, agreement.agreementId);
+    // Send USSD with verification codes
+    await afroSMSService.sendUSSDConsentWithCode(
+      tenantUser.phone,
+      landlordUser.phone,
+      agreement.agreementId,
+      tenantCode,
+      landlordCode
+    );
 
     return agreement;
   });
 };
 
-const processUSSDConsent = async (agreementId, phone, response) => {
-  const consent = await prisma.uSSDConsent.findUnique({ where: { agreementId } });
+const processUSSDVerification = async (agreementId, phone, code) => {
+  const id = Number(agreementId);
+  const consent = await prisma.uSSDConsent.findUnique({ where: { agreementId: id } });
   if (!consent) throw new Error('Consent record not found');
 
   const isTenant = consent.tenantPhone === phone;
   const isLandlord = consent.landlordPhone === phone;
-  if (!isTenant && !isLandlord) throw new Error('Phone not authorized');
+  if (!isTenant && !isLandlord) throw new Error('Phone not authorized for this agreement');
 
-  const isAgree = response.toUpperCase() === 'YES' || response.toUpperCase() === 'OK';
-
-  if (!isAgree) {
-    await prisma.rentalAgreement.update({ where: { agreementId }, data: { status: 'REJECTED' } });
-    return { success: true, message: 'Agreement rejected by user' };
+  if (isTenant && consent.tenantConsent) {
+    throw new Error('You have already signed this agreement');
+  }
+  if (isLandlord && consent.landlordConsent) {
+    throw new Error('You have already signed this agreement');
   }
 
+  // Verify the code
+  if (isTenant && code !== consent.tenantVerificationCode) {
+    throw new Error('Invalid verification code. Please check your USSD message.');
+  }
+  if (isLandlord && code !== consent.landlordVerificationCode) {
+    throw new Error('Invalid verification code. Please check your USSD message.');
+  }
+
+  // Record consent
   if (isTenant) {
     await prisma.uSSDConsent.update({
-      where: { agreementId },
-      data: { tenantConsent: true, tenantConsentDate: new Date() }
+      where: { agreementId: id },
+      data: {
+        tenantConsent: true,
+        tenantConsentDate: new Date()
+      }
     });
   }
   if (isLandlord) {
     await prisma.uSSDConsent.update({
-      where: { agreementId },
-      data: { landlordConsent: true, landlordConsentDate: new Date() }
+      where: { agreementId: id },
+      data: {
+        landlordConsent: true,
+        landlordConsentDate: new Date()
+      }
     });
   }
 
-  const updated = await prisma.uSSDConsent.findUnique({ where: { agreementId } });
+  // Check if both have consented
+  const updated = await prisma.uSSDConsent.findUnique({ where: { agreementId: id } });
 
   if (updated.tenantConsent && updated.landlordConsent) {
-    await prisma.rentalAgreement.update({ where: { agreementId }, data: { status: 'PENDING_PAYMENT' } });
-    await afroSMSService.sendUSSD50BirrPayment(consent.landlordPhone, agreementId);
+    await prisma.rentalAgreement.update({
+      where: { agreementId: id },
+      data: { status: 'PENDING_REVIEW' }
+    });
+
+    // Send 50 Birr payment request to landlord
+    await afroSMSService.sendUSSD50BirrPayment(consent.landlordPhone, id);
 
     const agreement = await prisma.rentalAgreement.findUnique({
-      where: { agreementId },
+      where: { agreementId: id },
       include: { landlord: true }
     });
 
     await prisma.governmentFeePayment.create({
       data: {
-        agreementId: agreementId,
+        agreementId: id,
         landlordId: agreement.landlordId,
         amount: 50,
         status: 'PENDING'
       }
     });
 
-    return { success: true, message: 'Both parties consented. Payment request sent to landlord.' };
+    return {
+      success: true,
+      message: 'Both parties signed. Payment request sent to landlord.'
+    };
   }
 
-  return { success: true, message: 'Consent recorded. Waiting for other party.' };
+  return {
+    success: true,
+    message: 'Signature recorded. Waiting for other party.'
+  };
 };
 
 const process50BirrPayment = async (agreementId, phone, pin) => {
-  const consent = await prisma.uSSDConsent.findUnique({ where: { agreementId } });
+  const id = Number(agreementId);
+  const consent = await prisma.uSSDConsent.findUnique({ where: { agreementId: id } });
   if (!consent || consent.landlordPhone !== phone) throw new Error('Phone not authorized');
 
-  const fee = await prisma.governmentFeePayment.findUnique({ where: { agreementId } });
+  const fee = await prisma.governmentFeePayment.findUnique({ where: { agreementId: id } });
   if (!fee) throw new Error('Payment record not found');
   if (fee.status === 'PAID') throw new Error('Payment already completed');
 
@@ -199,13 +247,13 @@ const process50BirrPayment = async (agreementId, phone, pin) => {
   const txId = 'TXN-' + Date.now();
 
   await prisma.governmentFeePayment.update({
-    where: { agreementId },
+    where: { agreementId: id },
     data: { status: 'PAID', transactionId: txId, paymentDate: new Date() }
   });
 
   await prisma.rentalAgreement.update({
-    where: { agreementId },
-    data: { status: 'PENDING_APPROVAL' }
+    where: { agreementId: id },
+    data: { status: 'PENDING_REVIEW' }
   });
 
   return {
@@ -216,8 +264,9 @@ const process50BirrPayment = async (agreementId, phone, pin) => {
 };
 
 const getAgreementById = async (agreementId) => {
-  return prisma.rentalAgreement.findUnique({
-    where: { agreementId },
+  const id = Number(agreementId);
+  const agreement = await prisma.rentalAgreement.findUnique({
+    where: { agreementId: id },
     include: {
       unit: { include: { property: true } },
       landlord: { include: { user: true } },
@@ -234,8 +283,9 @@ const getAgreementById = async (agreementId) => {
 
 module.exports = {
   createAgreement,
-  processUSSDConsent,
+  processUSSDVerification,
   process50BirrPayment,
   getAgreementById,
-  generateReferenceNumber
+  generateReferenceNumber,
+  generateVerificationCode
 };

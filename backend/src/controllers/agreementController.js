@@ -1,10 +1,9 @@
-const prisma = require('../config/database');
+const prisma = require('../config/db');
 const agreementService = require('../services/agreementService');
-const { validateRequiredFields } = require('../utils/validation');
 
 const createAgreement = async (req, res) => {
   try {
-    if (req.user.role !== 'OFFICER') {
+    if (req.user.role !== 'OFFICER' && req.user.role !== 'SYSTEM_ADMIN' && req.user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         error: 'Only Officers can create rental agreements.'
@@ -14,7 +13,7 @@ const createAgreement = async (req, res) => {
     const agreement = await agreementService.createAgreement(req.body);
     res.status(201).json({
       success: true,
-      message: 'Agreement created. USSD consent requests sent.',
+      message: 'Agreement created. USSD verification codes sent.',
       data: agreement
     });
 
@@ -23,10 +22,11 @@ const createAgreement = async (req, res) => {
   }
 };
 
-const processUSSDConsent = async (req, res) => {
+const processUSSDVerification = async (req, res) => {
   try {
-    const { agreementId, phone, response } = req.body;
-    const result = await agreementService.processUSSDConsent(agreementId, phone, response);
+    const { agreementId, phone, code } = req.body;
+    const targetId = agreementId || req.params.id;
+    const result = await agreementService.processUSSDVerification(targetId, phone, code);
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -36,7 +36,8 @@ const processUSSDConsent = async (req, res) => {
 const process50BirrPayment = async (req, res) => {
   try {
     const { agreementId, phone, pin } = req.body;
-    const result = await agreementService.process50BirrPayment(agreementId, phone, pin);
+    const targetId = agreementId || req.params.id;
+    const result = await agreementService.process50BirrPayment(targetId, phone, pin);
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -54,7 +55,7 @@ const getAgreement = async (req, res) => {
 
 module.exports = {
   createAgreement,
-  processUSSDConsent,
+  processUSSDVerification,
   process50BirrPayment,
   getAgreement
 };
