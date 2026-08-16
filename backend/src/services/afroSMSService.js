@@ -1,9 +1,11 @@
 const prisma = require('../config/db');
 
 const generateVerificationCode = () => {
-  const part1 = Math.floor(1000 + Math.random() * 9000);
-  const part2 = Math.floor(1000 + Math.random() * 9000);
-  return `${part1}-${part2}`;
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const getCodeExpiry = () => {
+  return new Date(Date.now() + 10 * 60 * 1000);
 };
 
 const sendSMS = async (phone, message) => {
@@ -17,18 +19,18 @@ const sendUSSD = async (phone, message) => {
 };
 
 const sendOTP = async (phone, code) => {
-  return sendSMS(phone, `Your SmartRent verification code is: ${code}. Valid for 5 minutes.`);
+  return sendSMS(phone, `Your SmartRent verification code is: ${code}. Valid for 10 minutes.`);
 };
 
-const sendUSSDVerification = async (phone, agreementId, code) => {
-  const message = `SmartRent: Your Rental Agreement #${agreementId} verification code is: ${code}. Reply with this code to sign.`;
-  console.log(`📱 Sending USSD to ${phone}: ${message}`);
-  return { success: true, sessionId: 'USSD-' + Date.now(), phone, code };
+const sendUSSDVerification = async (phone, agreementId, code, expiresAt) => {
+  const message = `SmartRent: Agreement #${agreementId}. Your verification code is: ${code}. Valid for 10 minutes. Reply with this code to sign.`;
+  console.log(`Sending USSD to ${phone}: ${message}`);
+  return { success: true, sessionId: 'USSD-' + Date.now() };
 };
 
-const sendUSSDConsentWithCode = async (tenantPhone, landlordPhone, agreementId, tenantCode, landlordCode) => {
-  await sendUSSDVerification(tenantPhone, agreementId, tenantCode);
-  await sendUSSDVerification(landlordPhone, agreementId, landlordCode);
+const sendUSSDConsentWithCode = async (tenantPhone, landlordPhone, agreementId, tenantCode, landlordCode, tenantExpiry, landlordExpiry) => {
+  await sendUSSDVerification(tenantPhone, agreementId, tenantCode, tenantExpiry);
+  await sendUSSDVerification(landlordPhone, agreementId, landlordCode, landlordExpiry);
   return { success: true };
 };
 
@@ -39,7 +41,7 @@ const sendUSSDConsent = async (tenantPhone, landlordPhone, agreementId) => {
 };
 
 const sendUSSD50BirrPayment = async (tenantPhone, agreementId) => {
-  return sendUSSD(tenantPhone, `SmartRent: Pay 50 Birr government fee for Agreement #${agreementId}. Enter your Telebirr PIN.`);
+  return sendUSSD(tenantPhone, `SmartRent: Pay 50 Birr service fee for Agreement #${agreementId}. Enter your Telebirr PIN.`);
 };
 
 const sendReferenceNumberSMS = async (tenantPhone, landlordPhone, referenceNumber) => {
@@ -51,6 +53,7 @@ const sendReferenceNumberSMS = async (tenantPhone, landlordPhone, referenceNumbe
 
 module.exports = {
   generateVerificationCode,
+  getCodeExpiry,
   sendSMS,
   sendUSSD,
   sendOTP,

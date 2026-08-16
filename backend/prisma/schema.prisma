@@ -21,11 +21,13 @@ enum UserRole {
 enum AgreementStatus {
   DRAFT
   PENDING_REVIEW
+  PARTIES_VERIFIED
+  SERVICE_FEE_PENDING
   APPROVED
-  REJECTED
   ACTIVE
+  ENDED
   TERMINATED
-  EXPIRED
+  REJECTED
 }
 
 enum ApprovalDecision {
@@ -174,21 +176,22 @@ model RentalAgreement {
   @@index([tenantId])
   @@index([paymentFrequencyId])
 }
-
 model USSDConsent {
-  consentId                Int       @id @default(autoincrement())
-  agreementId              Int       @unique
-  tenantPhone              String
-  landlordPhone            String
-  tenantConsent            Boolean   @default(false)
-  landlordConsent          Boolean   @default(false)
-  tenantConsentDate        DateTime?
-  landlordConsentDate      DateTime?
-  tenantVerificationCode   String?
+  consentId          Int      @id @default(autoincrement())
+  agreementId        Int      @unique
+  tenantPhone        String
+  landlordPhone      String
+  tenantConsent      Boolean  @default(false)
+  landlordConsent    Boolean  @default(false)
+  tenantConsentDate  DateTime?
+  landlordConsentDate DateTime?
+  tenantVerificationCode String?
   landlordVerificationCode String?
-  consentType              String
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
+  tenantCodeExpiresAt  DateTime?
+  landlordCodeExpiresAt DateTime?
+  consentType        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   agreement RentalAgreement @relation(fields: [agreementId], references: [agreementId])
 }

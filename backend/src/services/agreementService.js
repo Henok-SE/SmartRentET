@@ -4,79 +4,121 @@ const afroSMSService = require('./afroSMSService');
 const generateReferenceNumber = () => {
   const year = new Date().getFullYear();
   const randomStr = Math.floor(1000 + Math.random() * 9000);
-  return `RES-${year}-${String(randomStr).padStart(5, '0')}`;
-};
-
-const generateVerificationCode = () => {
-  const part1 = Math.floor(1000 + Math.random() * 9000);
-  const part2 = Math.floor(1000 + Math.random() * 9000);
-  return `${part1}-${part2}`;
+  return `AGR-${year}-${String(randomStr).padStart(6, '0')}`;
 };
 
 const createAgreement = async (data) => {
   const {
-    landlordFirstName, landlordMiddleName, landlordLastName,
-    landlordPhone, landlordNationalId, landlordFinNumber,
-    landlordAddress, landlordSubCity, landlordHouseNumber, landlordBankAccount,
-    tenantFirstName, tenantMiddleName, tenantLastName,
-    tenantPhone, tenantNationalId,
-    propertyLocation, propertySubCity, propertyWoreda,
-    propertyHouseNumber, propertyType,
-    unitNumber, unitFloor, unitBedrooms, unitBathrooms,
-    monthlyRent, securityDeposit, effectiveDate, paymentFrequency
+    landlordFirstName,
+    landlordFatherName,
+    landlordGrandFatherName,
+    landlordPhone,
+    landlordNationalId,
+    landlordAddress,
+    landlordSubCity,
+    landlordWoreda,
+    landlordHouseNumber,
+    landlordBankAccount,
+    tenantFirstName,
+    tenantFatherName,
+    tenantGrandFatherName,
+    tenantPhone,
+    tenantNationalId,
+    tenantAddress,
+    tenantSubCity,
+    tenantWoreda,
+    tenantHouseNumber,
+    houseType,
+    houseNumber,
+    numberOfRooms,
+    numberOfKitchens,
+    numberOfDoors,
+    numberOfWindows,
+    furnitureDescription,
+    leaseDurationYears,
+    leaseDurationMonths,
+    leaseStartDate,
+    leaseEndDate,
+    rentAmount,
+    rentCondition,
+    paymentMethod,
+    amountPaidAtSigning,
+    effectiveDate
   } = data;
 
   return prisma.$transaction(async (tx) => {
-    const landlordUser = await tx.user.create({
-      data: {
-        firstName: landlordFirstName,
-        middleName: landlordMiddleName || null,
-        lastName: landlordLastName,
-        phone: landlordPhone,
-        nationalId: landlordNationalId,
-        finNumber: landlordFinNumber || null,
-        username: null,
-        passwordHash: null,
-        role: 'LANDLORD',
-        isActive: true
-      }
+    let landlordUser = await tx.user.findUnique({
+      where: { nationalId: landlordNationalId }
     });
 
-    const landlord = await tx.landlord.create({
-      data: {
-        userId: landlordUser.userId,
-        address: landlordAddress || 'N/A',
-        houseNumber: landlordHouseNumber || 'N/A',
-        bankAccountNumber: landlordBankAccount || null
-      }
+    if (!landlordUser) {
+      landlordUser = await tx.user.create({
+        data: {
+          firstName: landlordFirstName,
+          middleName: landlordFatherName,
+          lastName: landlordGrandFatherName,
+          phone: landlordPhone,
+          nationalId: landlordNationalId,
+          username: null,
+          passwordHash: null,
+          role: 'LANDLORD',
+          isActive: true
+        }
+      });
+
+      await tx.landlord.create({
+        data: {
+          userId: landlordUser.userId,
+          address: landlordAddress || 'N/A',
+          subCity: landlordSubCity || 'N/A',
+          houseNumber: landlordHouseNumber || 'N/A',
+          bankAccountNumber: landlordBankAccount || null
+        }
+      });
+    }
+
+    let tenantUser = await tx.user.findUnique({
+      where: { nationalId: tenantNationalId }
     });
 
-    const tenantUser = await tx.user.create({
-      data: {
-        firstName: tenantFirstName,
-        middleName: tenantMiddleName || null,
-        lastName: tenantLastName,
-        phone: tenantPhone,
-        nationalId: tenantNationalId,
-        username: null,
-        passwordHash: null,
-        role: 'TENANT',
-        isActive: true
-      }
+    if (!tenantUser) {
+      tenantUser = await tx.user.create({
+        data: {
+          firstName: tenantFirstName,
+          middleName: tenantFatherName,
+          lastName: tenantGrandFatherName,
+          phone: tenantPhone,
+          nationalId: tenantNationalId,
+          username: null,
+          passwordHash: null,
+          role: 'TENANT',
+          isActive: true
+        }
+      });
+
+      await tx.tenant.create({
+        data: {
+          userId: tenantUser.userId
+        }
+      });
+    }
+
+    const landlord = await tx.landlord.findUnique({
+      where: { userId: landlordUser.userId }
     });
 
-    const tenant = await tx.tenant.create({
-      data: { userId: tenantUser.userId }
+    const tenant = await tx.tenant.findUnique({
+      where: { userId: tenantUser.userId }
     });
 
     const property = await tx.property.create({
       data: {
         landlordId: landlord.landlordId,
-        location: propertyLocation || 'Addis Ababa',
-        subCity: propertySubCity || 'N/A',
-        woreda: propertyWoreda || null,
-        houseNumber: propertyHouseNumber || 'N/A',
-        propertyType: propertyType || 'RESIDENTIAL',
+        location: landlordAddress || 'Addis Ababa',
+        subCity: landlordSubCity || 'N/A',
+        woreda: landlordWoreda || null,
+        houseNumber: houseNumber || 'N/A',
+        propertyType: houseType || 'RESIDENTIAL',
         numberOfUnits: 1,
         status: 'AVAILABLE'
       }
@@ -85,28 +127,37 @@ const createAgreement = async (data) => {
     const unit = await tx.unit.create({
       data: {
         propertyId: property.propertyId,
-        unitNumber: unitNumber || '101',
-        floor: unitFloor ? Number(unitFloor) : 1,
+        unitNumber: houseNumber || '101',
+        floor: 1,
         sizeSqMeters: 0,
-        bedrooms: unitBedrooms ? Number(unitBedrooms) : 0,
-        bathrooms: unitBathrooms ? Number(unitBathrooms) : 0,
+        bedrooms: numberOfRooms ? Number(numberOfRooms) : 0,
+        bathrooms: 0,
         status: 'AVAILABLE',
-        rentAmountFloor: monthlyRent ? String(monthlyRent) : '0'
+        rentAmountFloor: rentAmount ? String(rentAmount) : '0'
       }
     });
 
     let paymentFrequencyRecord = await tx.paymentFrequency.findUnique({
-      where: { name: paymentFrequency || 'MONTHLY' }
+      where: { name: 'MONTHLY' }
     });
 
     if (!paymentFrequencyRecord) {
       paymentFrequencyRecord = await tx.paymentFrequency.create({
         data: {
-          name: paymentFrequency || 'MONTHLY',
-          minimumInterval: (paymentFrequency === 'MONTHLY' || !paymentFrequency) ? 30 : paymentFrequency === 'WEEKLY' ? 7 : 90,
-          description: (paymentFrequency || 'MONTHLY') + ' rent payments'
+          name: 'MONTHLY',
+          minimumInterval: 30,
+          description: 'Monthly rent payments'
         }
       });
+    }
+
+    let startDate = new Date(leaseStartDate || effectiveDate || Date.now());
+    let endDate = leaseEndDate ? new Date(leaseEndDate) : null;
+
+    if (!endDate && leaseDurationYears && leaseDurationMonths) {
+      endDate = new Date(startDate);
+      endDate.setFullYear(endDate.getFullYear() + Number(leaseDurationYears));
+      endDate.setMonth(endDate.getMonth() + Number(leaseDurationMonths));
     }
 
     const agreement = await tx.rentalAgreement.create({
@@ -115,18 +166,42 @@ const createAgreement = async (data) => {
         landlordId: landlord.landlordId,
         tenantId: tenant.tenantId,
         paymentFrequencyId: paymentFrequencyRecord.frequencyId,
-        monthlyRent: String(monthlyRent),
-        securityDeposit: securityDeposit ? String(securityDeposit) : null,
-        effectiveDate: new Date(effectiveDate || Date.now()),
-        status: 'DRAFT'
+        monthlyRent: String(rentAmount),
+        securityDeposit: null,
+        effectiveDate: new Date(effectiveDate || startDate),
+        terminationDate: endDate,
+        status: 'PENDING_REVIEW',
+        notes: JSON.stringify({
+          landlordFullName: {
+            firstName: landlordFirstName,
+            fatherName: landlordFatherName,
+            grandFatherName: landlordGrandFatherName
+          },
+          tenantFullName: {
+            firstName: tenantFirstName,
+            fatherName: tenantFatherName,
+            grandFatherName: tenantGrandFatherName
+          },
+          houseType: houseType || 'N/A',
+          numberOfRooms: numberOfRooms || 0,
+          numberOfKitchens: numberOfKitchens || 0,
+          numberOfDoors: numberOfDoors || 0,
+          numberOfWindows: numberOfWindows || 0,
+          furnitureDescription: furnitureDescription || 'N/A',
+          rentCondition: rentCondition || 'N/A',
+          leaseDurationYears: leaseDurationYears || 0,
+          leaseDurationMonths: leaseDurationMonths || 12,
+          paymentMethod: paymentMethod || 'TELEBIRR',
+          amountPaidAtSigning: amountPaidAtSigning || 0
+        })
       }
     });
 
-    // Generate unique verification codes for each party
-    const tenantCode = generateVerificationCode();
-    const landlordCode = generateVerificationCode();
+    const tenantCode = afroSMSService.generateVerificationCode();
+    const landlordCode = afroSMSService.generateVerificationCode();
+    const tenantExpiry = afroSMSService.getCodeExpiry();
+    const landlordExpiry = afroSMSService.getCodeExpiry();
 
-    // Create USSD Consent record with verification codes
     await tx.uSSDConsent.create({
       data: {
         agreementId: agreement.agreementId,
@@ -134,17 +209,20 @@ const createAgreement = async (data) => {
         landlordPhone: landlordUser.phone,
         tenantVerificationCode: tenantCode,
         landlordVerificationCode: landlordCode,
+        tenantCodeExpiresAt: tenantExpiry,
+        landlordCodeExpiresAt: landlordExpiry,
         consentType: 'INITIAL'
       }
     });
 
-    // Send USSD with verification codes
     await afroSMSService.sendUSSDConsentWithCode(
       tenantUser.phone,
       landlordUser.phone,
       agreement.agreementId,
       tenantCode,
-      landlordCode
+      landlordCode,
+      tenantExpiry,
+      landlordExpiry
     );
 
     return agreement;
@@ -167,15 +245,24 @@ const processUSSDVerification = async (agreementId, phone, code) => {
     throw new Error('You have already signed this agreement');
   }
 
-  // Verify the code
-  if (isTenant && code !== consent.tenantVerificationCode) {
-    throw new Error('Invalid verification code. Please check your USSD message.');
-  }
-  if (isLandlord && code !== consent.landlordVerificationCode) {
-    throw new Error('Invalid verification code. Please check your USSD message.');
+  if (isTenant) {
+    if (code !== consent.tenantVerificationCode) {
+      throw new Error('Invalid verification code. Please check your USSD message.');
+    }
+    if (new Date() > consent.tenantCodeExpiresAt) {
+      throw new Error('Verification code has expired. Please request a new one.');
+    }
   }
 
-  // Record consent
+  if (isLandlord) {
+    if (code !== consent.landlordVerificationCode) {
+      throw new Error('Invalid verification code. Please check your USSD message.');
+    }
+    if (new Date() > consent.landlordCodeExpiresAt) {
+      throw new Error('Verification code has expired. Please request a new one.');
+    }
+  }
+
   if (isTenant) {
     await prisma.uSSDConsent.update({
       where: { agreementId: id },
@@ -195,21 +282,19 @@ const processUSSDVerification = async (agreementId, phone, code) => {
     });
   }
 
-  // Check if both have consented
   const updated = await prisma.uSSDConsent.findUnique({ where: { agreementId: id } });
 
   if (updated.tenantConsent && updated.landlordConsent) {
     await prisma.rentalAgreement.update({
       where: { agreementId: id },
-      data: { status: 'PENDING_PAYMENT' }
+      data: { status: 'PARTIES_VERIFIED' }
     });
 
-    // Send 50 Birr payment request to TENANT
     await afroSMSService.sendUSSD50BirrPayment(consent.tenantPhone, id);
 
     const agreement = await prisma.rentalAgreement.findUnique({
       where: { agreementId: id },
-      include: { landlord: true }
+      include: { landlord: true, tenant: true }
     });
 
     await prisma.governmentFeePayment.create({
@@ -224,13 +309,13 @@ const processUSSDVerification = async (agreementId, phone, code) => {
 
     return {
       success: true,
-      message: 'Both parties signed. Payment request sent to tenant.'
+      message: 'Both parties verified. Payment request sent to tenant.'
     };
   }
 
   return {
     success: true,
-    message: 'Signature recorded. Waiting for other party.'
+    message: 'Verification recorded. Waiting for other party.'
   };
 };
 
@@ -254,7 +339,7 @@ const process50BirrPayment = async (agreementId, phone, pin) => {
 
   await prisma.rentalAgreement.update({
     where: { agreementId: id },
-    data: { status: 'PENDING_APPROVAL' }
+    data: { status: 'SERVICE_FEE_PENDING' }
   });
 
   return {
@@ -287,6 +372,5 @@ module.exports = {
   processUSSDVerification,
   process50BirrPayment,
   getAgreementById,
-  generateReferenceNumber,
-  generateVerificationCode
+  generateReferenceNumber
 };
