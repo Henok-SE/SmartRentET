@@ -201,11 +201,11 @@ const processUSSDVerification = async (agreementId, phone, code) => {
   if (updated.tenantConsent && updated.landlordConsent) {
     await prisma.rentalAgreement.update({
       where: { agreementId: id },
-      data: { status: 'PENDING_REVIEW' }
+      data: { status: 'PENDING_PAYMENT' }
     });
 
-    // Send 50 Birr payment request to landlord
-    await afroSMSService.sendUSSD50BirrPayment(consent.landlordPhone, id);
+    // Send 50 Birr payment request to TENANT
+    await afroSMSService.sendUSSD50BirrPayment(consent.tenantPhone, id);
 
     const agreement = await prisma.rentalAgreement.findUnique({
       where: { agreementId: id },
@@ -216,6 +216,7 @@ const processUSSDVerification = async (agreementId, phone, code) => {
       data: {
         agreementId: id,
         landlordId: agreement.landlordId,
+        tenantId: agreement.tenantId,
         amount: 50,
         status: 'PENDING'
       }
@@ -223,7 +224,7 @@ const processUSSDVerification = async (agreementId, phone, code) => {
 
     return {
       success: true,
-      message: 'Both parties signed. Payment request sent to landlord.'
+      message: 'Both parties signed. Payment request sent to tenant.'
     };
   }
 
@@ -236,7 +237,7 @@ const processUSSDVerification = async (agreementId, phone, code) => {
 const process50BirrPayment = async (agreementId, phone, pin) => {
   const id = Number(agreementId);
   const consent = await prisma.uSSDConsent.findUnique({ where: { agreementId: id } });
-  if (!consent || consent.landlordPhone !== phone) throw new Error('Phone not authorized');
+  if (!consent || consent.tenantPhone !== phone) throw new Error('Phone not authorized');
 
   const fee = await prisma.governmentFeePayment.findUnique({ where: { agreementId: id } });
   if (!fee) throw new Error('Payment record not found');
@@ -253,12 +254,12 @@ const process50BirrPayment = async (agreementId, phone, pin) => {
 
   await prisma.rentalAgreement.update({
     where: { agreementId: id },
-    data: { status: 'PENDING_REVIEW' }
+    data: { status: 'PENDING_APPROVAL' }
   });
 
   return {
     success: true,
-    message: '50 Birr paid successfully. Waiting for officer approval.',
+    message: '50 Birr paid successfully by tenant. Waiting for officer approval.',
     transactionId: txId
   };
 };

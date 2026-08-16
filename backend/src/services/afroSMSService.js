@@ -38,8 +38,8 @@ const sendUSSDConsent = async (tenantPhone, landlordPhone, agreementId) => {
   return { success: true };
 };
 
-const sendUSSD50BirrPayment = async (landlordPhone, agreementId) => {
-  return sendUSSD(landlordPhone, `SmartRent: Pay 50 Birr government fee for Agreement #${agreementId}. Reply with your Telebirr PIN.`);
+const sendUSSD50BirrPayment = async (tenantPhone, agreementId) => {
+  return sendUSSD(tenantPhone, `SmartRent: Pay 50 Birr government fee for Agreement #${agreementId}. Enter your Telebirr PIN.`);
 };
 
 const sendReferenceNumberSMS = async (tenantPhone, landlordPhone, referenceNumber) => {
