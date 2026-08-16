@@ -1,11 +1,16 @@
 const express = require('express');
+const approvalController = require('../controllers/approvalController');
+const { authenticate } = require('../middleware/auth');
+const { requireOfficerOrAdmin } = require('../middleware/role');
+
 const router = express.Router();
-const agreementController = require('../controllers/agreementController');
+const approvalController = require('../controllers/approvalController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 
-router.use(authenticateToken);
+router.use(authenticate);
 
-// Approval history / direct approval endpoint
-router.post('/:id', authorizeRoles('OFFICER', 'ADMIN'), agreementController.approveOrReject);
+router.post('/:id/approve', authorizeRoles('OFFICER'), approvalController.approveAgreement);
+router.post('/:id/reject', authorizeRoles('OFFICER'), approvalController.rejectAgreement);
+router.get('/:id/history', approvalController.getApprovalHistory);
 
 module.exports = router;
