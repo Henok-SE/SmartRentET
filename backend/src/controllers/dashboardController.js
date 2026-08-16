@@ -1,14 +1,36 @@
-const getSummary = (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Dashboard summary retrieved successfully',
-    data: {
-      totalAgreements: 0,
-      activeAgreements: 0,
-      pendingReview: 0,
-      flaggedContracts: 0,
-    },
-  });
+const dashboardService = require('../services/dashboardService');
+const getSummary = async (req, res) => {
+  try {
+    const data = await dashboardService.getSummary();
+
+    res.status(200).json({
+      success: true,
+      message: 'Dashboard summary retrieved successfully',
+      data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve dashboard summary',
+    });
+  }
+};
+
+const getSuperAdmins = async (req, res) => {
+  try {
+    const data = await dashboardService.getSuperAdmins();
+
+    res.status(200).json({
+      success: true,
+      message: 'Super Admins retrieved successfully',
+      data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve Super Admins',
+    });
+  }
 };
 
 const getContracts = (req, res) => {
@@ -95,6 +117,7 @@ const getOfficers = (req, res) => {
 
 module.exports = {
   getSummary,
+  getSuperAdmins,
   getContracts,
   getAuditLogs,
   getReports,
