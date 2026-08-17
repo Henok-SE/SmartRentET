@@ -10,7 +10,15 @@ type AdminForm = {
   nationalId: string;
   password: string;
   employeeId: string;
-  officeId: string;
+   office: {
+    officeName: string;
+    officeCode: string;
+    region: string;
+    city: string;
+    subCity: string;
+    woreda: string;
+    address: string;
+  };
 };
 
 type StoredUser = {
@@ -36,7 +44,15 @@ function SuperAdminDashboard() {
     nationalId: "",
     password: "",
     employeeId: "",
-    officeId: "1",
+   office: {
+    officeName: "",
+    officeCode: "",
+    region: "",
+    city: "",
+    subCity: "",
+    woreda: "",
+    address: "",
+  },
   });
 
   /*
@@ -83,15 +99,29 @@ function SuperAdminDashboard() {
    */
 
   const handleChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const { name, value } = event.target;
+  event: React.ChangeEvent<HTMLInputElement>
+) => {
+  const { name, value } = event.target;
 
-    setForm((previous) => ({
-      ...previous,
+  setForm((previous) => ({
+    ...previous,
+    [name]: value,
+  }));
+};
+
+const handleOfficeChange = (
+  event: React.ChangeEvent<HTMLInputElement>
+) => {
+  const { name, value } = event.target;
+
+  setForm((previous) => ({
+    ...previous,
+    office: {
+      ...previous.office,
       [name]: value,
-    }));
-  };
+    },
+  }));
+};
 
   const openCreateAdmin = () => {
     setError("");
@@ -105,7 +135,15 @@ function SuperAdminDashboard() {
       nationalId: "",
       password: "",
       employeeId: "",
-      officeId: "1",
+      office: {
+  officeName: "",
+  officeCode: "",
+  region: "",
+  city: "",
+  subCity: "",
+  woreda: "",
+  address: "",
+},
     });
 
     setShowCreateAdmin(true);
@@ -163,7 +201,15 @@ function SuperAdminDashboard() {
   role: "OFFICE_ADMIN",
   profileData: {
     employeeId: form.employeeId.trim(),
-    officeId: Number(form.officeId),
+    office: {
+    officeName: form.office.officeName.trim(),
+    officeCode: form.office.officeCode.trim(),
+    region: form.office.region.trim(),
+    city: form.office.city.trim(),
+    subCity: form.office.subCity.trim(),
+    woreda: form.office.woreda.trim(),
+    address: form.office.address.trim(),
+  },
   },
 }),
         }
@@ -189,7 +235,15 @@ function SuperAdminDashboard() {
         nationalId: "",
         password: "",
         employeeId: "",
-        officeId: "1",
+        office: {
+    officeName: "",
+    officeCode: "",
+    region: "",
+    city: "",
+    subCity: "",
+    woreda: "",
+    address: "",
+  },
       });
 
       setTimeout(() => {
@@ -762,28 +816,148 @@ function SuperAdminDashboard() {
   />
 
 </div>
-     <div className="super-admin-form-group">
-  <label htmlFor="admin-officeId">
-    Government Office
-  </label>
+     {/* Government Office Information */}
 
-  <select
-    id="admin-officeId"
-    name="officeId"
-    value={form.officeId}
-    onChange={(event) =>
-      setForm((previous) => ({
-        ...previous,
-        officeId: event.target.value,
-      }))
-    }
-    disabled={loading}
-    required
-  >
-    <option value="1">
-      ADDIS-001 — Addis Ababa Rental Office
-    </option>
-  </select>
+<div className="super-admin-form-section">
+  <div className="super-admin-form-section-header">
+    <span className="super-admin-section-eyebrow">
+      GOVERNMENT OFFICE
+    </span>
+
+    <h3>Government Office Information</h3>
+
+    <p>
+      Enter the government office assigned to this Office Administrator.
+    </p>
+  </div>
+
+  <div className="super-admin-form-group">
+    <label htmlFor="admin-officeName">
+      Office Name
+    </label>
+
+    <input
+      id="admin-officeName"
+      name="officeName"
+      type="text"
+      value={form.office.officeName}
+      onChange={handleOfficeChange}
+      placeholder="e.g. Addis Ababa Rental Office"
+      disabled={loading}
+      required
+    />
+  </div>
+
+  <div className="super-admin-form-group">
+    <label htmlFor="admin-officeCode">
+      Office Code
+    </label>
+
+    <input
+      id="admin-officeCode"
+      name="officeCode"
+      type="text"
+      value={form.office.officeCode}
+      onChange={handleOfficeChange}
+      placeholder="e.g. ADDIS-001"
+      disabled={loading}
+      required
+    />
+  </div>
+
+  <div className="super-admin-form-row">
+
+    <div className="super-admin-form-group">
+      <label htmlFor="admin-region">
+        Region
+      </label>
+
+      <input
+        id="admin-region"
+        name="region"
+        type="text"
+        value={form.office.region}
+        onChange={handleOfficeChange}
+        placeholder="e.g. Addis Ababa"
+        disabled={loading}
+        required
+      />
+    </div>
+
+    <div className="super-admin-form-group">
+      <label htmlFor="admin-city">
+        City
+      </label>
+
+      <input
+        id="admin-city"
+        name="city"
+        type="text"
+        value={form.office.city}
+        onChange={handleOfficeChange}
+        placeholder="e.g. Addis Ababa"
+        disabled={loading}
+        required
+      />
+    </div>
+
+  </div>
+
+  <div className="super-admin-form-row">
+
+    <div className="super-admin-form-group">
+      <label htmlFor="admin-subCity">
+        Sub-City
+      </label>
+
+      <input
+        id="admin-subCity"
+        name="subCity"
+        type="text"
+        value={form.office.subCity}
+        onChange={handleOfficeChange}
+        placeholder="e.g. Bole"
+        disabled={loading}
+        required
+      />
+    </div>
+
+    <div className="super-admin-form-group">
+      <label htmlFor="admin-woreda">
+        Woreda
+      </label>
+
+      <input
+        id="admin-woreda"
+        name="woreda"
+        type="text"
+        value={form.office.woreda}
+        onChange={handleOfficeChange}
+        placeholder="e.g. 03"
+        disabled={loading}
+        required
+      />
+    </div>
+
+  </div>
+
+  <div className="super-admin-form-group">
+    <label htmlFor="admin-address">
+      Address
+    </label>
+
+    <input
+      id="admin-address"
+      name="address"
+      type="text"
+      value={form.office.address}
+      onChange={handleOfficeChange}
+      placeholder="Enter office address"
+      disabled={loading}
+      required
+    />
+  </div>
+
 </div>
               {/* Phone */}
 
