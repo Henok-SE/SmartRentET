@@ -5,15 +5,17 @@ import { useNavigate } from "react-router-dom";
 function CreateAdmin() {
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    nationalId: "",
-    username: "",
-    password: "",
-    confirmPassword: "",
-  });
+ const [form, setForm] = useState({
+  firstName: "",
+  lastName: "",
+  phone: "",
+  nationalId: "",
+  username: "",
+  password: "",
+  confirmPassword: "",
+  employeeId: "",
+  officeId: "1",
+});
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -62,14 +64,18 @@ function CreateAdmin() {
               : {}),
           },
           body: JSON.stringify({
-            firstName: form.firstName,
-            lastName: form.lastName,
-            phone: form.phone,
-            nationalId: form.nationalId,
-            username: form.username,
-            password: form.password,
-            role: "OFFICE_ADMIN",
-          }),
+  firstName: form.firstName,
+  lastName: form.lastName,
+  phone: form.phone,
+  nationalId: form.nationalId,
+  username: form.username,
+  password: form.password,
+  role: "OFFICE_ADMIN",
+  profileData: {
+    employeeId: form.employeeId,
+    officeId: Number(form.officeId),
+  },
+}),
         }
       );
 
@@ -89,6 +95,8 @@ function CreateAdmin() {
         username: "",
         password: "",
         confirmPassword: "",
+        employeeId: "",
+        officeId: "1",
       });
 
       setTimeout(() => {
@@ -216,6 +224,44 @@ function CreateAdmin() {
               required
             />
           </div>
+          <div className="form-group">
+  <label htmlFor="employeeId">
+    Employee ID
+  </label>
+
+  <input
+    id="employeeId"
+    name="employeeId"
+    type="text"
+    value={form.employeeId}
+    onChange={handleChange}
+    placeholder="e.g. EMP-001"
+    required
+  />
+</div>
+    <div className="form-group">
+  <label htmlFor="officeId">
+    Government Office
+  </label>
+
+  <select
+    id="officeId"
+    name="officeId"
+    value={form.officeId}
+    onChange={(event) =>
+      setForm((previous) => ({
+        ...previous,
+        officeId: event.target.value,
+      }))
+    }
+    disabled={loading}
+    required
+  >
+    <option value="1">
+      ADDIS-001 — Addis Ababa Rental Office
+    </option>
+  </select>
+</div>
 
           <div className="form-group">
             <label htmlFor="password">

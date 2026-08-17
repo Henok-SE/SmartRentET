@@ -9,6 +9,8 @@ type AdminForm = {
   phone: string;
   nationalId: string;
   password: string;
+  employeeId: string;
+  officeId: string;
 };
 
 type StoredUser = {
@@ -33,6 +35,8 @@ function SuperAdminDashboard() {
     phone: "",
     nationalId: "",
     password: "",
+    employeeId: "",
+    officeId: "1",
   });
 
   /*
@@ -100,6 +104,8 @@ function SuperAdminDashboard() {
       phone: "",
       nationalId: "",
       password: "",
+      employeeId: "",
+      officeId: "1",
     });
 
     setShowCreateAdmin(true);
@@ -147,15 +153,19 @@ function SuperAdminDashboard() {
               : {}),
           },
 
-          body: JSON.stringify({
-            firstName: form.firstName.trim(),
-            lastName: form.lastName.trim(),
-            phone: form.phone.trim(),
-            nationalId: form.nationalId.trim(),
-            username: form.username.trim(),
-            password: form.password,
-            role: "OFFICE_ADMIN",
-          }),
+         body: JSON.stringify({
+  firstName: form.firstName.trim(),
+  lastName: form.lastName.trim(),
+  phone: form.phone.trim(),
+  nationalId: form.nationalId.trim(),
+  username: form.username.trim(),
+  password: form.password,
+  role: "OFFICE_ADMIN",
+  profileData: {
+    employeeId: form.employeeId.trim(),
+    officeId: Number(form.officeId),
+  },
+}),
         }
       );
 
@@ -178,6 +188,8 @@ function SuperAdminDashboard() {
         phone: "",
         nationalId: "",
         password: "",
+        employeeId: "",
+        officeId: "1",
       });
 
       setTimeout(() => {
@@ -732,8 +744,47 @@ function SuperAdminDashboard() {
                 />
 
               </div>
+              <div className="super-admin-form-group">
 
+  <label htmlFor="admin-employeeId">
+    Employee ID
+  </label>
 
+  <input
+    id="admin-employeeId"
+    name="employeeId"
+    type="text"
+    value={form.employeeId}
+    onChange={handleChange}
+    placeholder="Enter employee ID"
+    disabled={loading}
+    required
+  />
+
+</div>
+     <div className="super-admin-form-group">
+  <label htmlFor="admin-officeId">
+    Government Office
+  </label>
+
+  <select
+    id="admin-officeId"
+    name="officeId"
+    value={form.officeId}
+    onChange={(event) =>
+      setForm((previous) => ({
+        ...previous,
+        officeId: event.target.value,
+      }))
+    }
+    disabled={loading}
+    required
+  >
+    <option value="1">
+      ADDIS-001 — Addis Ababa Rental Office
+    </option>
+  </select>
+</div>
               {/* Phone */}
 
               <div className="super-admin-form-group">

@@ -70,6 +70,23 @@ const registerUser = async (userData) => {
           employer: profileData.employer || null
         }
       });
+      } else if (user.role === 'OFFICE_ADMIN') {
+  await tx.officeAdmin.create({
+    data: {
+      user: {
+        connect: {
+          userId: user.userId
+        }
+      },
+      office: {
+        connect: {
+          officeId: Number(profileData.officeId)
+        }
+      },
+      employeeId: profileData.employeeId
+    }
+  });
+} else if (user.role === 'OFFICER') {
     } else if (user.role === 'OFFICER') {
   await tx.officer.create({
     data: {
