@@ -16,6 +16,8 @@ function AdminDashboard() {
     password: "",
     employeeId: "",
     subCity: "",
+    assignedTo: "",
+    officeId: "1",
   });
 
   const storedUser = localStorage.getItem("user");
@@ -65,80 +67,85 @@ function AdminDashboard() {
     }
   };
 
-  const handleCreateOfficer = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault();
+ const handleCreateOfficer = async (
+  event: React.FormEvent<HTMLFormElement>
+) => {
+  event.preventDefault();
 
-    setError("");
-    setSuccess("");
-    setLoading(true);
+  setError("");
+  setSuccess("");
+  setLoading(true);
 
-    try {
-      const token = localStorage.getItem("token");
+  try {
+    const token = localStorage.getItem("token");
 
-      const response = await fetch(
-        "http://localhost:5000/api/auth/register",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : {}),
-          },
-          body: JSON.stringify({
-            firstName: form.firstName,
-            lastName: form.lastName,
-            phone: form.phone,
-            nationalId: form.nationalId,
-            username: form.username,
-            password: form.password,
-            role: "OFFICER",
+    const response = await fetch(
+      "http://localhost:5000/api/auth/register",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {}),
+        },
+        body: JSON.stringify({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          phone: form.phone,
+          nationalId: form.nationalId,
+          username: form.username,
+          password: form.password,
+          role: "OFFICER",
+          profileData: {
             employeeId: form.employeeId,
             subCity: form.subCity,
-          }),
-        }
+            assignedTo: form.assignedTo,
+            officeId: Number(form.officeId),
+          },
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || "Failed to create officer."
       );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Failed to create officer."
-        );
-      }
-
-      setSuccess("Officer created successfully.");
-
-      setForm({
-        firstName: "",
-        lastName: "",
-        username: "",
-        phone: "",
-        nationalId: "",
-        password: "",
-        employeeId: "",
-        subCity: "",
-      });
-
-      setTimeout(() => {
-        setShowCreateOfficer(false);
-        setSuccess("");
-      }, 1200);
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to create officer.");
-      }
-    } finally {
-      setLoading(false);
     }
-  };
 
+    setSuccess("Officer created successfully.");
+
+    setForm({
+      firstName: "",
+      lastName: "",
+      username: "",
+      phone: "",
+      nationalId: "",
+      password: "",
+      employeeId: "",
+      subCity: "",
+      assignedTo: "",
+      officeId: "1",
+    });
+
+    setTimeout(() => {
+      setShowCreateOfficer(false);
+      setSuccess("");
+    }, 1200);
+  } catch (err) {
+    if (err instanceof Error) {
+      setError(err.message);
+    } else {
+      setError("Failed to create officer.");
+    }
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <div className="admin-figma-page">
 
@@ -684,7 +691,45 @@ function AdminDashboard() {
                 />
 
               </div>
+              <div className="form-group">
+  <label htmlFor="officeId">
+    Government Office
+  </label>
 
+  <select
+    id="officeId"
+    name="officeId"
+    value={form.officeId}
+    onChange={(event) =>
+      setForm((previous) => ({
+        ...previous,
+        officeId: event.target.value,
+      }))
+    }
+    disabled={loading}
+    required
+  >
+    <option value="1">
+      ADDIS-001 — Addis Ababa Rental Office
+    </option>
+  </select>
+</div>
+ <div className="form-group">
+  <label htmlFor="assignedTo">
+    Assigned To
+  </label>
+
+  <input
+    id="assignedTo"
+    name="assignedTo"
+    type="text"
+    value={form.assignedTo}
+    onChange={handleChange}
+    placeholder="e.g. Office 1"
+    disabled={loading}
+    required
+  />
+</div>
 
               <div className="form-group">
 

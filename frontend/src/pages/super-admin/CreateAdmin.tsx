@@ -68,7 +68,7 @@ function CreateAdmin() {
             nationalId: form.nationalId,
             username: form.username,
             password: form.password,
-            role: "ADMIN",
+            role: "OFFICE_ADMIN",
           }),
         }
       );

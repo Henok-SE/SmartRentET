@@ -154,7 +154,7 @@ function SuperAdminDashboard() {
             nationalId: form.nationalId.trim(),
             username: form.username.trim(),
             password: form.password,
-            role: "ADMIN",
+            role: "OFFICE_ADMIN",
           }),
         }
       );

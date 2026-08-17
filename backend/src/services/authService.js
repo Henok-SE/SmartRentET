@@ -71,15 +71,24 @@ const registerUser = async (userData) => {
         }
       });
     } else if (user.role === 'OFFICER') {
-      await tx.officer.create({
-        data: {
-          userId: user.userId,
-          employeeId: profileData.employeeId || `EMP-${Date.now()}`,
-          subCity: profileData.subCity || 'Addis Ababa',
-          assignedTo: profileData.assignedTo || null
+  await tx.officer.create({
+    data: {
+      user: {
+        connect: {
+          userId: user.userId
         }
-      });
+      },
+      office: {
+        connect: {
+          officeId: Number(profileData.officeId)
+        }
+      },
+      employeeId: profileData.employeeId || `EMP-${Date.now()}`,
+      subCity: profileData.subCity || 'Addis Ababa',
+      assignedTo: profileData.assignedTo || null
     }
+  });
+}
 
     return user;
   });

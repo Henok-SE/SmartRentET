@@ -56,8 +56,8 @@ function Login() {
 
       if (user.role === "SUPER_ADMIN") {
         navigate("/super-admin");
-      } else if (user.role === "ADMIN") {
-        navigate("/admin");
+      } else if (user.role === "OFFICE_ADMIN") {
+  navigate("/admin");
       } else if (user.role === "OFFICER") {
         navigate("/officer");
       } else {
