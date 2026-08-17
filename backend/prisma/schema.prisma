@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -165,9 +163,7 @@ model RentalAgreement {
   paymentFrequency PaymentFrequency @relation(fields: [paymentFrequencyId], references: [frequencyId])
 
   previousAgreement RentalAgreement? @relation("AgreementRenewal", fields: [previousAgreementId], references: [agreementId])
-
   renewedAgreements RentalAgreement[] @relation("AgreementRenewal")
-
   agreementApprovals AgreementApproval[]
   ussdConsent        USSDConsent?
   feePayment         GovernmentFeePayment?
@@ -177,6 +173,7 @@ model RentalAgreement {
   @@index([tenantId])
   @@index([paymentFrequencyId])
 }
+
 model USSDConsent {
   consentId          Int      @id @default(autoincrement())
   agreementId        Int      @unique
@@ -276,4 +273,3 @@ model AuditLog {
 
   user User @relation(fields: [userId], references: [userId])
 }
-
