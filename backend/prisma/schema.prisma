@@ -1,7 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,27 +9,23 @@ datasource db {
   provider = "postgresql"
 }
 
-// =====================================================
-// ENUMS
-// =====================================================
-
 enum UserRole {
-  SUPER_ADMIN
-  OFFICE_ADMIN
-  OFFICER
   LANDLORD
   TENANT
+  OFFICER
+  ADMIN
 }
 
 enum AgreementStatus {
   DRAFT
-  PENDING_VERIFICATION
-  PENDING_SERVICE_FEE
+  PENDING_REVIEW
+  PARTIES_VERIFIED
+  SERVICE_FEE_PENDING
   APPROVED
-  REJECTED
   ACTIVE
+  ENDED
   TERMINATED
-  EXPIRED
+  REJECTED
 }
 
 enum ApprovalDecision {
@@ -43,651 +38,238 @@ enum ApprovalType {
   FINAL_APPROVAL
 }
 
-enum VerificationParty {
-  LANDLORD
-  TENANT
-}
-
-enum VerificationStatus {
-  PENDING
-  VERIFIED
-  EXPIRED
-  FAILED
-}
-
-enum PaymentStatus {
-  PENDING
-  PAID
-  PARTIALLY_PAID
-  OVERDUE
-  FAILED
-  CANCELLED
-}
-
-enum PaymentMethod {
-  CASH
-  BANK_TRANSFER
-  MOBILE_MONEY
-}
-
-enum PaymentProvider {
-  NONE
-  TELEBIRR
-  BANK
-  OTHER
-}
-
-enum ServiceFeeStatus {
-  PENDING
-  INITIATED
-  PAID
-  FAILED
-  EXPIRED
-  CANCELLED
-}
-
-enum OfficeStatus {
-  ACTIVE
-  INACTIVE
-}
-
-enum PropertyStatus {
-  ACTIVE
-  INACTIVE
-}
-
-enum UnitStatus {
-  AVAILABLE
-  OCCUPIED
-  INACTIVE
-}
-
-enum RentalDurationUnit {
-  MONTH
-  YEAR
-}
-
-enum AuditAction {
-  CREATE
-  UPDATE
-  DELETE
-  LOGIN
-  LOGOUT
-  APPROVE
-  REJECT
-  DEACTIVATE
-  ACTIVATE
-  PAYMENT_RECORDED
-  VERIFICATION_SENT
-  VERIFICATION_COMPLETED
-  SERVICE_FEE_INITIATED
-  SERVICE_FEE_PAID
-}
-
-// =====================================================
-// USER
-// =====================================================
-
 model User {
-  userId Int @id @default(autoincrement())
-
-  firstName String
-  lastName  String
-
-  email      String? @unique
-  phone      String
-  nationalId String? @unique
-  username   String? @unique
-
-  // Required for government/admin accounts.
-  // Optional for landlord/tenant accounts created during
-  // first agreement registration.
+  userId       Int      @id @default(autoincrement())
+  firstName    String
+  middleName   String?
+  lastName     String
+  phone        String
+  nationalId   String   @unique
+  finNumber    String?
+  username     String?  @unique
   passwordHash String?
+  role         UserRole
+  mfaEnabled   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  role UserRole
-
-  mfaEnabled Boolean @default(false)
-  isActive   Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  superAdmin  SuperAdmin?
-  officeAdmin OfficeAdmin?
-  officer     Officer?
-  landlord    Landlord?
-  tenant      Tenant?
-
-  auditLogs AuditLog[] @relation("AuditActor")
-
-  @@index([phone])
-  @@index([role])
+  landlord            Landlord?
+  tenant              Tenant?
+  systemAdministrator SystemAdministrator?
+  officer             Officer?
+  auditLogs           AuditLog[]
 }
-
-// =====================================================
-// SUPER ADMIN
-// =====================================================
-
-model SuperAdmin {
-  superAdminId Int @id @default(autoincrement())
-
-  userId Int @unique
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [userId])
-}
-
-// =====================================================
-// GOVERNMENT OFFICE
-// =====================================================
-
-model GovernmentOffice {
-  officeId Int @id @default(autoincrement())
-
-  officeCode String @unique
-  officeName String
-
-  region  String?
-  city    String?
-  subCity String?
-  woreda  String?
-
-  address String?
-
-  status OfficeStatus @default(ACTIVE)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  officeAdmins OfficeAdmin[]
-  officers     Officer[]
-  agreements   RentalAgreement[]
-
-  @@index([region])
-  @@index([city])
-  @@index([subCity])
-  @@index([woreda])
-}
-
-// =====================================================
-// OFFICE ADMIN
-// =====================================================
-
-model OfficeAdmin {
-  officeAdminId Int @id @default(autoincrement())
-
-  userId   Int @unique
-  officeId Int
-
-  employeeId String @unique
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [userId])
-
-  office GovernmentOffice @relation(fields: [officeId], references: [officeId])
-
-  @@index([officeId])
-}
-
-// =====================================================
-// OFFICER
-// =====================================================
-
-model Officer {
-  officerId Int @id @default(autoincrement())
-
-  userId   Int @unique
-  officeId Int
-
-  employeeId   String  @unique
-  position     String?
-  assignedArea String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user   User             @relation(fields: [userId], references: [userId])
-  office GovernmentOffice @relation(fields: [officeId], references: [officeId])
-
-  agreements         RentalAgreement[]
-  agreementApprovals AgreementApproval[]
-
-  @@index([officeId])
-}
-
-// =====================================================
-// LANDLORD
-// =====================================================
 
 model Landlord {
-  landlordId Int @id @default(autoincrement())
-
-  userId Int @unique
-
-  address     String?
-  subCity     String?
-  woreda      String?
-  houseNumber String?
-
+  landlordId        Int      @id @default(autoincrement())
+  userId            Int      @unique
+  address           String
+  subCity           String?
+  houseNumber       String
   businessLicense   String?
   bankAccountNumber String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [userId])
-
+  user       User              @relation(fields: [userId], references: [userId])
   properties Property[]
   agreements RentalAgreement[]
 }
 
-// =====================================================
-// TENANT
-// =====================================================
-
 model Tenant {
-  tenantId Int @id @default(autoincrement())
-
-  userId Int @unique
-
-  address     String?
-  subCity     String?
-  woreda      String?
-  houseNumber String?
-
+  tenantId              Int      @id @default(autoincrement())
+  userId                Int      @unique
   emergencyContactName  String?
   emergencyContactPhone String?
   employer              String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
+  user       User              @relation(fields: [userId], references: [userId])
+  agreements RentalAgreement[]
+}
+
+model SystemAdministrator {
+  adminId   Int      @id @default(autoincrement())
+  userId    Int      @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [userId])
-
-  agreements RentalAgreement[]
 }
-
-// =====================================================
-// PROPERTY
-// =====================================================
 
 model Property {
-  propertyId Int @id @default(autoincrement())
-
-  landlordId Int
-
-  location    String
-  subCity     String
-  woreda      String
-  houseNumber String
-
+  propertyId    Int      @id @default(autoincrement())
+  landlordId    Int
+  location      String
+  subCity       String
+  woreda        String
+  houseNumber   String
   propertyType  String
   numberOfUnits Int
-
-  status PropertyStatus @default(ACTIVE)
-
-  description String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status        String
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   landlord Landlord @relation(fields: [landlordId], references: [landlordId])
-
-  units Unit[]
+  units    Unit[]
 
   @@index([landlordId])
-  @@index([subCity])
-  @@index([woreda])
 }
 
-// =====================================================
-// UNIT
-// =====================================================
-
 model Unit {
-  unitId Int @id @default(autoincrement())
-
-  propertyId Int
-
-  unitNumber String
-  floor      Int?
-
-  sizeSqMeters Decimal
-  bedrooms     Int
-  bathrooms    Int
-
-  status UnitStatus @default(AVAILABLE)
-
+  unitId          Int      @id @default(autoincrement())
+  propertyId      Int
+  unitNumber      String
+  floor           Int
+  sizeSqMeters    Decimal
+  bedrooms        Int
+  bathrooms       Int
+  status          String
   rentAmountFloor Decimal
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  property Property @relation(fields: [propertyId], references: [propertyId])
-
+  property   Property          @relation(fields: [propertyId], references: [propertyId])
   agreements RentalAgreement[]
 
   @@unique([propertyId, unitNumber])
   @@index([propertyId])
 }
 
-// =====================================================
-// RENTAL AGREEMENT
-// =====================================================
-
 model RentalAgreement {
-  agreementId Int @id @default(autoincrement())
-
-  referenceNumber String @unique
-
-  // ===================================================
-  // GOVERNMENT OFFICE
-  // ===================================================
-
-  officeId Int
-
-  // Officer who creates/processes the agreement
-  createdByOfficerId Int
-
-  // ===================================================
-  // PARTIES
-  // ===================================================
-
-  landlordId Int
-  tenantId   Int
-
-  // Property unit involved in the agreement
-  unitId Int
-
-  // ===================================================
-  // GOVERNMENT FORM - SECTION 3
-  // TYPE OF HOUSE AND CONDITION
-  // ===================================================
-
-  houseType String
-
-  houseNumber String
-
-  numberOfRooms     Int
-  numberOfBathrooms Int
-  numberOfDoors     Int
-  numberOfWindows   Int
-
-  // Example:
-  // "Bed 1x, table 2x, chair 4x"
-  houseItems String?
-
-  // ===================================================
-  // GOVERNMENT FORM - SECTION 4
-  // RENTAL AMOUNT AND CONDITIONS
-  // ===================================================
-
-  durationValue Int
-
-  durationUnit RentalDurationUnit
-
-  effectiveDate   DateTime
-  terminationDate DateTime?
-
-  rentalAmount Decimal
-
-  paymentTerms String?
-
-  advancePayment Decimal @default(0)
-
-  // ===================================================
-  // PAYMENT FREQUENCY
-  // ===================================================
-
-  paymentFrequencyId Int
-
-  // ===================================================
-  // AGREEMENT WORKFLOW
-  // ===================================================
-
-  status AgreementStatus @default(DRAFT)
-
-  // Set when both landlord and tenant successfully
-  // complete SMS verification.
-  bothPartiesVerifiedAt DateTime?
-
-  // ===================================================
-  // RENEWAL
-  // ===================================================
-
+  agreementId         Int             @id @default(autoincrement())
+  referenceNumber     String?         @unique
+  unitId              Int
+  landlordId          Int
+  tenantId            Int
+  paymentFrequencyId  Int
+  monthlyRent         Decimal
+  securityDeposit     Decimal?
+  status              AgreementStatus @default(DRAFT)
+  effectiveDate       DateTime
+  terminationDate     DateTime?
+  renewalDate         DateTime?
   previousAgreementId Int?
+  notes               String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
-  notes String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // ===================================================
-  // RELATIONS
-  // ===================================================
-
-  office GovernmentOffice @relation(fields: [officeId], references: [officeId])
-
-  createdByOfficer Officer @relation(fields: [createdByOfficerId], references: [officerId])
-
-  landlord Landlord @relation(fields: [landlordId], references: [landlordId])
-
-  tenant Tenant @relation(fields: [tenantId], references: [tenantId])
-
-  unit Unit @relation(fields: [unitId], references: [unitId])
-
+  unit             Unit             @relation(fields: [unitId], references: [unitId])
+  landlord         Landlord         @relation(fields: [landlordId], references: [landlordId])
+  tenant           Tenant           @relation(fields: [tenantId], references: [tenantId])
   paymentFrequency PaymentFrequency @relation(fields: [paymentFrequencyId], references: [frequencyId])
 
   previousAgreement RentalAgreement? @relation("AgreementRenewal", fields: [previousAgreementId], references: [agreementId])
-
   renewedAgreements RentalAgreement[] @relation("AgreementRenewal")
-
   agreementApprovals AgreementApproval[]
+  ussdConsent        USSDConsent?
+  feePayment         GovernmentFeePayment?
 
-  verifications AgreementVerification[]
-
-  serviceFeePayment ServiceFeePayment?
-
-  payments Payment[]
-
-  @@index([officeId])
-  @@index([createdByOfficerId])
+  @@index([unitId])
   @@index([landlordId])
   @@index([tenantId])
-  @@index([unitId])
   @@index([paymentFrequencyId])
-  @@index([status])
 }
 
-// =====================================================
-// PAYMENT FREQUENCY
-// =====================================================
+model USSDConsent {
+  consentId          Int      @id @default(autoincrement())
+  agreementId        Int      @unique
+  tenantPhone        String
+  landlordPhone      String
+  tenantConsent      Boolean  @default(false)
+  landlordConsent    Boolean  @default(false)
+  tenantConsentDate  DateTime?
+  landlordConsentDate DateTime?
+  tenantVerificationCode String?
+  landlordVerificationCode String?
+  tenantCodeExpiresAt  DateTime?
+  landlordCodeExpiresAt DateTime?
+  consentType        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  agreement RentalAgreement @relation(fields: [agreementId], references: [agreementId])
+}
+
+model GovernmentFeePayment {
+  paymentId     Int       @id @default(autoincrement())
+  agreementId   Int       @unique
+  landlordId    Int
+  tenantId      Int?
+  amount        Decimal   @default(50)
+  currency      String    @default("ETB")
+  status        String    @default("PENDING")
+  transactionId String?
+  paymentDate   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  agreement RentalAgreement @relation(fields: [agreementId], references: [agreementId])
+}
+
+model OTP {
+  otpId     Int      @id @default(autoincrement())
+  userId    Int
+  code      String
+  type      String   @default("LOGIN")
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
 
 model PaymentFrequency {
-  frequencyId Int @id @default(autoincrement())
-
-  name String @unique
-
-  // Minimum number of days between rent payments
+  frequencyId     Int      @id @default(autoincrement())
+  name            String   @unique
   minimumInterval Int
-
-  description String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   agreements RentalAgreement[]
 }
 
-// =====================================================
-// RENT PAYMENT
-// =====================================================
+model Officer {
+  officerId  Int      @id @default(autoincrement())
+  userId     Int      @unique
+  employeeId String   @unique
+  subCity    String
+  assignedTo String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-model Payment {
-  paymentId Int @id @default(autoincrement())
-
-  agreementId Int
-
-  amount Decimal
-
-  dueDate  DateTime
-  paidDate DateTime?
-
-  status PaymentStatus @default(PENDING)
-
-  method   PaymentMethod?
-  provider PaymentProvider @default(NONE)
-
-  transactionReference String?
-
-  notes String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  agreement RentalAgreement @relation(fields: [agreementId], references: [agreementId])
-
-  @@unique([provider, transactionReference])
-  @@index([agreementId])
-  @@index([dueDate])
-  @@index([status])
+  user               User                @relation(fields: [userId], references: [userId])
+  agreementApprovals AgreementApproval[]
 }
-
-// =====================================================
-// AGREEMENT VERIFICATION
-// =====================================================
-
-model AgreementVerification {
-  verificationId Int @id @default(autoincrement())
-
-  agreementId Int
-
-  // LANDLORD or TENANT
-  party VerificationParty
-
-  // Phone number receiving the verification code
-  phoneNumber String
-
-  // Store only the hashed verification code
-  codeHash String
-
-  status VerificationStatus @default(PENDING)
-
-  sentAt    DateTime @default(now())
-  expiresAt DateTime
-
-  verifiedAt DateTime?
-
-  attempts    Int @default(0)
-  resendCount Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  agreement RentalAgreement @relation(fields: [agreementId], references: [agreementId])
-
-  // One active verification record per party per agreement
-  @@unique([agreementId, party])
-  @@index([agreementId])
-  @@index([phoneNumber])
-  @@index([status])
-}
-
-// =====================================================
-// SERVICE FEE PAYMENT
-// =====================================================
-
-model ServiceFeePayment {
-  serviceFeePaymentId Int @id @default(autoincrement())
-
-  agreementId Int @unique
-
-  // SmartRent government service fee
-  amount Decimal @default(50)
-
-  status ServiceFeeStatus @default(PENDING)
-
-  // V1: Telebirr / mobile money
-  provider PaymentProvider @default(TELEBIRR)
-
-  paymentMethod PaymentMethod @default(MOBILE_MONEY)
-
-  // Transaction ID returned by Telebirr
-  transactionReference String?
-
-  // External request/reference generated when
-  // initiating the Telebirr payment
-  externalRequestId String?
-
-  initiatedAt DateTime?
-  paidAt      DateTime?
-
-  failureReason String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  agreement RentalAgreement @relation(fields: [agreementId], references: [agreementId])
-
-  @@index([status])
-  @@index([transactionReference])
-  @@index([externalRequestId])
-}
-
-// =====================================================
-// AGREEMENT APPROVAL
-// =====================================================
 
 model AgreementApproval {
-  approvalId Int @id @default(autoincrement())
-
-  agreementId Int
-  officerId   Int
-
+  approvalId   Int              @id @default(autoincrement())
+  agreementId  Int
+  officerId    Int
   approvalType ApprovalType
-
-  decision ApprovalDecision
-
-  comments String?
-
-  approvalDate DateTime @default(now())
+  decision     ApprovalDecision
+  comments     String?
+  approvalDate DateTime         @default(now())
 
   agreement RentalAgreement @relation(fields: [agreementId], references: [agreementId])
-
-  officer Officer @relation(fields: [officerId], references: [officerId])
+  officer   Officer         @relation(fields: [officerId], references: [officerId])
 
   @@index([agreementId])
   @@index([officerId])
 }
 
-// =====================================================
-// AUDIT LOG
-// =====================================================
-
 model AuditLog {
-  auditId Int @id @default(autoincrement())
-
-  userId Int?
-
-  action AuditAction
-
+  logId      Int      @id @default(autoincrement())
+  userId     Int
+  actionType String
   entityType String
   entityId   Int?
+  newValues  Json?
+  oldValues  Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
 
-  description String?
-
-  ipAddress String?
-  userAgent String?
-
-  createdAt DateTime @default(now())
-
-  user User? @relation("AuditActor", fields: [userId], references: [userId])
-
-  @@index([userId])
-  @@index([entityType, entityId])
-  @@index([createdAt])
+  user User @relation(fields: [userId], references: [userId])
 }
