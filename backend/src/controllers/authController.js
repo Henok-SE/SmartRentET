@@ -1,7 +1,4 @@
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
-const prisma = require('../config/database');
-const userService = require('../services/userService');
+const authService = require('../services/authService');
 
 const register = async (req, res) => {
   try {

@@ -67,6 +67,7 @@ model Landlord {
   landlordId        Int      @id @default(autoincrement())
   userId            Int      @unique
   address           String
+  subCity           String?
   houseNumber       String
   businessLicense   String?
   bankAccountNumber String?

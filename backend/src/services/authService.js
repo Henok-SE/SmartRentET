@@ -16,7 +16,7 @@ const generateToken = (user) => {
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 const registerUser = async (userData) => {
-  const { firstName, lastName, phone, nationalId, username, password, role, profileData = {} } = userData;
+  const { firstName, middleName, lastName, phone, nationalId, username, password, role, profileData = {} } = userData;
   const normalizedRole = role.toUpperCase();
 
   if (!['OFFICER', 'SYSTEM_ADMIN'].includes(normalizedRole)) {
@@ -42,11 +42,21 @@ const registerUser = async (userData) => {
 
   const newUser = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { firstName, lastName, phone, nationalId, username, passwordHash, role: normalizedRole, isActive: true }
+      data: {
+        firstName,
+        middleName,
+        lastName,
+        phone,
+        nationalId,
+        username,
+        passwordHash,
+        role: normalizedRole,
+        isActive: true
+      }
     });
 
     if (user.role === 'SYSTEM_ADMIN') {
-      await tx.systemAdministrator.create({ data: { userId: user.userId, isSeedAccount: false, otpEnabled: false } });
+      await tx.systemAdministrator.create({ data: { userId: user.userId } });
     } else if (user.role === 'OFFICER') {
       await tx.officer.create({
         data: {
@@ -70,7 +80,12 @@ const loginUser = async (username, password) => {
 
   const user = await prisma.user.findUnique({
     where: { username },
-    include: { systemAdmin: true, officer: true }
+    include: {
+      landlord: true,
+      tenant: true,
+      officer: true,
+      systemAdministrator: true
+    }
   });
 
   if (!user) throw new Error('Invalid username or password');
@@ -82,7 +97,7 @@ const loginUser = async (username, password) => {
   const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) throw new Error('Invalid username or password');
 
-  if (user.role === 'SYSTEM_ADMIN' && user.systemAdmin && user.systemAdmin.otpEnabled) {
+  if (user.role === 'SYSTEM_ADMIN' && user.systemAdministrator) {
     const otpCode = generateOTP();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await prisma.oTP.create({
@@ -117,7 +132,12 @@ const verifyOTP = async (userId, code) => {
 const getUserById = async (userId) => {
   const user = await prisma.user.findUnique({
     where: { userId: Number(userId) },
-    include: { landlord: true, tenant: true, officer: true, systemAdmin: true }
+    include: {
+      landlord: true,
+      tenant: true,
+      officer: true,
+      systemAdministrator: true
+    }
   });
   if (!user) throw new Error('User not found');
   const { passwordHash: _, ...sanitizedUser } = user;
@@ -148,9 +168,7 @@ const createSystemAdmin = async (adminData, creatorUserId) => {
         isActive: true
       }
     });
-    await tx.systemAdministrator.create({
-      data: { userId: user.userId, isSeedAccount: false, otpEnabled: adminData.otpEnabled || false }
-    });
+    await tx.systemAdministrator.create({ data: { userId: user.userId } });
     await tx.auditLog.create({
       data: { userId: creatorUserId, actionType: 'CREATE', entityType: 'SYSTEM_ADMIN', entityId: user.userId }
     });
