@@ -48,7 +48,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Test login: POST http://localhost:${PORT}/api/auth/login`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`SmartRent ET Backend is running on port ${PORT}`);
 });
+
+// app.listen(PORT, () => {
+//   console.log(`Server is running on port ${PORT}`);
+//   console.log(`Test login: POST http://localhost:${PORT}/api/auth/login`);
+// });
