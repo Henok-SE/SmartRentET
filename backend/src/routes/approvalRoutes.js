@@ -5,8 +5,8 @@ const { authenticateToken, authorizeRoles } = require('../middleware/authMiddlew
 
 router.use(authenticateToken);
 
-router.post('/:id/approve', authorizeRoles('OFFICER'), approvalController.approveAgreement);
-router.post('/:id/reject', authorizeRoles('OFFICER'), approvalController.rejectAgreement);
+router.post('/:id/approve', authorizeRoles('OFFICER', 'OFFICE_ADMIN', 'SUPER_ADMIN'), approvalController.approveAgreement);
+router.post('/:id/reject', authorizeRoles('OFFICER', 'OFFICE_ADMIN', 'SUPER_ADMIN'), approvalController.rejectAgreement);
 router.get('/:id/history', approvalController.getApprovalHistory);
 
 module.exports = router;

@@ -5,6 +5,7 @@ const approveAgreement = async (req, res) => {
     const { id } = req.params;
     const { comments } = req.body;
     const result = await approvalService.approveAgreement(id, req.user.userId, comments);
+
     res.status(200).json({
       success: true,
       message: 'Agreement approved and activated. Reference number generated.',
@@ -20,6 +21,7 @@ const rejectAgreement = async (req, res) => {
     const { id } = req.params;
     const { comments } = req.body;
     const result = await approvalService.rejectAgreement(id, req.user.userId, comments);
+
     res.status(200).json({
       success: true,
       message: 'Agreement rejected',

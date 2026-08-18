@@ -1,5 +1,3 @@
-const prisma = require('../config/db');
-
 const generateVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
@@ -34,18 +32,12 @@ const sendUSSDConsentWithCode = async (tenantPhone, landlordPhone, agreementId, 
   return { success: true };
 };
 
-const sendUSSDConsent = async (tenantPhone, landlordPhone, agreementId) => {
-  await sendUSSD(tenantPhone, `SmartRent: Do you agree to Rental Agreement #${agreementId}? Reply YES or NO.`);
-  await sendUSSD(landlordPhone, `SmartRent: Do you agree to Rental Agreement #${agreementId}? Reply YES or NO.`);
-  return { success: true };
-};
-
 const sendUSSD50BirrPayment = async (tenantPhone, agreementId) => {
   return sendUSSD(tenantPhone, `SmartRent: Pay 50 Birr service fee for Agreement #${agreementId}. Enter your Telebirr PIN.`);
 };
 
 const sendReferenceNumberSMS = async (tenantPhone, landlordPhone, referenceNumber) => {
-  const msg = `SmartRent: Your Rental Agreement is approved Reference: ${referenceNumber}`;
+  const msg = `SmartRent: Your Rental Agreement is approved. Reference: ${referenceNumber}`;
   await sendSMS(tenantPhone, msg);
   await sendSMS(landlordPhone, msg);
   return { success: true };
@@ -59,7 +51,6 @@ module.exports = {
   sendOTP,
   sendUSSDVerification,
   sendUSSDConsentWithCode,
-  sendUSSDConsent,
   sendUSSD50BirrPayment,
   sendReferenceNumberSMS
 };
