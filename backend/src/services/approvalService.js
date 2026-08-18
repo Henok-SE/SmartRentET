@@ -7,70 +7,94 @@ const approveAgreement = async (agreementId, officerUserId, comments = null) => 
     const agreement = await tx.rentalAgreement.findUnique({
       where: { agreementId: Number(agreementId) }
     });
+
     if (!agreement) throw new Error('Agreement not found');
-    if (agreement.status !== 'SERVICE_FEE_PENDING') {
-      throw new Error('Agreement cannot be approved. Current status: ' + agreement.status);
+
+    // Only APPROVED status can be activated
+    if (agreement.status !== 'APPROVED') {
+      throw new Error('Agreement must be approved before activation.');
     }
 
     const officer = await tx.officer.findUnique({
       where: { userId: officerUserId }
     });
+
     if (!officer) {
       throw new Error('Officer not found');
     }
 
-    const consent = await tx.uSSDConsent.findUnique({
-      where: { agreementId: Number(agreementId) }
+    const verifications = await tx.agreementVerification.findMany({
+      where: {
+        agreementId: Number(agreementId),
+        status: 'VERIFIED'
+      }
     });
-    if (!consent || !consent.tenantConsent || !consent.landlordConsent) {
-      throw new Error('Both parties must consent before approval');
+
+    if (verifications.length < 2) {
+      throw new Error('Both parties must verify before approval');
     }
 
-    const fee = await tx.governmentFeePayment.findUnique({
+    const serviceFee = await tx.serviceFeePayment.findUnique({
       where: { agreementId: Number(agreementId) }
     });
-    if (!fee || fee.status !== 'PAID') {
-      throw new Error('50 Birr government fee must be paid before approval');
+
+    if (!serviceFee || serviceFee.status !== 'PAID') {
+      throw new Error('Service fee must be paid before approval');
     }
 
-    const ref = generateReferenceNumber();
+    const ref = await generateReferenceNumber();
 
+    // Update unit status
     await tx.unit.update({
       where: { unitId: agreement.unitId },
       data: { status: 'OCCUPIED' }
     });
 
+    // Update agreement
     const updated = await tx.rentalAgreement.update({
       where: { agreementId: Number(agreementId) },
-      data: { status: 'ACTIVE', referenceNumber: ref }
+      data: {
+        status: 'ACTIVE',
+        referenceNumber: ref
+      }
     });
 
+    // Create approval record
     const approval = await tx.agreementApproval.create({
       data: {
         agreementId: Number(agreementId),
         officerId: officer.officerId,
         approvalType: 'FINAL_APPROVAL',
         decision: 'APPROVED',
-        comments: comments || 'Approved after consents and payment'
+        comments: comments || 'Approved after verification and payment'
       }
     });
 
+    // Audit log
     await tx.auditLog.create({
       data: {
         userId: officerUserId,
-        actionType: 'APPROVE',
-        entityType: 'AGREEMENT',
+        action: 'APPROVE',
+        entityType: 'RENTAL_AGREEMENT',
         entityId: Number(agreementId),
-        newValues: { status: 'ACTIVE', referenceNumber: ref }
+        description: `Approved agreement ${ref}`
       }
     });
 
-    const consentData = await tx.uSSDConsent.findUnique({
-      where: { agreementId: Number(agreementId) }
+    // Send SMS
+    const landlord = await tx.landlord.findUnique({
+      where: { landlordId: agreement.landlordId },
+      include: { user: true }
     });
+
+    const tenant = await tx.tenant.findUnique({
+      where: { tenantId: agreement.tenantId },
+      include: { user: true }
+    });
+
     await afroSMSService.sendReferenceNumberSMS(
-      consentData.tenantPhone,
-      consentData.landlordPhone,
+      tenant.user.phone,
+      landlord.user.phone,
       ref
     );
 
@@ -83,14 +107,18 @@ const rejectAgreement = async (agreementId, officerUserId, comments) => {
     const agreement = await tx.rentalAgreement.findUnique({
       where: { agreementId: Number(agreementId) }
     });
+
     if (!agreement) throw new Error('Agreement not found');
-    if (agreement.status !== 'SERVICE_FEE_PENDING') {
+
+    // Can reject if status is DRAFT, PENDING_VERIFICATION, PENDING_SERVICE_FEE, or APPROVED
+    if (!['DRAFT', 'PENDING_VERIFICATION', 'PENDING_SERVICE_FEE', 'APPROVED'].includes(agreement.status)) {
       throw new Error('Agreement cannot be rejected. Current status: ' + agreement.status);
     }
 
     const officer = await tx.officer.findUnique({
       where: { userId: officerUserId }
     });
+
     if (!officer) {
       throw new Error('Officer not found');
     }
@@ -113,10 +141,10 @@ const rejectAgreement = async (agreementId, officerUserId, comments) => {
     await tx.auditLog.create({
       data: {
         userId: officerUserId,
-        actionType: 'REJECT',
-        entityType: 'AGREEMENT',
+        action: 'REJECT',
+        entityType: 'RENTAL_AGREEMENT',
         entityId: Number(agreementId),
-        newValues: { status: 'REJECTED' }
+        description: `Rejected agreement ${agreement.referenceNumber}`
       }
     });
 
