@@ -1,13 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { authenticateToken } = require('../middleware/authMiddleware');
 
-// Public endpoints
+// Public routes - No authentication needed
 router.post('/register', authController.register);
 router.post('/login', authController.login);
+router.post('/verify-otp', authController.verifyOTP);
 
-// Protected endpoint
-router.get('/me', authenticateToken, authController.getMe);
+// Protected routes - Authentication needed
+router.get('/me', authController.getMe);
+
+// Admin routes
+router.post('/office-admin', authController.createOfficeAdmin);
+router.post('/officer', authController.createOfficer);
 
 module.exports = router;

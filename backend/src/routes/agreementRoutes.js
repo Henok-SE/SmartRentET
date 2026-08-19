@@ -3,14 +3,19 @@ const router = express.Router();
 const agreementController = require('../controllers/agreementController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 
-// All agreement routes require authentication
+// All routes require authentication
 router.use(authenticateToken);
 
-router.post('/', authorizeRoles('LANDLORD', 'TENANT', 'ADMIN'), agreementController.create);
-router.get('/', agreementController.getAll);
-router.get('/:id', agreementController.getById);
+// Create agreement (Officer or Office Admin only)
+router.post('/', authorizeRoles('OFFICER', 'OFFICE_ADMIN'), agreementController.createAgreement);
 
-// Officer approval endpoint
-router.post('/:id/approve', authorizeRoles('OFFICER', 'ADMIN'), agreementController.approveOrReject);
+// Verify USSD code (Officer or Office Admin only)
+router.post('/:id/verify', authorizeRoles('OFFICER', 'OFFICE_ADMIN'), agreementController.verifyCode);
+
+// Process service fee payment (Officer or Office Admin only)
+router.post('/:id/pay-service-fee', authorizeRoles('OFFICER', 'OFFICE_ADMIN'), agreementController.processServiceFeePayment);
+
+// Get agreement by ID (Authenticated users)
+router.get('/:id', agreementController.getAgreement);
 
 module.exports = router;

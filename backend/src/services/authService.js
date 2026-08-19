@@ -1,202 +1,444 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
+const afroSMSService = require('./afroSMSService');
 
-/**
- * Register a new user and create their role profile
- */
-const registerUser = async (userData) => {
-  const {
-    firstName,
-    lastName,
-    phone,
-    nationalId,
-    username,
-    password,
-    role,
-    profileData = {}
-  } = userData;
-
-  // 1. Basic validation
-  if (!firstName || !lastName || !phone || !nationalId || !username || !password || !role) {
-    throw new Error('All required fields must be provided: firstName, lastName, phone, nationalId, username, password, role');
-  }
-
-  // 2. Check if username or nationalId already exists
-  const existingUsername = await prisma.user.findUnique({ where: { username } });
-  if (existingUsername) {
-    throw new Error('Username is already taken');
-  }
-
-  const existingNationalId = await prisma.user.findUnique({ where: { nationalId } });
-  if (existingNationalId) {
-    throw new Error('National ID is already registered');
-  }
-
-  // 3. Hash password
-  const passwordHash = await bcrypt.hash(password, 10);
-
-  // 4. Create User & associated Role Profile inside a Prisma transaction
-  const newUser = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        firstName,
-        lastName,
-        phone,
-        nationalId,
-        username,
-        passwordHash,
-        role: role.toUpperCase()
-      }
-    });
-
-    // Create role specific profiles
-    if (user.role === 'LANDLORD') {
-      await tx.landlord.create({
-        data: {
-          userId: user.userId,
-          address: profileData.address || 'N/A',
-          houseNumber: profileData.houseNumber || 'N/A',
-          businessLicense: profileData.businessLicense || null,
-          bankAccountNumber: profileData.bankAccountNumber || null
-        }
-      });
-    } else if (user.role === 'TENANT') {
-      await tx.tenant.create({
-        data: {
-          userId: user.userId,
-          emergencyContactName: profileData.emergencyContactName || null,
-          emergencyContactPhone: profileData.emergencyContactPhone || null,
-          employer: profileData.employer || null
-        }
-      });
-      } else if (user.role === 'OFFICE_ADMIN') {
-  await tx.officeAdmin.create({
-    data: {
-      user: {
-        connect: {
-          userId: user.userId
-        }
-      },
-      office: {
-        connect: {
-          officeId: Number(profileData.officeId)
-        }
-      },
-      employeeId: profileData.employeeId
-    }
-  });
-} else if (user.role === 'OFFICER') {
-    } else if (user.role === 'OFFICER') {
-  await tx.officer.create({
-    data: {
-      user: {
-        connect: {
-          userId: user.userId
-        }
-      },
-      office: {
-        connect: {
-          officeId: Number(profileData.officeId)
-        }
-      },
-      employeeId: profileData.employeeId || `EMP-${Date.now()}`,
-      subCity: profileData.subCity || 'Addis Ababa',
-      assignedTo: profileData.assignedTo || null
-    }
-  });
-}
-
-    return user;
-  });
-
-  // 5. Generate token & return user info
-  const token = generateToken(newUser);
-  const { passwordHash: _, ...sanitizedUser } = newUser;
-
-  return { user: sanitizedUser, token };
-};
-
-/**
- * Authenticate user and issue JWT token
- */
-const loginUser = async (username, password) => {
-  if (!username || !password) {
-    throw new Error('Username and password are required');
-  }
-
-  // 1. Find user by username
-  const user = await prisma.user.findUnique({
-    where: { username },
-    include: {
-      landlord: true,
-      tenant: true,
-      officer: true
-    }
-  });
-
-  if (!user) {
-    throw new Error('Invalid username or password');
-  }
-
-  if (!user.isActive) {
-    throw new Error('Account is inactive. Please contact support.');
-  }
-
-  // 2. Verify password
-  const isMatch = await bcrypt.compare(password, user.passwordHash);
-  if (!isMatch) {
-    throw new Error('Invalid username or password');
-  }
-
-  // 3. Generate token & return user details
-  const token = generateToken(user);
-  const { passwordHash: _, ...sanitizedUser } = user;
-
-  return { user: sanitizedUser, token };
-};
-
-/**
- * Get user by ID without passwordHash
- */
-const getUserById = async (userId) => {
-  const user = await prisma.user.findUnique({
-    where: { userId: Number(userId) },
-    include: {
-      landlord: true,
-      tenant: true,
-      officer: true
-    }
-  });
-
-  if (!user) {
-    throw new Error('User not found');
-  }
-
-  const { passwordHash: _, ...sanitizedUser } = user;
-  return sanitizedUser;
-};
-
-/**
- * Generate JWT Token helper
- */
 const generateToken = (user) => {
   const secret = process.env.JWT_SECRET || 'smartrent_fallback_secret';
-  const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
-
+  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
   return jwt.sign(
-    {
-      userId: user.userId,
-      username: user.username,
-      role: user.role
-    },
+    { userId: user.userId, username: user.username, role: user.role },
     secret,
     { expiresIn }
   );
 };
 
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+const registerUser = async (userData) => {
+  try {
+    console.log('=== REGISTER USER ===');
+    console.log('userData:', userData);
+    
+    const { firstName, lastName, phone, email, nationalId, username, password, role, profileData = {} } = userData;
+    const normalizedRole = role.toUpperCase();
+
+    if (!['SUPER_ADMIN', 'OFFICE_ADMIN', 'OFFICER'].includes(normalizedRole)) {
+      throw new Error('Only SUPER_ADMIN, OFFICE_ADMIN, and OFFICER can be registered directly.');
+    }
+
+    if (!firstName || !lastName || !phone || !username || !password) {
+      throw new Error('All required fields must be provided.');
+    }
+
+    const existing = await prisma.user.findFirst({
+      where: { OR: [{ username }, { phone }] }
+    });
+    
+    if (existing) {
+      if (existing.username === username) throw new Error('Username already taken');
+      if (existing.phone === phone) throw new Error('Phone number already registered');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        phone,
+        email: email || null,
+        nationalId: nationalId || null,
+        username,
+        passwordHash,
+        role: normalizedRole,
+        isActive: true
+      }
+    });
+
+    if (user.role === 'SUPER_ADMIN') {
+      await prisma.superAdmin.create({ data: { userId: user.userId } });
+    } else if (user.role === 'OFFICE_ADMIN') {
+      await prisma.officeAdmin.create({
+        data: {
+          userId: user.userId,
+          officeId: profileData.officeId || 1,
+          employeeId: profileData.employeeId || `ADMIN-${Date.now()}`
+        }
+      });
+    } else if (user.role === 'OFFICER') {
+      await prisma.officer.create({
+        data: {
+          userId: user.userId,
+          officeId: profileData.officeId || 1,
+          employeeId: profileData.employeeId || `OFF-${Date.now()}`,
+          position: profileData.position || null,
+          assignedArea: profileData.assignedArea || null
+        }
+      });
+    }
+
+    const token = generateToken(user);
+    const { passwordHash: _, ...sanitizedUser } = user;
+    return { user: sanitizedUser, token };
+  } catch (error) {
+    console.error('Register error:', error);
+    throw error;
+  }
+};
+
+const loginUser = async (username, password) => {
+  try {
+    console.log('=== LOGIN USER ===');
+    console.log('Username:', username);
+    
+    if (!username || !password) {
+      throw new Error('Username and password are required');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { username }
+    });
+
+    console.log('User found:', user ? 'Yes' : 'No');
+    if (user) {
+      console.log('User role:', user.role);
+      console.log('User isActive:', user.isActive);
+    }
+
+    if (!user) {
+      throw new Error('Invalid username or password');
+    }
+    
+    if (!user.isActive) {
+      throw new Error('Account is inactive');
+    }
+
+    if (!user.passwordHash) {
+      throw new Error('Account has no password set. Please contact administrator.');
+    }
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    console.log('Password match:', isMatch ? 'Yes' : 'No');
+    
+    if (!isMatch) {
+      throw new Error('Invalid username or password');
+    }
+
+    if (!['SUPER_ADMIN', 'OFFICE_ADMIN', 'OFFICER'].includes(user.role)) {
+      throw new Error('Invalid login. Please use your dashboard credentials.');
+    }
+    
+    // OPTION 1: OTP ONLY FOR OFFICE_ADMIN (CURRENTLY ACTIVE)
+  
+    if (user.role === 'OFFICE_ADMIN') {
+      const otpCode = generateOTP();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      
+      await prisma.oTP.create({
+        data: { 
+          userId: user.userId, 
+          code: otpCode, 
+          type: 'LOGIN', 
+          expiresAt 
+        }
+      });
+      
+      await afroSMSService.sendOTP(user.phone, otpCode);
+      
+      console.log('OTP sent to:', user.phone);
+      console.log('OTP code (for testing):', otpCode);
+      
+      return { 
+        requiresOTP: true, 
+        userId: user.userId, 
+        message: 'OTP sent to your phone',
+        debugOTP: otpCode 
+      };
+    }
+
+   
+    const token = generateToken(user);
+    const { passwordHash: _, ...sanitizedUser } = user;
+    console.log('Login successful for:', username);
+    return { user: sanitizedUser, token };
+  } catch (error) {
+    console.error('Login error:', error);
+    throw error;
+  }
+};
+
+const verifyOTP = async (userId, code) => {
+  try {
+    console.log('=== VERIFY OTP ===');
+    console.log('userId:', userId);
+    console.log('code:', code);
+    
+    if (!userId || !code) {
+      throw new Error('User ID and OTP code are required');
+    }
+
+    if (!prisma.oTP) {
+      console.error('OTP model not found! Available models:', 
+        Object.keys(prisma).filter(key => !key.startsWith('_') && !key.startsWith('$'))
+      );
+      throw new Error('OTP model not configured. Please run database migrations.');
+    }
+
+    const otp = await prisma.oTP.findFirst({
+      where: { 
+        userId: Number(userId), 
+        code: code, 
+        used: false, 
+        expiresAt: { gt: new Date() } 
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    console.log('OTP found:', otp ? 'Yes' : 'No');
+    
+    if (!otp) {
+      throw new Error('Invalid or expired OTP');
+    }
+
+    await prisma.oTP.update({ 
+      where: { otpId: otp.otpId }, 
+      data: { used: true } 
+    });
+
+    const user = await prisma.user.findUnique({ 
+      where: { userId: Number(userId) } 
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const token = generateToken(user);
+    const { passwordHash: _, ...sanitizedUser } = user;
+    console.log('OTP verified successfully for user:', user.username);
+    return { user: sanitizedUser, token };
+  } catch (error) {
+    console.error('OTP verification error:', error);
+    throw error;
+  }
+};
+
+const getUserById = async (userId) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { userId: Number(userId) },
+      include: {
+        superAdmin: true,
+        officeAdmin: true,
+        officer: true,
+        landlord: true,
+        tenant: true
+      }
+    });
+    
+    if (!user) throw new Error('User not found');
+    
+    const { passwordHash: _, ...sanitizedUser } = user;
+    return sanitizedUser;
+  } catch (error) {
+    console.error('Get user error:', error);
+    throw error;
+  }
+};
+
+const createOfficeAdmin = async (adminData, creatorUserId) => {
+  try {
+    console.log('=== CREATE OFFICE ADMIN ===');
+    console.log('adminData:', adminData);
+    console.log('creatorUserId:', creatorUserId);
+    
+    const { firstName, lastName, phone, username, password, email, nationalId, officeId } = adminData;
+
+    const creator = await prisma.user.findUnique({ 
+      where: { userId: creatorUserId } 
+    });
+    
+    if (!creator || creator.role !== 'SUPER_ADMIN') {
+      throw new Error('Only Super Admin can create Office Admins');
+    }
+
+    const existing = await prisma.user.findUnique({ 
+      where: { username } 
+    });
+    
+    if (existing) {
+      throw new Error('Username already taken');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        phone,
+        email: email || null,
+        nationalId: nationalId || null,
+        username,
+        passwordHash,
+        role: 'OFFICE_ADMIN',
+        isActive: true
+      }
+    });
+
+    await prisma.officeAdmin.create({
+      data: {
+        userId: user.userId,
+        officeId: officeId || 1,
+        employeeId: `ADMIN-${Date.now()}`
+      }
+    });
+
+    const { passwordHash: _, ...sanitizedUser } = user;
+    return sanitizedUser;
+  } catch (error) {
+    console.error('Create office admin error:', error);
+    throw error;
+  }
+};
+
+const createOfficer = async (officerData, creatorUserId) => {
+  try {
+    console.log('=== CREATE OFFICER ===');
+    console.log('officerData:', officerData);
+    console.log('creatorUserId:', creatorUserId);
+    
+    const { firstName, lastName, phone, username, password, email, nationalId, officeId, position, assignedArea } = officerData;
+
+    const creator = await prisma.user.findUnique({ 
+      where: { userId: creatorUserId } 
+    });
+    
+    if (!creator || !['SUPER_ADMIN', 'OFFICE_ADMIN'].includes(creator.role)) {
+      throw new Error('Only Super Admin or Office Admin can create Officers');
+    }
+
+    const existing = await prisma.user.findUnique({ 
+      where: { username } 
+    });
+    
+    if (existing) {
+      throw new Error('Username already taken');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        phone,
+        email: email || null,
+        nationalId: nationalId || null,
+        username,
+        passwordHash,
+        role: 'OFFICER',
+        isActive: true
+      }
+    });
+
+    await prisma.officer.create({
+      data: {
+        userId: user.userId,
+        officeId: officeId || 1,
+        employeeId: `OFF-${Date.now()}`,
+        position: position || null,
+        assignedArea: assignedArea || null
+      }
+    });
+
+    const { passwordHash: _, ...sanitizedUser } = user;
+    return sanitizedUser;
+  } catch (error) {
+    console.error('Create officer error:', error);
+    throw error;
+  }
+};
+
+const createLandlord = async (landlordData) => {
+  try {
+    const user = await prisma.user.create({
+      data: {
+        firstName: landlordData.firstName,
+        lastName: landlordData.lastName,
+        phone: landlordData.phone,
+        nationalId: landlordData.nationalId || null,
+        username: null,
+        passwordHash: null,
+        role: 'LANDLORD',
+        isActive: true
+      }
+    });
+
+    await prisma.landlord.create({
+      data: {
+        userId: user.userId,
+        address: landlordData.address || null,
+        subCity: landlordData.subCity || null,
+        woreda: landlordData.woreda || null,
+        houseNumber: landlordData.houseNumber || null,
+        businessLicense: landlordData.businessLicense || null,
+        bankAccountNumber: landlordData.bankAccountNumber || null
+      }
+    });
+
+    return user;
+  } catch (error) {
+    console.error('Create landlord error:', error);
+    throw error;
+  }
+};
+
+const createTenant = async (tenantData) => {
+  try {
+    const user = await prisma.user.create({
+      data: {
+        firstName: tenantData.firstName,
+        lastName: tenantData.lastName,
+        phone: tenantData.phone,
+        nationalId: tenantData.nationalId || null,
+        username: null,
+        passwordHash: null,
+        role: 'TENANT',
+        isActive: true
+      }
+    });
+
+    await prisma.tenant.create({
+      data: {
+        userId: user.userId,
+        address: tenantData.address || null,
+        subCity: tenantData.subCity || null,
+        woreda: tenantData.woreda || null,
+        houseNumber: tenantData.houseNumber || null,
+        emergencyContactName: tenantData.emergencyContactName || null,
+        emergencyContactPhone: tenantData.emergencyContactPhone || null,
+        employer: tenantData.employer || null
+      }
+    });
+
+    return user;
+  } catch (error) {
+    console.error('Create tenant error:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
-  getUserById
+  verifyOTP,
+  getUserById,
+  createOfficeAdmin,
+  createOfficer,
+  createLandlord,
+  createTenant,
+  generateToken,
+  generateOTP
 };

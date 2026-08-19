@@ -13,7 +13,7 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  console.log("🌱 Starting database seed...");
+  console.log("Starting database seed...");
 
   const passwordHash = await bcrypt.hash("SmartRent@123", 12);
 
@@ -24,9 +24,11 @@ async function main() {
     update: {
       firstName: "SmartRent",
       lastName: "System Administrator",
-      passwordHash,
+      passwordHash: passwordHash,
       role: "SUPER_ADMIN",
       isActive: true,
+      nationalId: "SA000001",
+      email: "superadmin@smartrent.et",
     },
     create: {
       firstName: "SmartRent",
@@ -34,7 +36,8 @@ async function main() {
       username: "superadmin",
       email: "superadmin@smartrent.et",
       phone: "+251900000000",
-      passwordHash,
+      nationalId: "SA000001",
+      passwordHash: passwordHash,
       role: "SUPER_ADMIN",
       isActive: true,
       mfaEnabled: false,
@@ -51,15 +54,15 @@ async function main() {
     },
   });
 
-  console.log("✅ Super Admin seeded successfully");
-  console.log(`   User ID: ${superAdminUser.userId}`);
-  console.log(`   Username: ${superAdminUser.username}`);
-  console.log("   Password: SmartRent@123");
+  console.log("Super Admin seeded successfully");
+  console.log("User ID:", superAdminUser.userId);
+  console.log("Username:", superAdminUser.username);
+  console.log("Password: SmartRent@123");
 }
 
 main()
   .catch((error) => {
-    console.error("❌ Seed failed:", error);
+    console.error("Seed failed:", error);
     process.exit(1);
   })
   .finally(async () => {
