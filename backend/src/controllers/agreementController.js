@@ -1,76 +1,130 @@
+const prisma = require('../config/db');
 const agreementService = require('../services/agreementService');
 
-/**
- * Create a new rental agreement
- */
-const create = async (req, res) => {
+const createAgreement = async (req, res) => {
   try {
-    const agreement = await agreementService.createAgreement(req.body, req.user.userId);
-    res.status(201).json({
-      message: 'Rental agreement created successfully',
-      data: agreement
-    });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-};
+    console.log('=== CREATE AGREEMENT ===');
+    console.log('User:', req.user);
+    
+    // Only OFFICER or OFFICE_ADMIN can create agreements
+    if (!['OFFICER', 'OFFICE_ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only Officers and Office Admins can create rental agreements.'
+      });
+    }
 
-/**
- * Get all agreements for logged in user
- */
-const getAll = async (req, res) => {
-  try {
-    const agreements = await agreementService.getAgreements(req.user);
-    res.status(200).json({
-      message: 'Agreements retrieved successfully',
-      data: agreements
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
+    // Get officerId
+    let officerId = null;
+    let officeId = 1;
 
-/**
- * Get single agreement by ID
- */
-const getById = async (req, res) => {
-  try {
-    const agreement = await agreementService.getAgreementById(req.params.id);
-    res.status(200).json({
-      message: 'Agreement details retrieved',
-      data: agreement
-    });
-  } catch (error) {
-    res.status(404).json({ error: error.message });
-  }
-};
+    if (req.user.role === 'OFFICER') {
+      const officer = await prisma.officer.findUnique({
+        where: { userId: req.user.userId }
+      });
+      
+      console.log('Officer found:', officer);
+      
+      if (!officer) {
+        return res.status(404).json({
+          success: false,
+          error: 'Officer record not found. Please contact administrator.'
+        });
+      }
+      
+      officerId = officer.officerId;
+      officeId = officer.officeId;
+      
+    } else if (req.user.role === 'OFFICE_ADMIN') {
+      const admin = await prisma.officeAdmin.findUnique({
+        where: { userId: req.user.userId }
+      });
+      
+      console.log('Office Admin found:', admin);
+      
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          error: 'Office Admin record not found. Please contact administrator.'
+        });
+      }
+      
+      // For Office Admin, find the first officer in their office
+      const officer = await prisma.officer.findFirst({
+        where: { officeId: admin.officeId }
+      });
+      
+      if (!officer) {
+        return res.status(404).json({
+          success: false,
+          error: 'No officer found in this office. Please create an officer first.'
+        });
+      }
+      
+      officerId = officer.officerId;
+      officeId = admin.officeId;
+    }
 
-/**
- * Process agreement approval (Officer only)
- */
-const approveOrReject = async (req, res) => {
-  try {
-    const { approvalType, decision, comments } = req.body;
-    const approval = await agreementService.processApproval(
-      req.params.id,
-      req.user.userId,
-      approvalType,
-      decision,
-      comments
+    console.log('OfficerId:', officerId);
+    console.log('OfficeId:', officeId);
+
+    if (!officerId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Could not determine officer. Please contact administrator.'
+      });
+    }
+
+    const agreement = await agreementService.createAgreement(
+      req.body,
+      officerId,
+      officeId
     );
 
-    res.status(200).json({
-      message: `Agreement decision logged: ${decision}`,
-      data: approval
+    res.status(201).json({
+      success: true,
+      message: 'Agreement created. USSD verification codes sent.',
+      data: agreement
     });
+
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error('Create agreement error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+const verifyCode = async (req, res) => {
+  try {
+    const { agreementId, phone, code } = req.body;
+    const result = await agreementService.verifyAgreementCode(agreementId, phone, code);
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+const processServiceFeePayment = async (req, res) => {
+  try {
+    const { agreementId, phone, pin } = req.body;
+    const result = await agreementService.processServiceFeePayment(agreementId, phone, pin);
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+const getAgreement = async (req, res) => {
+  try {
+    const agreement = await agreementService.getAgreementById(req.params.id);
+    res.status(200).json({ success: true, data: agreement });
+  } catch (error) {
+    res.status(404).json({ success: false, error: error.message });
   }
 };
 
 module.exports = {
-  create,
-  getAll,
-  getById,
-  approveOrReject
+  createAgreement,
+  verifyCode,
+  processServiceFeePayment,
+  getAgreement
 };
