@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const bcrypt = require('bcryptjs');
 
 const getSummary = async () => {
   const [
@@ -539,7 +540,6 @@ const getOfficers = async ({ subCity, isActive } = {}) => {
   });
 };
 
-
 const getOfficeAdmins = async ({ officeId, subCity, isActive, officeCode } = {}) => {
   return prisma.officeAdmin.findMany({
     where: {
@@ -704,6 +704,201 @@ const getOffices = async ({ status, subCity, city } = {}) => {
   });
 };
 
+const createOffice = async ({ officeName, officeCode, region, city, subCity, woreda, address }) => {
+  const existing = await prisma.governmentOffice.findUnique({
+    where: { officeCode },
+  });
+
+  if (existing) {
+    throw Object.assign(new Error('Office code already exists'), { code: 'OFFICE_CODE_EXISTS' });
+  }
+
+  return prisma.governmentOffice.create({
+    data: {
+      officeName,
+      officeCode,
+      region: region ?? null,
+      city: city ?? null,
+      subCity: subCity ?? null,
+      woreda: woreda ?? null,
+      address: address ?? null,
+    },
+  });
+};
+
+
+const createOfficeAdmin = async ({
+  firstName,
+  lastName,
+  username,
+  phone,
+  nationalId,
+  employeeId,
+  email,
+  officeId,
+  password,
+}) => {
+  const office = await prisma.governmentOffice.findUnique({
+    where: { officeId: parseInt(officeId, 10) },
+  });
+
+  if (!office) {
+    throw Object.assign(new Error('Government office not found'), { code: 'OFFICE_NOT_FOUND' });
+  }
+
+  const dupCheck = await prisma.officeAdmin.findFirst({
+    where: {
+      OR: [
+        { employeeId },
+        { user: { OR: [{ username }, ...(phone ? [{ phone }] : []), ...(email ? [{ email }] : []), ...(nationalId ? [{ nationalId }] : [])] } },
+      ],
+    },
+    include: { user: { select: { username: true, email: true, phone: true } } },
+  });
+
+  if (dupCheck) {
+    throw Object.assign(new Error('An admin with this employee ID, username, phone, email, or national ID already exists'), { code: 'DUPLICATE_ADMIN' });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        firstName,
+        lastName,
+        username,
+        phone,
+        email: email ?? null,
+        nationalId: nationalId ?? null,
+        passwordHash,
+        role: 'OFFICE_ADMIN',
+      },
+    });
+
+    const admin = await tx.officeAdmin.create({
+      data: {
+        userId: user.userId,
+        officeId: parseInt(officeId, 10),
+        employeeId,
+      },
+      include: {
+        user: {
+          select: {
+            userId: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            username: true,
+            role: true,
+            isActive: true,
+          },
+        },
+        office: {
+          select: {
+            officeId: true,
+            officeCode: true,
+            officeName: true,
+            subCity: true,
+            woreda: true,
+          },
+        },
+      },
+    });
+
+    return admin;
+  });
+};
+
+const createOfficer = async ({
+  firstName,
+  lastName,
+  username,
+  phone,
+  nationalId,
+  employeeId,
+  email,
+  officeId,
+  position,
+  assignedArea,
+  password,
+}) => {
+  const office = await prisma.governmentOffice.findUnique({
+    where: { officeId: parseInt(officeId, 10) },
+  });
+
+  if (!office) {
+    throw Object.assign(new Error('Government office not found'), { code: 'OFFICE_NOT_FOUND' });
+  }
+
+  const dupCheck = await prisma.officer.findFirst({
+    where: {
+      OR: [
+        { employeeId },
+        { user: { OR: [{ username }, ...(phone ? [{ phone }] : []), ...(email ? [{ email }] : []), ...(nationalId ? [{ nationalId }] : [])] } },
+      ],
+    },
+    include: { user: { select: { username: true, email: true, phone: true } } },
+  });
+
+  if (dupCheck) {
+    throw Object.assign(new Error('An officer with this employee ID, username, phone, email, or national ID already exists'), { code: 'DUPLICATE_OFFICER' });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        firstName,
+        lastName,
+        username,
+        phone,
+        email: email ?? null,
+        nationalId: nationalId ?? null,
+        passwordHash,
+        role: 'OFFICER',
+      },
+    });
+
+    const officer = await tx.officer.create({
+      data: {
+        userId: user.userId,
+        officeId: parseInt(officeId, 10),
+        employeeId,
+        position: position ?? null,
+        assignedArea: assignedArea ?? null,
+      },
+      include: {
+        user: {
+          select: {
+            userId: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            username: true,
+            role: true,
+            isActive: true,
+          },
+        },
+        office: {
+          select: {
+            officeId: true,
+            officeCode: true,
+            officeName: true,
+            subCity: true,
+            woreda: true,
+          },
+        },
+      },
+    });
+
+    return officer;
+  });
+};
+
 module.exports = {
   getSummary,
   getOfficers,
@@ -715,4 +910,7 @@ module.exports = {
   getOfficeAdmins,
   getOfficeSummary,
   getOffices,
+  createOffice,
+  createOfficeAdmin,
+  createOfficer,
 };

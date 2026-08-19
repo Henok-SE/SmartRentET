@@ -266,6 +266,116 @@ const getOffices = async (req, res) => {
   }
 };
 
+// ---- POST: create endpoints ----
+
+const createOffice = async (req, res) => {
+  try {
+    const { officeName, officeCode, region, city, subCity, woreda, address } = req.body;
+
+    if (!officeName || !officeCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Office name and office code are required',
+      });
+    }
+
+    const data = await dashboardService.createOffice({
+      officeName, officeCode, region, city, subCity, woreda, address,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Government office created successfully',
+      data,
+    });
+  } catch (error) {
+    console.error('Create office error:', error);
+
+    if (error.code === 'OFFICE_CODE_EXISTS') {
+      return res.status(409).json({ success: false, message: 'An office with this code already exists' });
+    }
+
+    res.status(500).json({ success: false, message: 'Failed to create government office' });
+  }
+};
+
+const createOfficeAdmin = async (req, res) => {
+  try {
+    const { firstName, lastName, username, phone, nationalId, employeeId, email, officeId, password } = req.body;
+
+    if (!firstName || !lastName || !username || !phone || !employeeId || !officeId || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: firstName, lastName, username, phone, employeeId, officeId, password',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+
+    const data = await dashboardService.createOfficeAdmin({
+      firstName, lastName, username, phone, nationalId, employeeId, email, officeId, password,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Office admin created successfully',
+      data,
+    });
+  } catch (error) {
+    console.error('Create office admin error:', error);
+
+    if (error.code === 'OFFICE_NOT_FOUND') {
+      return res.status(404).json({ success: false, message: 'Government office not found' });
+    }
+    if (error.code === 'DUPLICATE_ADMIN') {
+      return res.status(409).json({ success: false, message: 'An admin with these details already exists' });
+    }
+
+    res.status(500).json({ success: false, message: error.message || 'Failed to create office admin' });
+
+  }
+};
+
+const createOfficer = async (req, res) => {
+  try {
+    const { firstName, lastName, username, phone, nationalId, employeeId, email, officeId, position, assignedArea, password } = req.body;
+
+    if (!firstName || !lastName || !username || !phone || !employeeId || !officeId || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: firstName, lastName, username, phone, employeeId, officeId, password',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+
+    const data = await dashboardService.createOfficer({
+      firstName, lastName, username, phone, nationalId, employeeId, email, officeId, position, assignedArea, password,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Officer created successfully',
+      data,
+    });
+  } catch (error) {
+    console.error('Create officer error:', error);
+
+    if (error.code === 'OFFICE_NOT_FOUND') {
+      return res.status(404).json({ success: false, message: 'Government office not found' });
+    }
+    if (error.code === 'DUPLICATE_OFFICER') {
+      return res.status(409).json({ success: false, message: 'An officer with these details already exists' });
+    }
+
+    res.status(500).json({ success: false, message: 'Failed to create officer' });
+  }
+};
+
 module.exports = {
   getSummary,
   getSuperAdmins,
@@ -277,4 +387,7 @@ module.exports = {
   getOfficeAdmins,
   getOfficeSummary,
   getOffices,
+  createOffice,
+  createOfficeAdmin,
+  createOfficer,
 };
