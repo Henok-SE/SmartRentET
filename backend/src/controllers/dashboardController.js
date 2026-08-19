@@ -188,6 +188,83 @@ const getOfficers = async (req, res) => {
   }
 };
 
+const getOfficeAdmins = async (req, res) => {
+  try {
+    const { officeId, subCity, isActive, officeCode } = req.query;
+
+    const data = await dashboardService.getOfficeAdmins({
+      officeId,
+      subCity,
+      isActive,
+      officeCode,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Office Admins retrieved successfully',
+      filters: { officeId, subCity, isActive, officeCode },
+      data,
+    });
+  } catch (error) {
+    console.error('Office admins error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve Office Admins',
+    });
+  }
+};
+
+const getOfficeSummary = async (req, res) => {
+  try {
+    const { officeId, subCity } = req.query;
+
+    const data = await dashboardService.getOfficeSummary({
+      officeId,
+      subCity,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Office summary retrieved successfully',
+      filters: { officeId, subCity },
+      data,
+    });
+  } catch (error) {
+    console.error('Office summary error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve office summary',
+    });
+  }
+};
+
+const getOffices = async (req, res) => {
+  try {
+    const { status, subCity, city } = req.query;
+
+    const data = await dashboardService.getOffices({
+      status,
+      subCity,
+      city,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Government offices retrieved successfully',
+      filters: { status, subCity, city },
+      data,
+    });
+  } catch (error) {
+    console.error('Offices error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve government offices',
+    });
+  }
+};
 
 module.exports = {
   getSummary,
@@ -197,4 +274,7 @@ module.exports = {
   getAuditLogs,
   getReports,
   getNotifications,
+  getOfficeAdmins,
+  getOfficeSummary,
+  getOffices,
 };

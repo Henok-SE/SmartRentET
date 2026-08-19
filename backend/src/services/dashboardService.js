@@ -539,6 +539,171 @@ const getOfficers = async ({ subCity, isActive } = {}) => {
   });
 };
 
+
+const getOfficeAdmins = async ({ officeId, subCity, isActive, officeCode } = {}) => {
+  return prisma.officeAdmin.findMany({
+    where: {
+      ...(officeId
+        ? { officeId: parseInt(officeId, 10) }
+        : {}),
+
+      ...(officeCode
+        ? {
+            office: {
+              OR: [
+                { officeCode: { contains: officeCode, mode: 'insensitive' } },
+                { officeName: { contains: officeCode, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
+
+      ...(subCity
+        ? {
+            office: {
+              subCity,
+            },
+          }
+        : {}),
+
+      ...(isActive !== undefined
+        ? {
+            user: {
+              isActive: isActive === 'true',
+            },
+          }
+        : {}),
+    },
+
+    select: {
+      officeAdminId: true,
+      employeeId: true,
+      createdAt: true,
+
+      user: {
+        select: {
+          userId: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          username: true,
+          role: true,
+          isActive: true,
+        },
+      },
+
+      office: {
+        select: {
+          officeId: true,
+          officeCode: true,
+          officeName: true,
+          region: true,
+          city: true,
+          subCity: true,
+          woreda: true,
+          status: true,
+        },
+      },
+    },
+
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+};
+
+const getOfficeSummary = async ({ officeId, subCity } = {}) => {
+  const officeWhere = {
+    ...(officeId ? { officeId: parseInt(officeId, 10) } : {}),
+    ...(subCity ? { office: { subCity } } : {}),
+  };
+
+  const agreementWhere = {
+    ...(officeId ? { officeId: parseInt(officeId, 10) } : {}),
+    ...(subCity ? { office: { subCity } } : {}),
+  };
+
+  const [
+    totalOfficers,
+    activeOfficers,
+    totalAgreements,
+    activeAgreements,
+    pendingAgreements,
+    pendingPayments,
+    overduePayments,
+    totalOfficeAdmins,
+    totalOffices,
+  ] = await Promise.all([
+    prisma.officer.count({ where: officeWhere }),
+    prisma.officer.count({
+      where: { ...officeWhere, user: { isActive: true } },
+    }),
+    prisma.rentalAgreement.count({ where: agreementWhere }),
+    prisma.rentalAgreement.count({
+      where: { ...agreementWhere, status: 'ACTIVE' },
+    }),
+    prisma.rentalAgreement.count({
+      where: { ...agreementWhere, status: 'PENDING_VERIFICATION' },
+    }),
+    prisma.payment.count({
+      where: { agreement: agreementWhere, status: 'PENDING' },
+    }),
+    prisma.payment.count({
+      where: { agreement: agreementWhere, status: 'OVERDUE' },
+    }),
+    prisma.officeAdmin.count(),
+    prisma.governmentOffice.count(),
+  ]);
+
+  return {
+    totalOfficers,
+    activeOfficers,
+    totalAgreements,
+    activeAgreements,
+    pendingAgreements,
+    pendingPayments,
+    overduePayments,
+    totalOfficeAdmins,
+    totalOffices,
+  };
+};
+
+const getOffices = async ({ status, subCity, city } = {}) => {
+  return prisma.governmentOffice.findMany({
+    where: {
+      ...(status ? { status } : {}),
+      ...(subCity ? { subCity } : {}),
+      ...(city ? { city } : {}),
+    },
+
+    select: {
+      officeId: true,
+      officeCode: true,
+      officeName: true,
+      region: true,
+      city: true,
+      subCity: true,
+      woreda: true,
+      address: true,
+      status: true,
+      createdAt: true,
+
+      _count: {
+        select: {
+          officeAdmins: true,
+          officers: true,
+          agreements: true,
+        },
+      },
+    },
+
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+};
+
 module.exports = {
   getSummary,
   getOfficers,
@@ -547,4 +712,7 @@ module.exports = {
   getAuditLogs,
   getReports,
   getNotifications,
+  getOfficeAdmins,
+  getOfficeSummary,
+  getOffices,
 };

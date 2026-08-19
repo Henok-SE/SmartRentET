@@ -9,5 +9,8 @@ router.get('/reports', dashboardController.getReports);
 router.get('/notifications', dashboardController.getNotifications);
 router.get('/officers', dashboardController.getOfficers);
 router.get('/super-admins', dashboardController.getSuperAdmins);
+router.get('/office-admins', dashboardController.getOfficeAdmins);
+router.get('/office-summary', dashboardController.getOfficeSummary);
+router.get('/offices', dashboardController.getOffices);
 
 module.exports = router;
