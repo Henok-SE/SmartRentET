@@ -1,6 +1,30 @@
 import { useMemo, useState } from "react";
 import LogoutButton from "../../components/LogoutButton";
+import { apiRequest } from "../../services/api";
 import "../../styles/super-admin-dashboard.css";
+
+type GovernmentOffice = {
+  officeId: number;
+  officeCode: string;
+  officeName: string;
+  region?: string | null;
+  city?: string | null;
+  subCity?: string | null;
+  woreda?: string | null;
+  address?: string | null;
+  status?: "ACTIVE" | "INACTIVE";
+  createdAt?: string;
+};
+
+type OfficeForm = {
+  officeName: string;
+  officeCode: string;
+  region: string;
+  city: string;
+  subCity: string;
+  woreda: string;
+  address: string;
+};
 
 type AdminForm = {
   firstName: string;
@@ -9,31 +33,86 @@ type AdminForm = {
   phone: string;
   nationalId: string;
   password: string;
+  employeeId: string;
+  officeId: string;
 };
 
 type StoredUser = {
-  userId?: string;
+  userId?: number | string;
   username?: string;
   role?: string;
   firstName?: string;
   lastName?: string;
 };
 
+type OfficeListResponse = {
+  success: boolean;
+  message?: string;
+  filters?: {
+    status?: string;
+    subCity?: string;
+    city?: string;
+  };
+  data: GovernmentOffice[];
+};
+
+type OfficeCreateResponse = {
+  success: boolean;
+  message: string;
+  data: GovernmentOffice;
+};
+
+type CreateAdminResponse = {
+  success: boolean;
+  message: string;
+  data?: unknown;
+};
+
+const createEmptyOfficeForm = (): OfficeForm => ({
+  officeName: "",
+  officeCode: "",
+  region: "",
+  city: "",
+  subCity: "",
+  woreda: "",
+  address: "",
+});
+
+const createEmptyAdminForm = (): AdminForm => ({
+  firstName: "",
+  lastName: "",
+  username: "",
+  phone: "",
+  nationalId: "",
+  password: "",
+  employeeId: "",
+  officeId: "",
+});
+
 function SuperAdminDashboard() {
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
+  const [showCreateOffice, setShowCreateOffice] = useState(false);
+
   const [loading, setLoading] = useState(false);
+  const [officeLoading, setOfficeLoading] = useState(false);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const [officeError, setOfficeError] = useState("");
+  const [officeSuccess, setOfficeSuccess] = useState("");
+
   const [search, setSearch] = useState("");
 
-  const [form, setForm] = useState<AdminForm>({
-    firstName: "",
-    lastName: "",
-    username: "",
-    phone: "",
-    nationalId: "",
-    password: "",
-  });
+  const [offices, setOffices] = useState<GovernmentOffice[]>([]);
+
+  const [adminForm, setAdminForm] = useState<AdminForm>(
+    createEmptyAdminForm
+  );
+
+  const [officeForm, setOfficeForm] = useState<OfficeForm>(
+    createEmptyOfficeForm
+  );
 
   /*
    * ---------------------------------------------------------
@@ -49,7 +128,7 @@ function SuperAdminDashboard() {
     }
 
     try {
-      return JSON.parse(storedUser);
+      return JSON.parse(storedUser) as StoredUser;
     } catch {
       return {};
     }
@@ -74,35 +153,145 @@ function SuperAdminDashboard() {
 
   /*
    * ---------------------------------------------------------
-   * FORM HANDLING
+   * HELPERS
    * ---------------------------------------------------------
    */
 
-  const handleChange = (
+  const resetAdminForm = () => {
+    setAdminForm(createEmptyAdminForm());
+  };
+
+  const resetOfficeForm = () => {
+    setOfficeForm(createEmptyOfficeForm());
+  };
+
+  const clearAdminMessages = () => {
+    setError("");
+    setSuccess("");
+  };
+
+  const clearOfficeMessages = () => {
+    setOfficeError("");
+    setOfficeSuccess("");
+  };
+
+  /*
+   * ---------------------------------------------------------
+   * ADMIN FORM
+   * ---------------------------------------------------------
+   */
+
+  const handleAdminChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const { name, value } = event.target;
 
-    setForm((previous) => ({
+    setAdminForm((previous) => ({
       ...previous,
       [name]: value,
     }));
   };
 
-  const openCreateAdmin = () => {
-    setError("");
-    setSuccess("");
+  const handleOfficeSelect = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    setAdminForm((previous) => ({
+      ...previous,
+      officeId: event.target.value,
+    }));
+  };
 
-    setForm({
-      firstName: "",
-      lastName: "",
-      username: "",
-      phone: "",
-      nationalId: "",
-      password: "",
-    });
+  /*
+   * ---------------------------------------------------------
+   * OFFICE FORM
+   * ---------------------------------------------------------
+   */
 
+  const handleOfficeChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = event.target;
+
+    setOfficeForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  /*
+   * ---------------------------------------------------------
+   * LOAD GOVERNMENT OFFICES
+   * ---------------------------------------------------------
+   */
+
+  const loadOffices = async () => {
+    setOfficeLoading(true);
+    setOfficeError("");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const response =
+        await apiRequest<OfficeListResponse>(
+          "/dashboard/offices",
+          {
+            method: "GET",
+            cache: "no-store",
+            headers: token
+              ? {
+                  Authorization: `Bearer ${token}`,
+                }
+              : undefined,
+          }
+        );
+
+      setOffices(response.data);
+    } catch (err) {
+      if (err instanceof Error) {
+        setOfficeError(err.message);
+      } else {
+        setOfficeError(
+          "Failed to load government offices."
+        );
+      }
+    } finally {
+      setOfficeLoading(false);
+    }
+  };
+
+  /*
+   * ---------------------------------------------------------
+   * OPEN / CLOSE OFFICE MODAL
+   * ---------------------------------------------------------
+   */
+
+  const openCreateOffice = () => {
+    clearOfficeMessages();
+    resetOfficeForm();
+    setShowCreateOffice(true);
+  };
+
+  const closeCreateOffice = () => {
+    if (officeLoading) {
+      return;
+    }
+
+    setShowCreateOffice(false);
+    clearOfficeMessages();
+  };
+
+  /*
+   * ---------------------------------------------------------
+   * OPEN / CLOSE ADMIN MODAL
+   * ---------------------------------------------------------
+   */
+
+  const openCreateAdmin = async () => {
+    clearAdminMessages();
+    resetAdminForm();
     setShowCreateAdmin(true);
+
+    await loadOffices();
   };
 
   const closeCreateAdmin = () => {
@@ -111,76 +300,198 @@ function SuperAdminDashboard() {
     }
 
     setShowCreateAdmin(false);
-    setError("");
-    setSuccess("");
+    clearAdminMessages();
   };
 
   /*
    * ---------------------------------------------------------
-   * CREATE ADMIN
+   * CREATE GOVERNMENT OFFICE
    * ---------------------------------------------------------
    */
+
+  const validateOfficeForm = (): string | null => {
+    if (!officeForm.officeName.trim()) {
+      return "Office name is required.";
+    }
+
+    if (!officeForm.officeCode.trim()) {
+      return "Office code is required.";
+    }
+
+    return null;
+  };
+
+  const handleCreateOffice = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    clearOfficeMessages();
+
+    const validationError = validateOfficeForm();
+
+    if (validationError) {
+      setOfficeError(validationError);
+      return;
+    }
+
+    setOfficeLoading(true);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const response =
+        await apiRequest<OfficeCreateResponse>(
+          "/dashboard/offices",
+          {
+            method: "POST",
+            headers: token
+              ? {
+                  Authorization: `Bearer ${token}`,
+                }
+              : undefined,
+            body: JSON.stringify({
+              officeName: officeForm.officeName.trim(),
+              officeCode: officeForm.officeCode.trim(),
+              region: officeForm.region.trim(),
+              city: officeForm.city.trim(),
+              subCity: officeForm.subCity.trim(),
+              woreda: officeForm.woreda.trim(),
+              address: officeForm.address.trim(),
+            }),
+          }
+        );
+
+      setOffices((previous) => {
+        const withoutDuplicate = previous.filter(
+          (office) =>
+            office.officeId !== response.data.officeId
+        );
+
+        return [...withoutDuplicate, response.data].sort(
+          (a, b) =>
+            a.officeName.localeCompare(b.officeName)
+        );
+      });
+
+      setAdminForm((previous) => ({
+        ...previous,
+        officeId: String(response.data.officeId),
+      }));
+
+      setOfficeSuccess(
+        "Government Office created successfully."
+      );
+
+      resetOfficeForm();
+
+      window.setTimeout(() => {
+        setShowCreateOffice(false);
+        setOfficeSuccess("");
+      }, 1000);
+    } catch (err) {
+      if (err instanceof Error) {
+        setOfficeError(err.message);
+      } else {
+        setOfficeError(
+          "Failed to create government office."
+        );
+      }
+    } finally {
+      setOfficeLoading(false);
+    }
+  };
+
+  /*
+   * ---------------------------------------------------------
+   * CREATE ADMINISTRATOR
+   * ---------------------------------------------------------
+   */
+
+  const validateAdminForm = (): string | null => {
+    if (!adminForm.firstName.trim()) {
+      return "First name is required.";
+    }
+
+    if (!adminForm.lastName.trim()) {
+      return "Last name is required.";
+    }
+
+    if (!adminForm.username.trim()) {
+      return "Username is required.";
+    }
+
+    if (!adminForm.phone.trim()) {
+      return "Phone number is required.";
+    }
+
+    if (!adminForm.nationalId.trim()) {
+      return "National ID is required.";
+    }
+
+    if (!adminForm.employeeId.trim()) {
+      return "Employee ID is required.";
+    }
+
+    if (!adminForm.officeId) {
+      return "Please select a Government Office.";
+    }
+
+    if (adminForm.password.length < 6) {
+      return "Password must be at least 6 characters.";
+    }
+
+    return null;
+  };
 
   const handleCreateAdmin = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
-    setError("");
-    setSuccess("");
+    clearAdminMessages();
+
+    const validationError = validateAdminForm();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
 
     try {
       const token = localStorage.getItem("token");
 
-      const response = await fetch(
-        "http://localhost:5000/api/auth/register",
+      await apiRequest<CreateAdminResponse>(
+        "/dashboard/office-admins",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-
-            ...(token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : {}),
-          },
-
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : undefined,
           body: JSON.stringify({
-            firstName: form.firstName.trim(),
-            lastName: form.lastName.trim(),
-            phone: form.phone.trim(),
-            nationalId: form.nationalId.trim(),
-            username: form.username.trim(),
-            password: form.password,
-            role: "ADMIN",
+            firstName: adminForm.firstName.trim(),
+            lastName: adminForm.lastName.trim(),
+            username: adminForm.username.trim(),
+            phone: adminForm.phone.trim(),
+            nationalId: adminForm.nationalId.trim(),
+            employeeId: adminForm.employeeId.trim(),
+            officeId: Number(adminForm.officeId),
+            password: adminForm.password,
           }),
         }
       );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Failed to create administrator."
-        );
-      }
 
       setSuccess(
         "Administrator created successfully."
       );
 
-      setForm({
-        firstName: "",
-        lastName: "",
-        username: "",
-        phone: "",
-        nationalId: "",
-        password: "",
-      });
+      resetAdminForm();
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         setShowCreateAdmin(false);
         setSuccess("");
       }, 1200);
@@ -205,17 +516,8 @@ function SuperAdminDashboard() {
 
   return (
     <div className="super-admin-page">
-
-      {/* =====================================================
-          SIDEBAR
-          ===================================================== */}
-
       <aside className="super-admin-sidebar">
-
-        {/* Brand */}
-
         <div className="super-admin-sidebar-brand">
-
           <img
             src="/smartrent-logo.png"
             alt="SmartRent ET"
@@ -226,19 +528,14 @@ function SuperAdminDashboard() {
             <h1>SmartRent ET</h1>
             <span>ADMINISTRATION</span>
           </div>
-
         </div>
-
-
-        {/* Divider */}
 
         <div className="super-admin-sidebar-divider" />
 
-
-        {/* Navigation */}
-
-        <nav className="super-admin-navigation">
-
+        <nav
+          className="super-admin-navigation"
+          aria-label="Super Admin navigation"
+        >
           <button
             type="button"
             className="super-admin-nav-item active"
@@ -246,11 +543,9 @@ function SuperAdminDashboard() {
             <span className="super-admin-nav-icon">
               ▦
             </span>
-
             <span>Dashboard</span>
           </button>
 
-
           <button
             type="button"
             className="super-admin-nav-item"
@@ -258,11 +553,9 @@ function SuperAdminDashboard() {
             <span className="super-admin-nav-icon">
               ♟
             </span>
-
             <span>Administrators</span>
           </button>
 
-
           <button
             type="button"
             className="super-admin-nav-item"
@@ -270,10 +563,18 @@ function SuperAdminDashboard() {
             <span className="super-admin-nav-icon">
               ♟
             </span>
-
             <span>Officers</span>
           </button>
 
+          <button
+            type="button"
+            className="super-admin-nav-item"
+          >
+            <span className="super-admin-nav-icon">
+              ◎
+            </span>
+            <span>Government Offices</span>
+          </button>
 
           <button
             type="button"
@@ -282,54 +583,31 @@ function SuperAdminDashboard() {
             <span className="super-admin-nav-icon">
               ⚙
             </span>
-
             <span>System Settings</span>
           </button>
-
         </nav>
 
-
-        {/* Sidebar bottom */}
-
         <div className="super-admin-sidebar-bottom">
-
           <div className="super-admin-profile">
-
             <div className="super-admin-avatar">
-              S
+              {displayName.charAt(0).toUpperCase()}
             </div>
 
             <div className="super-admin-profile-info">
               <strong>{displayName}</strong>
               <span>Super Administrator</span>
             </div>
-
           </div>
-
 
           <div className="super-admin-logout">
             <LogoutButton />
           </div>
-
         </div>
-
       </aside>
 
-
-      {/* =====================================================
-          MAIN AREA
-          ===================================================== */}
-
       <div className="super-admin-main">
-
-        {/* ===================================================
-            TOP BAR
-            =================================================== */}
-
         <header className="super-admin-topbar">
-
           <div className="super-admin-search">
-
             <span className="super-admin-search-icon">
               ⌕
             </span>
@@ -343,175 +621,110 @@ function SuperAdminDashboard() {
               placeholder="Search administrators..."
               aria-label="Search administrators"
             />
-
           </div>
 
-<div className="super-admin-topbar-user">
-  <span className="super-admin-user-status" />
-  <span className="super-admin-topbar-name">
-    {displayName}
-  </span>
-</div>
+          <div className="super-admin-topbar-user">
+            <span className="super-admin-user-status" />
 
+            <span className="super-admin-topbar-name">
+              {displayName}
+            </span>
+          </div>
         </header>
 
-
-        {/* ===================================================
-            CONTENT
-            =================================================== */}
-
         <main className="super-admin-content">
-
-          {/* Page heading */}
-
           <section className="super-admin-page-heading">
-
             <div>
-
               <span className="super-admin-eyebrow">
                 SYSTEM ADMINISTRATION
               </span>
 
-              <h1>
-                Super Admin Dashboard
-              </h1>
+              <h1>Super Admin Dashboard</h1>
 
               <p>
-                Manage SmartRent ET administrators and
-                system access.
+                Manage SmartRent ET administrators,
+                government offices, and system access.
               </p>
-
             </div>
 
-
-            <button
-              type="button"
-              className="super-admin-primary-button"
-              onClick={openCreateAdmin}
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                flexWrap: "wrap",
+              }}
             >
-              <span>+</span>
-              Create Admin
-            </button>
+              <button
+                type="button"
+                className="super-admin-outline-button"
+                onClick={openCreateOffice}
+              >
+                + Create Government Office
+              </button>
 
+              <button
+                type="button"
+                className="super-admin-primary-button"
+                onClick={openCreateAdmin}
+              >
+                <span>+</span>
+                Create Admin
+              </button>
+            </div>
           </section>
 
-
-          {/* =================================================
-              STATISTICS
-              ================================================= */}
-
           <section className="super-admin-stat-grid">
-
-            {/* Total Administrators */}
-
             <article className="super-admin-stat-card">
-
               <div className="super-admin-stat-icon">
                 ♟
               </div>
 
               <div className="super-admin-stat-content">
-
-                <span>
-                  Total Administrators
-                </span>
-
-                <strong>
-                  0
-                </strong>
-
-                <small>
-                  Registered accounts
-                </small>
-
+                <span>Total Administrators</span>
+                <strong>0</strong>
+                <small>Registered accounts</small>
               </div>
-
             </article>
 
-
-            {/* Active Administrators */}
-
             <article className="super-admin-stat-card">
-
               <div className="super-admin-stat-icon">
                 ✓
               </div>
 
               <div className="super-admin-stat-content">
-
-                <span>
-                  Active Administrators
-                </span>
-
-                <strong>
-                  0
-                </strong>
-
-                <small>
-                  Currently active
-                </small>
-
+                <span>Active Administrators</span>
+                <strong>0</strong>
+                <small>Currently active</small>
               </div>
-
             </article>
 
-
-            {/* System Status */}
-
             <article className="super-admin-stat-card">
-
               <div className="super-admin-stat-icon">
                 ◎
               </div>
 
               <div className="super-admin-stat-content">
-
-                <span>
-                  System Status
-                </span>
-
-                <strong className="system-status-active">
-                  Active
-                </strong>
-
-                <small>
-                  All systems operational
-                </small>
-
+                <span>Government Offices</span>
+                <strong>{offices.length}</strong>
+                <small>Available offices</small>
               </div>
-
             </article>
-
           </section>
 
-
-          {/* =================================================
-              ADMIN MANAGEMENT
-              ================================================= */}
-
           <section className="super-admin-management-card">
-
-            {/* Section header */}
-
             <div className="super-admin-management-header">
-
               <div>
-
                 <span className="super-admin-section-eyebrow">
                   USER MANAGEMENT
                 </span>
 
-                <h2>
-                  Administrators
-                </h2>
+                <h2>Administrators</h2>
 
                 <p>
                   Administrators created and managed by
                   the Super Admin.
                 </p>
-
               </div>
-
 
               <button
                 type="button"
@@ -520,21 +733,14 @@ function SuperAdminDashboard() {
               >
                 + Create Admin
               </button>
-
             </div>
 
-
-            {/* Empty state */}
-
             <div className="super-admin-empty-state">
-
               <div className="super-admin-empty-icon">
                 ♟
               </div>
 
-              <h3>
-                No administrators yet
-              </h3>
+              <h3>No administrators yet</h3>
 
               <p>
                 {search
@@ -551,29 +757,375 @@ function SuperAdminDashboard() {
                   Create First Admin
                 </button>
               )}
-
             </div>
-
           </section>
 
+          <section className="super-admin-management-card">
+            <div className="super-admin-management-header">
+              <div>
+                <span className="super-admin-section-eyebrow">
+                  OFFICE MANAGEMENT
+                </span>
 
-          {/* Current date */}
+                <h2>Government Offices</h2>
+
+                <p>
+                  Government offices available for Office
+                  Administrators.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="super-admin-outline-button"
+                onClick={openCreateOffice}
+              >
+                + Create Office
+              </button>
+            </div>
+
+            {officeError && (
+              <div
+                className="super-admin-form-error"
+                role="alert"
+              >
+                {officeError}
+              </div>
+            )}
+
+            {officeLoading && offices.length === 0 ? (
+              <div className="super-admin-empty-state">
+                <div className="super-admin-empty-icon">
+                  ⏳
+                </div>
+
+                <h3>Loading government offices...</h3>
+
+                <p>
+                  Retrieving available offices.
+                </p>
+              </div>
+            ) : offices.length === 0 ? (
+              <div className="super-admin-empty-state">
+                <div className="super-admin-empty-icon">
+                  ◎
+                </div>
+
+                <h3>No government offices yet</h3>
+
+                <p>
+                  Create a Government Office before
+                  assigning administrators to it.
+                </p>
+
+                <button
+                  type="button"
+                  className="super-admin-primary-button super-admin-empty-button"
+                  onClick={openCreateOffice}
+                >
+                  Create First Office
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gap: "12px",
+                  padding: "20px 0",
+                }}
+              >
+                {offices
+                  .filter((office) => {
+                    const query =
+                      search.trim().toLowerCase();
+
+                    if (!query) {
+                      return true;
+                    }
+
+                    return [
+                      office.officeCode,
+                      office.officeName,
+                      office.city,
+                      office.subCity,
+                      office.region,
+                    ]
+                      .filter(Boolean)
+                      .some((value) =>
+                        String(value)
+                          .toLowerCase()
+                          .includes(query)
+                      );
+                  })
+                  .map((office) => (
+                    <article
+                      key={office.officeId}
+                      style={{
+                        padding: "16px",
+                        border:
+                          "1px solid #e5e7eb",
+                        borderRadius:
+                          "10px",
+                        background:
+                          "#ffffff",
+                      }}
+                    >
+                      <strong>
+                        {office.officeCode} —{" "}
+                        {office.officeName}
+                      </strong>
+
+                      <p
+                        style={{
+                          margin: "6px 0 0",
+                          color: "#6b7280",
+                        }}
+                      >
+                        {[
+                          office.city,
+                          office.subCity,
+                          office.region,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") ||
+                          "Location not provided"}
+                      </p>
+                    </article>
+                  ))}
+              </div>
+            )}
+          </section>
 
           <div className="super-admin-footer-date">
             SmartRent ET Administration · {currentDate}
           </div>
-
         </main>
-
       </div>
 
+      {/* =====================================================
+          CREATE OFFICE MODAL
+          ===================================================== */}
+
+      {showCreateOffice && (
+        <div
+          className="super-admin-modal-overlay"
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !officeLoading
+            ) {
+              closeCreateOffice();
+            }
+          }}
+        >
+          <div
+            className="super-admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-office-title"
+          >
+            <div className="super-admin-modal-header">
+              <div>
+                <span className="super-admin-section-eyebrow">
+                  OFFICE MANAGEMENT
+                </span>
+
+                <h2 id="create-office-title">
+                  Create Government Office
+                </h2>
+
+                <p>
+                  Create a government office before
+                  assigning administrators to it.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="super-admin-modal-close"
+                onClick={closeCreateOffice}
+                disabled={officeLoading}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            {officeError && (
+              <div
+                className="super-admin-form-error"
+                role="alert"
+              >
+                {officeError}
+              </div>
+            )}
+
+            {officeSuccess && (
+              <div
+                className="super-admin-form-success"
+                role="status"
+              >
+                {officeSuccess}
+              </div>
+            )}
+
+            <form
+              className="super-admin-form"
+              onSubmit={handleCreateOffice}
+            >
+              <div className="super-admin-form-group">
+                <label htmlFor="office-officeName">
+                  Office Name
+                </label>
+
+                <input
+                  id="office-officeName"
+                  name="officeName"
+                  type="text"
+                  value={officeForm.officeName}
+                  onChange={handleOfficeChange}
+                  placeholder="e.g. Addis Ababa Rental Office"
+                  disabled={officeLoading}
+                  required
+                />
+              </div>
+
+              <div className="super-admin-form-group">
+                <label htmlFor="office-officeCode">
+                  Office Code
+                </label>
+
+                <input
+                  id="office-officeCode"
+                  name="officeCode"
+                  type="text"
+                  value={officeForm.officeCode}
+                  onChange={handleOfficeChange}
+                  placeholder="e.g. ADDIS-001"
+                  disabled={officeLoading}
+                  required
+                />
+              </div>
+
+              <div className="super-admin-form-row">
+                <div className="super-admin-form-group">
+                  <label htmlFor="office-region">
+                    Region
+                  </label>
+
+                  <input
+                    id="office-region"
+                    name="region"
+                    type="text"
+                    value={officeForm.region}
+                    onChange={handleOfficeChange}
+                    placeholder="e.g. Addis Ababa"
+                    disabled={officeLoading}
+                    required
+                  />
+                </div>
+
+                <div className="super-admin-form-group">
+                  <label htmlFor="office-city">
+                    City
+                  </label>
+
+                  <input
+                    id="office-city"
+                    name="city"
+                    type="text"
+                    value={officeForm.city}
+                    onChange={handleOfficeChange}
+                    placeholder="e.g. Addis Ababa"
+                    disabled={officeLoading}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="super-admin-form-row">
+                <div className="super-admin-form-group">
+                  <label htmlFor="office-subCity">
+                    Sub-City
+                  </label>
+
+                  <input
+                    id="office-subCity"
+                    name="subCity"
+                    type="text"
+                    value={officeForm.subCity}
+                    onChange={handleOfficeChange}
+                    placeholder="e.g. Bole"
+                    disabled={officeLoading}
+                    required
+                  />
+                </div>
+
+                <div className="super-admin-form-group">
+                  <label htmlFor="office-woreda">
+                    Woreda
+                  </label>
+
+                  <input
+                    id="office-woreda"
+                    name="woreda"
+                    type="text"
+                    value={officeForm.woreda}
+                    onChange={handleOfficeChange}
+                    placeholder="e.g. 03"
+                    disabled={officeLoading}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="super-admin-form-group">
+                <label htmlFor="office-address">
+                  Address
+                </label>
+
+                <input
+                  id="office-address"
+                  name="address"
+                  type="text"
+                  value={officeForm.address}
+                  onChange={handleOfficeChange}
+                  placeholder="Enter office address"
+                  disabled={officeLoading}
+                  required
+                />
+              </div>
+
+              <div className="super-admin-form-actions">
+                <button
+                  type="button"
+                  className="super-admin-cancel-button"
+                  onClick={closeCreateOffice}
+                  disabled={officeLoading}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="super-admin-primary-button"
+                  disabled={officeLoading}
+                >
+                  {officeLoading
+                    ? "Creating..."
+                    : "Create Government Office"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* =====================================================
           CREATE ADMIN MODAL
           ===================================================== */}
 
       {showCreateAdmin && (
-
         <div
           className="super-admin-modal-overlay"
           onMouseDown={(event) => {
@@ -585,20 +1137,14 @@ function SuperAdminDashboard() {
             }
           }}
         >
-
           <div
             className="super-admin-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-admin-title"
           >
-
-            {/* Modal header */}
-
             <div className="super-admin-modal-header">
-
               <div>
-
                 <span className="super-admin-section-eyebrow">
                   USER MANAGEMENT
                 </span>
@@ -608,12 +1154,10 @@ function SuperAdminDashboard() {
                 </h2>
 
                 <p>
-                  Create a new SmartRent administrator
-                  account.
+                  Create an Office Administrator and assign
+                  an existing Government Office.
                 </p>
-
               </div>
-
 
               <button
                 type="button"
@@ -624,193 +1168,245 @@ function SuperAdminDashboard() {
               >
                 ×
               </button>
-
             </div>
 
-
-            {/* Error */}
-
             {error && (
-
               <div
                 className="super-admin-form-error"
                 role="alert"
               >
                 {error}
               </div>
-
             )}
 
-
-            {/* Success */}
-
             {success && (
-
               <div
                 className="super-admin-form-success"
                 role="status"
               >
                 {success}
               </div>
-
             )}
-
-
-            {/* Form */}
 
             <form
               className="super-admin-form"
               onSubmit={handleCreateAdmin}
             >
+              <div className="super-admin-form-section">
+                <div className="super-admin-form-section-header">
+                  <span className="super-admin-section-eyebrow">
+                    USER MANAGEMENT
+                  </span>
 
-              {/* First + Last */}
+                  <h3>Administrator Information</h3>
 
-              <div className="super-admin-form-row">
+                  <p>
+                    Enter the account information for the new
+                    Office Administrator.
+                  </p>
+                </div>
+
+                <div className="super-admin-form-row">
+                  <div className="super-admin-form-group">
+                    <label htmlFor="admin-firstName">
+                      First Name
+                    </label>
+
+                    <input
+                      id="admin-firstName"
+                      name="firstName"
+                      type="text"
+                      value={adminForm.firstName}
+                      onChange={handleAdminChange}
+                      placeholder="Enter first name"
+                      autoComplete="given-name"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+
+                  <div className="super-admin-form-group">
+                    <label htmlFor="admin-lastName">
+                      Last Name
+                    </label>
+
+                    <input
+                      id="admin-lastName"
+                      name="lastName"
+                      type="text"
+                      value={adminForm.lastName}
+                      onChange={handleAdminChange}
+                      placeholder="Enter last name"
+                      autoComplete="family-name"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="super-admin-form-row">
+                  <div className="super-admin-form-group">
+                    <label htmlFor="admin-username">
+                      Username
+                    </label>
+
+                    <input
+                      id="admin-username"
+                      name="username"
+                      type="text"
+                      value={adminForm.username}
+                      onChange={handleAdminChange}
+                      placeholder="Choose username"
+                      autoComplete="username"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+
+                  <div className="super-admin-form-group">
+                    <label htmlFor="admin-employeeId">
+                      Employee ID
+                    </label>
+
+                    <input
+                      id="admin-employeeId"
+                      name="employeeId"
+                      type="text"
+                      value={adminForm.employeeId}
+                      onChange={handleAdminChange}
+                      placeholder="Enter employee ID"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="super-admin-form-row">
+                  <div className="super-admin-form-group">
+                    <label htmlFor="admin-phone">
+                      Phone Number
+                    </label>
+
+                    <input
+                      id="admin-phone"
+                      name="phone"
+                      type="tel"
+                      value={adminForm.phone}
+                      onChange={handleAdminChange}
+                      placeholder="Enter phone number"
+                      autoComplete="tel"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+
+                  <div className="super-admin-form-group">
+                    <label htmlFor="admin-nationalId">
+                      National ID
+                    </label>
+
+                    <input
+                      id="admin-nationalId"
+                      name="nationalId"
+                      type="text"
+                      value={adminForm.nationalId}
+                      onChange={handleAdminChange}
+                      placeholder="Enter national ID"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
 
                 <div className="super-admin-form-group">
-
-                  <label htmlFor="admin-firstName">
-                    First Name
+                  <label htmlFor="admin-password">
+                    Temporary Password
                   </label>
 
                   <input
-                    id="admin-firstName"
-                    name="firstName"
-                    type="text"
-                    value={form.firstName}
-                    onChange={handleChange}
-                    placeholder="Enter first name"
-                    autoComplete="given-name"
+                    id="admin-password"
+                    name="password"
+                    type="password"
+                    value={adminForm.password}
+                    onChange={handleAdminChange}
+                    placeholder="Create temporary password"
+                    autoComplete="new-password"
+                    minLength={6}
                     disabled={loading}
                     required
                   />
 
+                  <small>
+                    Minimum 6 characters.
+                  </small>
                 </div>
+              </div>
 
+              <div className="super-admin-form-section">
+                <div className="super-admin-form-section-header">
+                  <span className="super-admin-section-eyebrow">
+                    GOVERNMENT OFFICE
+                  </span>
+
+                  <h3>Assign Government Office</h3>
+
+                  <p>
+                    Select an existing Government Office for
+                    this administrator.
+                  </p>
+                </div>
 
                 <div className="super-admin-form-group">
-
-                  <label htmlFor="admin-lastName">
-                    Last Name
+                  <label htmlFor="admin-officeId">
+                    Government Office
                   </label>
 
-                  <input
-                    id="admin-lastName"
-                    name="lastName"
-                    type="text"
-                    value={form.lastName}
-                    onChange={handleChange}
-                    placeholder="Enter last name"
-                    autoComplete="family-name"
-                    disabled={loading}
+                  <select
+                    id="admin-officeId"
+                    name="officeId"
+                    value={adminForm.officeId}
+                    onChange={handleOfficeSelect}
+                    disabled={
+                      loading ||
+                      officeLoading ||
+                      offices.length === 0
+                    }
                     required
-                  />
+                  >
+                    <option value="">
+                      {officeLoading
+                        ? "Loading offices..."
+                        : offices.length === 0
+                        ? "No government offices available"
+                        : "Select a Government Office"}
+                    </option>
 
+                    {offices.map((office) => (
+                      <option
+                        key={office.officeId}
+                        value={office.officeId}
+                      >
+                        {office.officeCode} —{" "}
+                        {office.officeName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
+                {offices.length === 0 &&
+                  !officeLoading && (
+                    <div
+                      className="super-admin-form-success"
+                      role="status"
+                    >
+                      No Government Offices exist yet.
+                      Close this dialog and create an office
+                      first.
+                    </div>
+                  )}
               </div>
-
-
-              {/* Username */}
-
-              <div className="super-admin-form-group">
-
-                <label htmlFor="admin-username">
-                  Username
-                </label>
-
-                <input
-                  id="admin-username"
-                  name="username"
-                  type="text"
-                  value={form.username}
-                  onChange={handleChange}
-                  placeholder="Choose username"
-                  autoComplete="username"
-                  disabled={loading}
-                  required
-                />
-
-              </div>
-
-
-              {/* Phone */}
-
-              <div className="super-admin-form-group">
-
-                <label htmlFor="admin-phone">
-                  Phone Number
-                </label>
-
-                <input
-                  id="admin-phone"
-                  name="phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={handleChange}
-                  placeholder="Enter phone number"
-                  autoComplete="tel"
-                  disabled={loading}
-                  required
-                />
-
-              </div>
-
-
-              {/* National ID */}
-
-              <div className="super-admin-form-group">
-
-                <label htmlFor="admin-nationalId">
-                  National ID
-                </label>
-
-                <input
-                  id="admin-nationalId"
-                  name="nationalId"
-                  type="text"
-                  value={form.nationalId}
-                  onChange={handleChange}
-                  placeholder="Enter national ID"
-                  disabled={loading}
-                  required
-                />
-
-              </div>
-
-
-              {/* Password */}
-
-              <div className="super-admin-form-group">
-
-                <label htmlFor="admin-password">
-                  Temporary Password
-                </label>
-
-                <input
-                  id="admin-password"
-                  name="password"
-                  type="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  placeholder="Create temporary password"
-                  autoComplete="new-password"
-                  minLength={6}
-                  disabled={loading}
-                  required
-                />
-
-                <small>
-                  Minimum 6 characters.
-                </small>
-
-              </div>
-
-
-              {/* Actions */}
 
               <div className="super-admin-form-actions">
-
                 <button
                   type="button"
                   className="super-admin-cancel-button"
@@ -820,27 +1416,24 @@ function SuperAdminDashboard() {
                   Cancel
                 </button>
 
-
                 <button
                   type="submit"
                   className="super-admin-primary-button"
-                  disabled={loading}
+                  disabled={
+                    loading ||
+                    officeLoading ||
+                    offices.length === 0
+                  }
                 >
                   {loading
                     ? "Creating..."
-                    : "Create Admin"}
+                    : "Create Administrator"}
                 </button>
-
               </div>
-
             </form>
-
           </div>
-
         </div>
-
       )}
-
     </div>
   );
 }

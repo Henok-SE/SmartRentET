@@ -266,7 +266,8 @@ model Officer {
   employeeId   String  @unique
   position     String?
   assignedArea String?
-
+  subCity    String?
+  assignedTo String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

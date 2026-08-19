@@ -4,7 +4,7 @@ import type {
   RegisterRequest,
 } from "../types/auth";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = import.meta.env.VITE_API_URL;
 
 export async function login(
   credentials: LoginRequest
@@ -21,6 +21,32 @@ export async function login(
 
   if (!response.ok) {
     throw new Error(data.error || "Login failed");
+  }
+
+  return data;
+}
+
+export async function verifyOTP(
+  userId: number,
+  code: string
+): Promise<AuthResponse> {
+  const response = await fetch(`${API_URL}/auth/verify-otp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      userId,
+      code,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || "OTP verification failed"
+    );
   }
 
   return data;

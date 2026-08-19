@@ -3,9 +3,6 @@ import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../../services/authService";
 
-const SUPER_ADMIN_USERNAME = "superadmin";
-const SUPER_ADMIN_PASSWORD = "SuperAdmin123";
-
 function Login() {
   const navigate = useNavigate();
 
@@ -23,45 +20,16 @@ function Login() {
     try {
       /*
        * =====================================================
-       * SUPER ADMIN
+       * AUTHENTICATE THROUGH BACKEND
        * =====================================================
        *
-       * Development-only authentication for now.
-       * This should eventually be moved to the backend.
-       */
-      if (
-        username.trim() === SUPER_ADMIN_USERNAME &&
-        password === SUPER_ADMIN_PASSWORD
-      ) {
-        const superAdmin = {
-          userId: "super-admin",
-          username: SUPER_ADMIN_USERNAME,
-          role: "SUPER_ADMIN" as const,
-          firstName: "Super",
-          lastName: "Admin",
-        };
-
-        localStorage.setItem(
-          "token",
-          "super-admin-token"
-        );
-
-        localStorage.setItem(
-          "user",
-          JSON.stringify(superAdmin)
-        );
-
-        navigate("/super-admin");
-
-        return;
-      }
-
-      /*
-       * =====================================================
-       * ADMIN / OFFICER
-       * =====================================================
+       * All supported roles use the backend authentication:
        *
-       * Authenticate through the backend.
+       * SUPER_ADMIN
+       * ADMIN
+       * OFFICER
+       *
+       * No credentials are hard-coded in the frontend.
        */
       const response = await login({
         username: username.trim(),
@@ -71,19 +39,14 @@ function Login() {
       const { token, user } = response.data;
 
       if (!token || !user) {
-        throw new Error(
-          "Invalid login response from server."
-        );
+        throw new Error("Invalid login response from server.");
       }
 
       /*
        * Store authenticated session
        */
       localStorage.setItem("token", token);
-      localStorage.setItem(
-        "user",
-        JSON.stringify(user)
-      );
+      localStorage.setItem("user", JSON.stringify(user));
 
       /*
        * =====================================================
@@ -91,34 +54,23 @@ function Login() {
        * =====================================================
        */
 
-      if (user.role === "ADMIN") {
-        navigate("/admin");
+      if (user.role === "SUPER_ADMIN") {
+        navigate("/super-admin");
+      } else if (user.role === "OFFICE_ADMIN") {
+  navigate("/admin");
       } else if (user.role === "OFFICER") {
         navigate("/officer");
       } else {
-        /*
-         * Only these three roles are allowed:
-         *
-         * SUPER_ADMIN
-         * ADMIN
-         * OFFICER
-         *
-         * SUPER_ADMIN is handled above.
-         */
         localStorage.removeItem("token");
         localStorage.removeItem("user");
 
-        setError(
-          "This account does not have dashboard access."
-        );
+        setError("This account does not have dashboard access.");
       }
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError(
-          "Unable to login. Please try again."
-        );
+        setError("Unable to login. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -220,9 +172,7 @@ function Login() {
             className="figma-login-button"
             disabled={loading}
           >
-            {loading
-              ? "Logging in..."
-              : "Login"}
+            {loading ? "Logging in..." : "Login"}
           </button>
 
 
