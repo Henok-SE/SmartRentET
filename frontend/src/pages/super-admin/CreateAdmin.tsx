@@ -1,11 +1,48 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiRequest } from "../../services/api";
 
-function CreateAdmin() {
-  const navigate = useNavigate();
+type GovernmentOffice = {
+  officeId: number;
+  officeCode: string;
+  officeName: string;
+  region?: string | null;
+  city?: string | null;
+  subCity?: string | null;
+  woreda?: string | null;
+};
 
- const [form, setForm] = useState({
+type AdminForm = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  nationalId: string;
+  username: string;
+  password: string;
+  confirmPassword: string;
+  employeeId: string;
+  officeId: string;
+};
+
+type OfficeListResponse = {
+  success: boolean;
+  message?: string;
+  filters?: {
+    status?: string;
+    subCity?: string;
+    city?: string;
+  };
+  data: GovernmentOffice[];
+};
+
+type CreateAdminResponse = {
+  success: boolean;
+  message: string;
+  data?: unknown;
+};
+
+const createEmptyForm = (): AdminForm => ({
   firstName: "",
   lastName: "",
   phone: "",
@@ -14,12 +51,85 @@ function CreateAdmin() {
   password: "",
   confirmPassword: "",
   employeeId: "",
-  officeId: "1",
+  officeId: "",
 });
+
+function CreateAdmin() {
+  const navigate = useNavigate();
+
+  const [form, setForm] = useState<AdminForm>(
+    createEmptyForm
+  );
+
+  const [offices, setOffices] = useState<
+    GovernmentOffice[]
+  >([]);
+
+  const [loading, setLoading] = useState(false);
+  const [officeLoading, setOfficeLoading] = useState(true);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  /*
+   * ---------------------------------------------------------
+   * LOAD GOVERNMENT OFFICES
+   * ---------------------------------------------------------
+   */
+
+  useEffect(() => {
+    const loadOffices = async () => {
+      setOfficeLoading(true);
+      setError("");
+
+      try {
+        const token = localStorage.getItem("token");
+
+        const response =
+          await apiRequest<OfficeListResponse>(
+            "/dashboard/offices",
+            {
+              method: "GET",
+              cache: "no-store",
+              headers: token
+                ? {
+                    Authorization: `Bearer ${token}`,
+                  }
+                : undefined,
+            }
+          );
+
+        setOffices(response.data);
+
+        if (response.data.length === 1) {
+          setForm((previous) => ({
+            ...previous,
+            officeId: String(
+              response.data[0].officeId
+            ),
+          }));
+        }
+      } catch (err) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError(
+            "Failed to load government offices."
+          );
+        }
+      } finally {
+        setOfficeLoading(false);
+      }
+    };
+
+    void loadOffices();
+  }, []);
+
+  /*
+   * ---------------------------------------------------------
+   * FORM HANDLING
+   * ---------------------------------------------------------
+   */
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement>
@@ -32,19 +142,75 @@ function CreateAdmin() {
     }));
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleOfficeChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    setForm((previous) => ({
+      ...previous,
+      officeId: event.target.value,
+    }));
+  };
+
+  /*
+   * ---------------------------------------------------------
+   * SUBMIT
+   * ---------------------------------------------------------
+   */
+
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
     event.preventDefault();
 
     setError("");
     setSuccess("");
+
+    if (!form.firstName.trim()) {
+      setError("First name is required.");
+      return;
+    }
+
+    if (!form.lastName.trim()) {
+      setError("Last name is required.");
+      return;
+    }
+
+    if (!form.username.trim()) {
+      setError("Username is required.");
+      return;
+    }
+
+    if (!form.phone.trim()) {
+      setError("Phone number is required.");
+      return;
+    }
+
+    if (!form.nationalId.trim()) {
+      setError("National ID is required.");
+      return;
+    }
+
+    if (!form.employeeId.trim()) {
+      setError("Employee ID is required.");
+      return;
+    }
+
+    if (form.password.length < 6) {
+      setError(
+        "Password must be at least 6 characters."
+      );
+      return;
+    }
 
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
 
-    if (form.password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (!form.officeId) {
+      setError(
+        "Please select a Government Office."
+      );
       return;
     }
 
@@ -53,60 +219,44 @@ function CreateAdmin() {
     try {
       const token = localStorage.getItem("token");
 
-      const response = await fetch(
-        "http://localhost:5000/api/auth/register",
+      await apiRequest<CreateAdminResponse>(
+        "/dashboard/office-admins",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token
-              ? { Authorization: `Bearer ${token}` }
-              : {}),
-          },
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : undefined,
           body: JSON.stringify({
-  firstName: form.firstName,
-  lastName: form.lastName,
-  phone: form.phone,
-  nationalId: form.nationalId,
-  username: form.username,
-  password: form.password,
-  role: "OFFICE_ADMIN",
-  profileData: {
-    employeeId: form.employeeId,
-    officeId: Number(form.officeId),
-  },
-}),
+            firstName: form.firstName.trim(),
+            lastName: form.lastName.trim(),
+            username: form.username.trim(),
+            phone: form.phone.trim(),
+            nationalId: form.nationalId.trim(),
+            employeeId: form.employeeId.trim(),
+            officeId: Number(form.officeId),
+            password: form.password,
+          }),
         }
       );
 
-      const data = await response.json();
+      setSuccess(
+        "Administrator created successfully."
+      );
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create administrator.");
-      }
+      setForm(createEmptyForm());
 
-      setSuccess("Administrator created successfully.");
-
-      setForm({
-        firstName: "",
-        lastName: "",
-        phone: "",
-        nationalId: "",
-        username: "",
-        password: "",
-        confirmPassword: "",
-        employeeId: "",
-        officeId: "1",
-      });
-
-      setTimeout(() => {
+      window.setTimeout(() => {
         navigate("/super-admin");
       }, 1200);
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError("Failed to create administrator.");
+        setError(
+          "Failed to create administrator."
+        );
       }
     } finally {
       setLoading(false);
@@ -116,13 +266,21 @@ function CreateAdmin() {
   return (
     <div className="auth-page">
       <div className="auth-card">
+
         <div className="auth-header">
           <h1>Create Administrator</h1>
-          <p>Create a SmartRent ET administrator account</p>
+
+          <p>
+            Create an Office Administrator and assign an
+            existing Government Office.
+          </p>
         </div>
 
         {error && (
-          <div className="auth-error">
+          <div
+            className="auth-error"
+            role="alert"
+          >
             {error}
           </div>
         )}
@@ -137,13 +295,16 @@ function CreateAdmin() {
               borderRadius: "8px",
               marginBottom: "20px",
             }}
+            role="status"
           >
             {success}
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
+
           <div className="form-row">
+
             <div className="form-group">
               <label htmlFor="firstName">
                 First Name
@@ -156,6 +317,8 @@ function CreateAdmin() {
                 value={form.firstName}
                 onChange={handleChange}
                 placeholder="First name"
+                autoComplete="given-name"
+                disabled={loading}
                 required
               />
             </div>
@@ -172,9 +335,51 @@ function CreateAdmin() {
                 value={form.lastName}
                 onChange={handleChange}
                 placeholder="Last name"
+                autoComplete="family-name"
+                disabled={loading}
                 required
               />
             </div>
+
+          </div>
+
+          <div className="form-row">
+
+            <div className="form-group">
+              <label htmlFor="username">
+                Username
+              </label>
+
+              <input
+                id="username"
+                name="username"
+                type="text"
+                value={form.username}
+                onChange={handleChange}
+                placeholder="Choose username"
+                autoComplete="username"
+                disabled={loading}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="employeeId">
+                Employee ID
+              </label>
+
+              <input
+                id="employeeId"
+                name="employeeId"
+                type="text"
+                value={form.employeeId}
+                onChange={handleChange}
+                placeholder="e.g. EMP-001"
+                disabled={loading}
+                required
+              />
+            </div>
+
           </div>
 
           <div className="form-group">
@@ -189,6 +394,8 @@ function CreateAdmin() {
               value={form.phone}
               onChange={handleChange}
               placeholder="Phone number"
+              autoComplete="tel"
+              disabled={loading}
               required
             />
           </div>
@@ -205,67 +412,96 @@ function CreateAdmin() {
               value={form.nationalId}
               onChange={handleChange}
               placeholder="National ID"
+              disabled={loading}
               required
             />
           </div>
 
+          <div
+            style={{
+              marginTop: "24px",
+              marginBottom: "20px",
+            }}
+          >
+            <h2
+              style={{
+                marginBottom: "6px",
+              }}
+            >
+              Government Office
+            </h2>
+
+            <p
+              style={{
+                margin: 0,
+                color: "#6b7280",
+              }}
+            >
+              Assign this administrator to an existing
+              Government Office.
+            </p>
+          </div>
+
           <div className="form-group">
-            <label htmlFor="username">
-              Username
+
+            <label htmlFor="officeId">
+              Government Office
             </label>
 
-            <input
-              id="username"
-              name="username"
-              type="text"
-              value={form.username}
-              onChange={handleChange}
-              placeholder="Choose username"
+            <select
+              id="officeId"
+              name="officeId"
+              value={form.officeId}
+              onChange={handleOfficeChange}
+              disabled={
+                loading ||
+                officeLoading ||
+                offices.length === 0
+              }
               required
-            />
+            >
+              <option value="">
+                {officeLoading
+                  ? "Loading Government Offices..."
+                  : offices.length === 0
+                  ? "No Government Offices available"
+                  : "Select a Government Office"}
+              </option>
+
+              {offices.map((office) => (
+                <option
+                  key={office.officeId}
+                  value={office.officeId}
+                >
+                  {office.officeCode} —{" "}
+                  {office.officeName}
+                </option>
+              ))}
+            </select>
+
           </div>
-          <div className="form-group">
-  <label htmlFor="employeeId">
-    Employee ID
-  </label>
 
-  <input
-    id="employeeId"
-    name="employeeId"
-    type="text"
-    value={form.employeeId}
-    onChange={handleChange}
-    placeholder="e.g. EMP-001"
-    required
-  />
-</div>
-    <div className="form-group">
-  <label htmlFor="officeId">
-    Government Office
-  </label>
-
-  <select
-    id="officeId"
-    name="officeId"
-    value={form.officeId}
-    onChange={(event) =>
-      setForm((previous) => ({
-        ...previous,
-        officeId: event.target.value,
-      }))
-    }
-    disabled={loading}
-    required
-  >
-    <option value="1">
-      ADDIS-001 — Addis Ababa Rental Office
-    </option>
-  </select>
-</div>
+          {offices.length === 0 &&
+            !officeLoading && (
+              <div
+                style={{
+                  background: "#fffbeb",
+                  color: "#92400e",
+                  border: "1px solid #fde68a",
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  marginBottom: "20px",
+                }}
+              >
+                No Government Offices are available.
+                Create a Government Office first.
+              </div>
+            )}
 
           <div className="form-group">
+
             <label htmlFor="password">
-              Password
+              Temporary Password
             </label>
 
             <input
@@ -275,12 +511,20 @@ function CreateAdmin() {
               value={form.password}
               onChange={handleChange}
               placeholder="Create password"
+              autoComplete="new-password"
               minLength={6}
+              disabled={loading}
               required
             />
+
+            <small>
+              Minimum 6 characters.
+            </small>
+
           </div>
 
           <div className="form-group">
+
             <label htmlFor="confirmPassword">
               Confirm Password
             </label>
@@ -292,14 +536,21 @@ function CreateAdmin() {
               value={form.confirmPassword}
               onChange={handleChange}
               placeholder="Confirm password"
+              autoComplete="new-password"
               minLength={6}
+              disabled={loading}
               required
             />
+
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={
+              loading ||
+              officeLoading ||
+              offices.length === 0
+            }
           >
             {loading
               ? "Creating Administrator..."
@@ -318,6 +569,7 @@ function CreateAdmin() {
           >
             Cancel
           </button>
+
         </form>
       </div>
     </div>
