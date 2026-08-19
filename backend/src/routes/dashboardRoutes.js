@@ -13,4 +13,8 @@ router.get('/office-admins', dashboardController.getOfficeAdmins);
 router.get('/office-summary', dashboardController.getOfficeSummary);
 router.get('/offices', dashboardController.getOffices);
 
+router.post('/offices', dashboardController.createOffice);
+router.post('/office-admins', dashboardController.createOfficeAdmin);
+router.post('/officers', dashboardController.createOfficer);
+
 module.exports = router;
