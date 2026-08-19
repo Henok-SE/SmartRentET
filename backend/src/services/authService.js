@@ -128,14 +128,9 @@ const loginUser = async (username, password) => {
     if (!['SUPER_ADMIN', 'OFFICE_ADMIN', 'OFFICER'].includes(user.role)) {
       throw new Error('Invalid login. Please use your dashboard credentials.');
     }
-
-    // ============================================================
-    // OTP CONFIGURATION - CHOOSE YOUR OPTION BELOW
-    // ============================================================
     
-    // ============================================================
     // OPTION 1: OTP ONLY FOR OFFICE_ADMIN (CURRENTLY ACTIVE)
-    // ============================================================
+  
     if (user.role === 'OFFICE_ADMIN') {
       const otpCode = generateOTP();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -162,105 +157,7 @@ const loginUser = async (username, password) => {
       };
     }
 
-    // ============================================================
-    // OPTION 2: OTP FOR OFFICE_ADMIN AND OFFICER
-    // Uncomment this block and comment OPTION 1 above
-    // ============================================================
-    /*
-    if (user.role === 'OFFICE_ADMIN' || user.role === 'OFFICER') {
-      const otpCode = generateOTP();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-      
-      await prisma.oTP.create({
-        data: { 
-          userId: user.userId, 
-          code: otpCode, 
-          type: 'LOGIN', 
-          expiresAt 
-        }
-      });
-      
-      await afroSMSService.sendOTP(user.phone, otpCode);
-      
-      console.log('OTP sent to:', user.phone);
-      console.log('OTP code (for testing):', otpCode);
-      
-      return { 
-        requiresOTP: true, 
-        userId: user.userId, 
-        message: 'OTP sent to your phone',
-        debugOTP: otpCode 
-      };
-    }
-    */
-
-    // ============================================================
-    // OPTION 3: OTP FOR ALL ADMIN ROLES
-    // Uncomment this block and comment OPTION 1 above
-    // ============================================================
-    /*
-    if (['SUPER_ADMIN', 'OFFICE_ADMIN', 'OFFICER'].includes(user.role)) {
-      const otpCode = generateOTP();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-      
-      await prisma.oTP.create({
-        data: { 
-          userId: user.userId, 
-          code: otpCode, 
-          type: 'LOGIN', 
-          expiresAt 
-        }
-      });
-      
-      await afroSMSService.sendOTP(user.phone, otpCode);
-      
-      console.log('OTP sent to:', user.phone);
-      console.log('OTP code (for testing):', otpCode);
-      
-      return { 
-        requiresOTP: true, 
-        userId: user.userId, 
-        message: 'OTP sent to your phone',
-        debugOTP: otpCode 
-      };
-    }
-    */
-
-    // ============================================================
-    // OPTION 4: OTP BASED ON mfaEnabled FLAG
-    // Uncomment this block and comment OPTION 1 above
-    // ============================================================
-    /*
-    if (user.mfaEnabled) {
-      const otpCode = generateOTP();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-      
-      await prisma.oTP.create({
-        data: { 
-          userId: user.userId, 
-          code: otpCode, 
-          type: 'LOGIN', 
-          expiresAt 
-        }
-      });
-      
-      await afroSMSService.sendOTP(user.phone, otpCode);
-      
-      console.log('OTP sent to:', user.phone);
-      console.log('OTP code (for testing):', otpCode);
-      
-      return { 
-        requiresOTP: true, 
-        userId: user.userId, 
-        message: 'OTP sent to your phone',
-        debugOTP: otpCode 
-      };
-    }
-    */
-
-    // ============================================================
-    // NO OTP REQUIRED - Direct login for all other cases
-    // ============================================================
+   
     const token = generateToken(user);
     const { passwordHash: _, ...sanitizedUser } = user;
     console.log('Login successful for:', username);
