@@ -1,49 +1,53 @@
 const jwt = require('jsonwebtoken');
+const prisma = require('../config/db');
 
-/**
- * Middleware to authenticate requests using JWT tokens
- */
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Extract 'Bearer <TOKEN>'
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
+    return res.status(401).json({ success: false, error: 'Access denied. No token provided.' });
   }
 
   const secret = process.env.JWT_SECRET || 'smartrent_fallback_secret';
 
-  jwt.verify(token, secret, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid or expired token.' });
-    }
+  try {
+    const decoded = jwt.verify(token, secret);
+    const user = await prisma.user.findUnique({
+      where: { userId: decoded.userId },
+      select: {
+        userId: true,
+        username: true,
+        role: true,
+        isActive: true
+      }
+    });
+    if (!user) return res.status(401).json({ success: false, error: 'User not found' });
+    if (!user.isActive) return res.status(401).json({ success: false, error: 'Account is inactive' });
 
-    req.user = decoded; // Attach user payload ({ userId, username, role }) to request
+    req.user = { userId: user.userId, username: user.username, role: user.role };
     next();
-  });
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(403).json({ success: false, error: 'Token expired. Please login again.' });
+    }
+    return res.status(403).json({ success: false, error: 'Invalid or expired token.' });
+  }
 };
 
-/**
- * Middleware to authorize requests based on user roles
- * Example usage: authorizeRoles('ADMIN', 'OFFICER')
- */
 const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user || !req.user.role) {
-      return res.status(403).json({ error: 'Access denied. User role not determined.' });
+      return res.status(403).json({ success: false, error: 'Access denied. User role not determined.' });
     }
-
     if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({
-        error: `Access denied. Requires one of the following roles: ${allowedRoles.join(', ')}`
+        success: false,
+        error: `Access denied. Requires one of: ${allowedRoles.join(', ')}`
       });
     }
-
     next();
   };
 };
 
-module.exports = {
-  authenticateToken,
-  authorizeRoles
-};
+module.exports = { authenticateToken, authorizeRoles };
