@@ -14,6 +14,10 @@ const getSummary = async () => {
     collectedPayments,
     overduePayments,
     pendingVerifications,
+    totalSuperAdmins,
+    activeSuperAdmins,
+    totalOfficeAdmins,
+    activeOfficeAdmins,
   ] = await Promise.all([
     prisma.rentalAgreement.count(),
     prisma.rentalAgreement.count({ where: { status: 'ACTIVE' } }),
@@ -26,6 +30,10 @@ const getSummary = async () => {
     prisma.payment.count({ where: { status: 'PAID' } }),
     prisma.payment.count({ where: { status: 'OVERDUE' } }),
     prisma.agreementVerification.count({ where: { status: 'PENDING' } }),
+    prisma.superAdmin.count(),
+    prisma.superAdmin.count({ where: { user: { isActive: true } } }),
+    prisma.officeAdmin.count(),
+    prisma.officeAdmin.count({ where: { user: { isActive: true } } })
   ]);
 
   return {
@@ -40,6 +48,10 @@ const getSummary = async () => {
     collectedPayments,
     overduePayments,
     pendingVerifications,
+    totalSuperAdmins,
+    activeSuperAdmins,
+    totalOfficeAdmins,
+    activeOfficeAdmins,
   };
 };
 
