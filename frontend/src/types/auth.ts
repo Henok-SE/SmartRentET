@@ -43,7 +43,10 @@ export interface RegisterRequest {
 
 export interface AuthResponse {
   message: string;
-  data: {
+  requiresOTP?: boolean;
+  userId?: number;
+  debugOTP?: string;
+  data?: {
     user: User;
     token: string;
   };
