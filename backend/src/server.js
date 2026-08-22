@@ -19,6 +19,7 @@ const authRoutes = require('./routes/authRoutes');
 const agreementRoutes = require('./routes/agreementRoutes');
 const approvalRoutes = require('./routes/approvalRoutes');
 const officeRoutes = require('./routes/officeRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 // Routes
 app.get('/', (req, res) => {
@@ -33,6 +34,7 @@ app.use('/api/agreements', agreementRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/offices', officeRoutes);
+app.use('/api/payments', paymentRoutes)
 
 // 404 handler
 app.use((req, res) => {
