@@ -7,9 +7,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// =============================================
-// MIDDLEWARE - MUST BE IN THIS ORDER
-// =============================================
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -18,6 +15,7 @@ app.use(express.urlencoded({ extended: true }));
 const authRoutes = require('./routes/authRoutes');
 const agreementRoutes = require('./routes/agreementRoutes');
 const approvalRoutes = require('./routes/approvalRoutes');
+const officeRoutes = require('./routes/officeRoutes');
 
 // Routes
 app.get('/', (req, res) => {
@@ -30,6 +28,8 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/agreements', agreementRoutes);
 app.use('/api/approvals', approvalRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/offices', officeRoutes);
 
 // 404 handler
 app.use((req, res) => {
