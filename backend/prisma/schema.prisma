@@ -125,41 +125,29 @@ enum AuditAction {
 // =====================================================
 
 model User {
-  userId Int @id @default(autoincrement())
+  userId String      @id @default(uuid())
+  firstName           String
+  lastName            String
+  email               String?  @unique
+  phone               String
+  nationalId          String?  @unique
+  isNationalIdVerified Boolean  @default(false)
+  username            String?  @unique
+  passwordHash        String?
+  role                UserRole
+  mfaEnabled          Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  firstName String
-  lastName  String
-
-  email      String? @unique
-  phone      String
-  nationalId String? @unique
-  username   String? @unique
-
-  // Required for government/admin accounts.
-  // Optional for landlord/tenant accounts created during
-  // first agreement registration.
-  passwordHash String?
-
-  role UserRole
-
-  mfaEnabled Boolean @default(false)
-  isActive   Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  superAdmin  SuperAdmin?
-  officeAdmin OfficeAdmin?
-  officer     Officer?
-  landlord    Landlord?
-  tenant      Tenant?
-
-  otps        OTP[]     // Added for OTP support
-
-  auditLogs AuditLog[] @relation("AuditActor")
-
-  @@index([phone])
-  @@index([role])
+  superAdmin          SuperAdmin?
+  officeAdmin         OfficeAdmin?
+  officer             Officer?
+  landlord            Landlord?
+  tenant              Tenant?
+  otps                OTP[]
+  nationalIdVerifications NationalIdVerification[]  
+  auditLogs           AuditLog[] @relation("AuditActor")
 }
 
 // =====================================================
@@ -167,12 +155,13 @@ model User {
 // =====================================================
 
 model OTP {
-  otpId     Int      @id @default(autoincrement())
-  userId    Int
+  otpId String      @id @default(uuid())
+  userId String
   code      String
   type      String   // 'LOGIN', 'VERIFICATION', 'REGISTRATION'
   expiresAt DateTime
   used      Boolean  @default(false)
+  isOneTime Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
@@ -185,13 +174,34 @@ model OTP {
 }
 
 // =====================================================
+// NationalIdVerification
+// =====================================================
+
+model NationalIdVerification {
+  verificationId String      @id @default(uuid())
+  userId String
+  code           String
+  expiresAt      DateTime
+  used           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [userId])
+
+  @@index([userId])
+  @@index([code])
+  @@index([expiresAt])
+  @@index([used])
+}
+
+// =====================================================
 // SUPER ADMIN
 // =====================================================
 
 model SuperAdmin {
-  superAdminId Int @id @default(autoincrement())
+  superAdminId String @id @default(uuid())
 
-  userId Int @unique
+  userId String @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -204,7 +214,7 @@ model SuperAdmin {
 // =====================================================
 
 model GovernmentOffice {
-  officeId Int @id @default(autoincrement())
+  officeId String @id @default(uuid())
 
   officeCode String @unique
   officeName String
@@ -236,10 +246,10 @@ model GovernmentOffice {
 // =====================================================
 
 model OfficeAdmin {
-  officeAdminId Int @id @default(autoincrement())
+  officeAdminId String @id @default(uuid())
 
-  userId   Int @unique
-  officeId Int
+  userId String @unique
+  officeId String
 
   employeeId String @unique
 
@@ -258,10 +268,10 @@ model OfficeAdmin {
 // =====================================================
 
 model Officer {
-  officerId Int @id @default(autoincrement())
+  officerId String @id @default(uuid())
 
-  userId   Int @unique
-  officeId Int
+  userId String @unique
+  officeId String
 
   employeeId   String  @unique
   position     String?
@@ -284,9 +294,9 @@ model Officer {
 // =====================================================
 
 model Landlord {
-  landlordId Int @id @default(autoincrement())
+  landlordId String @id @default(uuid())
 
-  userId Int @unique
+  userId String @unique
 
   address     String?
   subCity     String?
@@ -310,9 +320,9 @@ model Landlord {
 // =====================================================
 
 model Tenant {
-  tenantId Int @id @default(autoincrement())
+  tenantId String @id @default(uuid())
 
-  userId Int @unique
+  userId String @unique
 
   address     String?
   subCity     String?
@@ -336,9 +346,9 @@ model Tenant {
 // =====================================================
 
 model Property {
-  propertyId Int @id @default(autoincrement())
+  propertyId String @id @default(uuid())
 
-  landlordId Int
+  landlordId String
 
   location    String
   subCity     String
@@ -369,9 +379,9 @@ model Property {
 // =====================================================
 
 model Unit {
-  unitId Int @id @default(autoincrement())
+  unitId String @id @default(uuid())
 
-  propertyId Int
+  propertyId String
 
   unitNumber String
   floor      Int?
@@ -400,7 +410,7 @@ model Unit {
 // =====================================================
 
 model RentalAgreement {
-  agreementId Int @id @default(autoincrement())
+  agreementId String @id @default(uuid())
 
   referenceNumber String @unique
 
@@ -408,23 +418,23 @@ model RentalAgreement {
   // GOVERNMENT OFFICE
   // ===================================================
 
-  officeId Int
+  officeId String
 
   // Officer who creates/processes the agreement
-  createdByOfficerId Int
+  createdByOfficerId String
 
   // ===================================================
   // PARTIES
   // ===================================================
 
-  landlordId Int
-  tenantId   Int
+  landlordId String
+  tenantId String
 
   // Property unit involved in the agreement
-  unitId Int
+  unitId String
 
   // ===================================================
-  // GOVERNMENT FORM - SECTION 3
+  // GOVERNMENT FORM
   // TYPE OF HOUSE AND CONDITION
   // ===================================================
 
@@ -442,7 +452,7 @@ model RentalAgreement {
   houseItems String?
 
   // ===================================================
-  // GOVERNMENT FORM - SECTION 4
+  // GOVERNMENT FORM
   // RENTAL AMOUNT AND CONDITIONS
   // ===================================================
 
@@ -463,7 +473,7 @@ model RentalAgreement {
   // PAYMENT FREQUENCY
   // ===================================================
 
-  paymentFrequencyId Int
+  paymentFrequencyId String
 
   // ===================================================
   // AGREEMENT WORKFLOW
@@ -479,7 +489,7 @@ model RentalAgreement {
   // RENEWAL
   // ===================================================
 
-  previousAgreementId Int?
+  previousAgreementId String?
 
   notes String?
 
@@ -519,7 +529,7 @@ model RentalAgreement {
 // =====================================================
 
 model PaymentFrequency {
-  frequencyId Int @id @default(autoincrement())
+  frequencyId String @id @default(uuid())
 
   name String @unique
 
@@ -539,9 +549,9 @@ model PaymentFrequency {
 // =====================================================
 
 model Payment {
-  paymentId Int @id @default(autoincrement())
+  paymentId String @id @default(uuid())
 
-  agreementId Int
+  agreementId String
 
   amount Decimal
 
@@ -573,9 +583,9 @@ model Payment {
 // =====================================================
 
 model AgreementVerification {
-  verificationId Int @id @default(autoincrement())
+  verificationId String @id @default(uuid())
 
-  agreementId Int
+  agreementId String
 
   // LANDLORD or TENANT
   party VerificationParty
@@ -614,9 +624,9 @@ model AgreementVerification {
 // =====================================================
 
 model ServiceFeePayment {
-  serviceFeePaymentId Int @id @default(autoincrement())
+  serviceFeePaymentId String @id @default(uuid())
 
-  agreementId Int @unique
+  agreementId String @unique
 
   // SmartRent government service fee
   amount Decimal @default(50)
@@ -655,10 +665,10 @@ model ServiceFeePayment {
 // =====================================================
 
 model AgreementApproval {
-  approvalId Int @id @default(autoincrement())
+  approvalId String @id @default(uuid())
 
-  agreementId Int
-  officerId   Int
+  agreementId String
+  officerId String
 
   approvalType ApprovalType
 
@@ -680,14 +690,14 @@ model AgreementApproval {
 // =====================================================
 
 model AuditLog {
-  auditId Int @id @default(autoincrement())
+  auditId String @id @default(uuid())
 
-  userId Int?
+  userId String?
 
   action AuditAction
 
   entityType String
-  entityId   Int?
+  entityId String?
 
   description String?
 

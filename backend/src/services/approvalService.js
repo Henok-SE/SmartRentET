@@ -5,7 +5,7 @@ const afroSMSService = require('./afroSMSService');
 const approveAgreement = async (agreementId, officerUserId, comments = null) => {
   return prisma.$transaction(async (tx) => {
     const agreement = await tx.rentalAgreement.findUnique({
-      where: { agreementId: Number(agreementId) }
+      where: { agreementId: agreementId }
     });
 
     if (!agreement) throw new Error('Agreement not found');
@@ -25,7 +25,7 @@ const approveAgreement = async (agreementId, officerUserId, comments = null) => 
 
     const verifications = await tx.agreementVerification.findMany({
       where: {
-        agreementId: Number(agreementId),
+        agreementId: agreementId,
         status: 'VERIFIED'
       }
     });
@@ -35,7 +35,7 @@ const approveAgreement = async (agreementId, officerUserId, comments = null) => 
     }
 
     const serviceFee = await tx.serviceFeePayment.findUnique({
-      where: { agreementId: Number(agreementId) }
+      where: { agreementId: agreementId }
     });
 
     if (!serviceFee || serviceFee.status !== 'PAID') {
@@ -52,7 +52,7 @@ const approveAgreement = async (agreementId, officerUserId, comments = null) => 
 
     // Update agreement
     const updated = await tx.rentalAgreement.update({
-      where: { agreementId: Number(agreementId) },
+      where: { agreementId: agreementId },
       data: {
         status: 'ACTIVE',
         referenceNumber: ref
@@ -62,7 +62,7 @@ const approveAgreement = async (agreementId, officerUserId, comments = null) => 
     // Create approval record
     const approval = await tx.agreementApproval.create({
       data: {
-        agreementId: Number(agreementId),
+        agreementId: agreementId,
         officerId: officer.officerId,
         approvalType: 'FINAL_APPROVAL',
         decision: 'APPROVED',
@@ -76,7 +76,7 @@ const approveAgreement = async (agreementId, officerUserId, comments = null) => 
         userId: officerUserId,
         action: 'APPROVE',
         entityType: 'RENTAL_AGREEMENT',
-        entityId: Number(agreementId),
+        entityId: agreementId,
         description: `Approved agreement ${ref}`
       }
     });
@@ -105,7 +105,7 @@ const approveAgreement = async (agreementId, officerUserId, comments = null) => 
 const rejectAgreement = async (agreementId, officerUserId, comments) => {
   return prisma.$transaction(async (tx) => {
     const agreement = await tx.rentalAgreement.findUnique({
-      where: { agreementId: Number(agreementId) }
+      where: { agreementId: agreementId }
     });
 
     if (!agreement) throw new Error('Agreement not found');
@@ -125,7 +125,7 @@ const rejectAgreement = async (agreementId, officerUserId, comments) => {
 
     const rejection = await tx.agreementApproval.create({
       data: {
-        agreementId: Number(agreementId),
+        agreementId: agreementId,
         officerId: officer.officerId,
         approvalType: 'FINAL_APPROVAL',
         decision: 'REJECTED',
@@ -134,7 +134,7 @@ const rejectAgreement = async (agreementId, officerUserId, comments) => {
     });
 
     const updated = await tx.rentalAgreement.update({
-      where: { agreementId: Number(agreementId) },
+      where: { agreementId: agreementId },
       data: { status: 'REJECTED' }
     });
 
@@ -143,7 +143,7 @@ const rejectAgreement = async (agreementId, officerUserId, comments) => {
         userId: officerUserId,
         action: 'REJECT',
         entityType: 'RENTAL_AGREEMENT',
-        entityId: Number(agreementId),
+        entityId: agreementId,
         description: `Rejected agreement ${agreement.referenceNumber}`
       }
     });
@@ -154,7 +154,7 @@ const rejectAgreement = async (agreementId, officerUserId, comments) => {
 
 const getApprovalHistory = async (agreementId) => {
   return prisma.agreementApproval.findMany({
-    where: { agreementId: Number(agreementId) },
+    where: { agreementId: agreementId },
     include: { officer: { include: { user: true } } },
     orderBy: { approvalDate: 'asc' }
   });
