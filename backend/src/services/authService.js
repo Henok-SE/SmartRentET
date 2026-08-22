@@ -52,7 +52,8 @@ const registerUser = async (userData) => {
         username,
         passwordHash,
         role: normalizedRole,
-        isActive: true
+        isActive: true,
+        isNationalIdVerified: false
       }
     });
 
@@ -62,7 +63,7 @@ const registerUser = async (userData) => {
       await prisma.officeAdmin.create({
         data: {
           userId: user.userId,
-          officeId: profileData.officeId || 1,
+          officeId: profileData.officeId || '1',
           employeeId: profileData.employeeId || `ADMIN-${Date.now()}`
         }
       });
@@ -70,7 +71,7 @@ const registerUser = async (userData) => {
       await prisma.officer.create({
         data: {
           userId: user.userId,
-          officeId: profileData.officeId || 1,
+          officeId: profileData.officeId || '1',
           employeeId: profileData.employeeId || `OFF-${Date.now()}`,
           position: profileData.position || null,
           assignedArea: profileData.assignedArea || null
@@ -128,21 +129,56 @@ const loginUser = async (username, password) => {
     if (!['SUPER_ADMIN', 'OFFICE_ADMIN', 'OFFICER'].includes(user.role)) {
       throw new Error('Invalid login. Please use your dashboard credentials.');
     }
-    
-    // OPTION 1: OTP ONLY FOR OFFICE_ADMIN (CURRENTLY ACTIVE)
-  
+
+    // ============================================
+    // OTP FOR OFFICE_ADMIN (One-time only)
+    // ============================================
     if (user.role === 'OFFICE_ADMIN') {
-      const otpCode = generateOTP();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-      
-      await prisma.oTP.create({
-        data: { 
-          userId: user.userId, 
-          code: otpCode, 
-          type: 'LOGIN', 
-          expiresAt 
+      // Check if user has already verified OTP before (used OTP exists)
+      const hasUsedOTP = await prisma.oTP.findFirst({
+        where: {
+          userId: user.userId,
+          isOneTime: true,
+          used: true
         }
       });
+
+      // If user already verified OTP before → direct login (no OTP)
+      if (hasUsedOTP) {
+        console.log('User already verified OTP before. Skipping OTP.');
+        const token = generateToken(user);
+        const { passwordHash: _, ...sanitizedUser } = user;
+        return { user: sanitizedUser, token };
+      }
+
+      // Check for existing unused OTP
+      const existingOTP = await prisma.oTP.findFirst({
+        where: {
+          userId: user.userId,
+          used: false,
+          isOneTime: true,
+          expiresAt: { gt: new Date() }
+        }
+      });
+
+      let otpCode;
+      if (existingOTP) {
+        otpCode = existingOTP.code;
+        console.log('Using existing OTP:', otpCode);
+      } else {
+        otpCode = generateOTP();
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        
+        await prisma.oTP.create({
+          data: { 
+            userId: user.userId, 
+            code: otpCode, 
+            type: 'LOGIN',
+            isOneTime: true,
+            expiresAt 
+          }
+        });
+      }
       
       await afroSMSService.sendOTP(user.phone, otpCode);
       
@@ -153,11 +189,11 @@ const loginUser = async (username, password) => {
         requiresOTP: true, 
         userId: user.userId, 
         message: 'OTP sent to your phone',
-        debugOTP: otpCode 
+        debugOTP: otpCode,
+        requiresPasswordChange: true
       };
     }
 
-   
     const token = generateToken(user);
     const { passwordHash: _, ...sanitizedUser } = user;
     console.log('Login successful for:', username);
@@ -187,9 +223,10 @@ const verifyOTP = async (userId, code) => {
 
     const otp = await prisma.oTP.findFirst({
       where: { 
-        userId: Number(userId), 
+        userId: userId, 
         code: code, 
-        used: false, 
+        used: false,
+        isOneTime: true,
         expiresAt: { gt: new Date() } 
       },
       orderBy: { createdAt: 'desc' }
@@ -201,25 +238,248 @@ const verifyOTP = async (userId, code) => {
       throw new Error('Invalid or expired OTP');
     }
 
+    
+    const hasUsedOTP = await prisma.oTP.findFirst({
+      where: {
+        userId: userId,
+        isOneTime: true,
+        used: true
+      }
+    });
+
+    console.log('Has used OTP before:', hasUsedOTP ? 'Yes' : 'No');
+
+    
     await prisma.oTP.update({ 
       where: { otpId: otp.otpId }, 
       data: { used: true } 
     });
 
     const user = await prisma.user.findUnique({ 
-      where: { userId: Number(userId) } 
+      where: { userId: userId } 
     });
 
     if (!user) {
       throw new Error('User not found');
     }
 
-    const token = generateToken(user);
+    const isFirstTime = !hasUsedOTP;
+    console.log('Is first time login:', isFirstTime);
+
     const { passwordHash: _, ...sanitizedUser } = user;
-    console.log('OTP verified successfully for user:', user.username);
-    return { user: sanitizedUser, token };
+    
+    if (isFirstTime) {
+      const tempToken = jwt.sign(
+        { userId: user.userId, username: user.username, role: user.role, tempAccess: true },
+        process.env.JWT_SECRET || 'smartrent_fallback_secret',
+        { expiresIn: '15m' }
+      );
+      
+      console.log('First time login - requires password change');
+      
+      return { 
+        user: sanitizedUser, 
+        tempToken,
+        requiresPasswordChange: true,
+        message: 'OTP verified. Please change your password.' 
+      };
+    } else {
+      const token = generateToken(user);
+      console.log('Returning user - no password change required');
+      
+      return {
+        user: sanitizedUser,
+        token,
+        requiresPasswordChange: false,
+        message: 'OTP verified successfully.'
+      };
+    }
   } catch (error) {
     console.error('OTP verification error:', error);
+    throw error;
+  }
+};
+
+// ============================================
+// CHANGE PASSWORD
+// ============================================
+const changePassword = async (userId, currentPassword, newPassword) => {
+  try {
+    console.log('=== CHANGE PASSWORD ===');
+    console.log('userId:', userId);
+    
+    if (!userId || !currentPassword || !newPassword) {
+      throw new Error('User ID, current password, and new password are required');
+    }
+
+    if (newPassword.length < 6) {
+      throw new Error('New password must be at least 6 characters');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { userId: userId }
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (!['SUPER_ADMIN', 'OFFICE_ADMIN', 'OFFICER'].includes(user.role)) {
+      throw new Error('Only Super Admins, Office Admins, and Officers can change password through this endpoint.');
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      throw new Error('Current password is incorrect');
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { userId: userId },
+      data: { passwordHash: newPasswordHash }
+    });
+
+    console.log('Password changed successfully for user:', user.username);
+    
+    return { success: true, message: 'Password changed successfully' };
+  } catch (error) {
+    console.error('Change password error:', error);
+    throw error;
+  }
+};
+
+// ============================================
+// UPDATE USERNAME (Optional)
+// ============================================
+const updateUsername = async (userId, newUsername) => {
+  try {
+    console.log('=== UPDATE USERNAME ===');
+    console.log('userId:', userId);
+    console.log('newUsername:', newUsername);
+    
+    if (!userId || !newUsername) {
+      throw new Error('User ID and new username are required');
+    }
+
+    const existing = await prisma.user.findFirst({
+      where: {
+        username: newUsername,
+        NOT: { userId: userId }
+      }
+    });
+
+    if (existing) {
+      throw new Error('Username already taken');
+    }
+
+    const user = await prisma.user.update({
+      where: { userId: userId },
+      data: { username: newUsername }
+    });
+
+    const { passwordHash: _, ...sanitizedUser } = user;
+    console.log('Username updated successfully for user:', newUsername);
+    
+    return { user: sanitizedUser, message: 'Username updated successfully' };
+  } catch (error) {
+    console.error('Update username error:', error);
+    throw error;
+  }
+};
+
+// ============================================
+// SEND NATIONAL ID VERIFICATION CODE
+// ============================================
+const sendNationalIdVerificationCode = async (userId) => {
+  try {
+    console.log('=== SEND NATIONAL ID VERIFICATION ===');
+    console.log('userId:', userId);
+    
+    const user = await prisma.user.findUnique({
+      where: { userId: userId }
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (!user.nationalId) {
+      throw new Error('User has no National ID registered');
+    }
+
+    if (user.isNationalIdVerified) {
+      throw new Error('National ID already verified');
+    }
+
+    const code = generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await prisma.nationalIdVerification.create({
+      data: {
+        userId: user.userId,
+        code: code,
+        expiresAt: expiresAt
+      }
+    });
+
+    await afroSMSService.sendNationalIdVerification(user.phone, code);
+
+    console.log('National ID verification code sent to:', user.phone);
+    console.log('Code (for testing):', code);
+
+    return { 
+      success: true, 
+      message: 'Verification code sent to your phone',
+      debugCode: code
+    };
+  } catch (error) {
+    console.error('Send national ID verification error:', error);
+    throw error;
+  }
+};
+
+// ============================================
+// VERIFY NATIONAL ID WITH OTP
+// ============================================
+const verifyNationalIdWithOTP = async (userId, code) => {
+  try {
+    console.log('=== VERIFY NATIONAL ID ===');
+    console.log('userId:', userId);
+    console.log('code:', code);
+    
+    if (!userId || !code) {
+      throw new Error('User ID and code are required');
+    }
+
+    const verification = await prisma.nationalIdVerification.findFirst({
+      where: {
+        userId: userId,
+        code: code,
+        used: false,
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!verification) {
+      throw new Error('Invalid or expired verification code');
+    }
+
+    await prisma.nationalIdVerification.update({
+      where: { verificationId: verification.verificationId },
+      data: { used: true }
+    });
+
+    await prisma.user.update({
+      where: { userId: userId },
+      data: { isNationalIdVerified: true }
+    });
+
+    console.log('National ID verified for user:', userId);
+    return { success: true, message: 'National ID verified successfully' };
+  } catch (error) {
+    console.error('Verify national ID error:', error);
     throw error;
   }
 };
@@ -227,7 +487,7 @@ const verifyOTP = async (userId, code) => {
 const getUserById = async (userId) => {
   try {
     const user = await prisma.user.findUnique({
-      where: { userId: Number(userId) },
+      where: { userId: userId },
       include: {
         superAdmin: true,
         officeAdmin: true,
@@ -247,6 +507,9 @@ const getUserById = async (userId) => {
   }
 };
 
+// ============================================
+// CREATE OFFICE ADMIN
+// ============================================
 const createOfficeAdmin = async (adminData, creatorUserId) => {
   try {
     console.log('=== CREATE OFFICE ADMIN ===');
@@ -283,17 +546,28 @@ const createOfficeAdmin = async (adminData, creatorUserId) => {
         username,
         passwordHash,
         role: 'OFFICE_ADMIN',
-        isActive: true
+        isActive: true,
+        isNationalIdVerified: false
       }
     });
 
     await prisma.officeAdmin.create({
       data: {
         userId: user.userId,
-        officeId: officeId || 1,
+        officeId: officeId || '1',
         employeeId: `ADMIN-${Date.now()}`
       }
     });
+
+    // ============================================
+    // SEND USERNAME & PASSWORD VIA SMS
+    // ============================================
+    await afroSMSService.sendSMS(
+      phone,
+      `SmartRent: Your account has been created.\nUsername: ${username}\nPassword: ${password}\nPlease login and change your password.`
+    );
+
+    console.log('SMS sent to:', phone);
 
     const { passwordHash: _, ...sanitizedUser } = user;
     return sanitizedUser;
@@ -303,6 +577,9 @@ const createOfficeAdmin = async (adminData, creatorUserId) => {
   }
 };
 
+// ============================================
+// CREATE OFFICER
+// ============================================
 const createOfficer = async (officerData, creatorUserId) => {
   try {
     console.log('=== CREATE OFFICER ===');
@@ -339,19 +616,30 @@ const createOfficer = async (officerData, creatorUserId) => {
         username,
         passwordHash,
         role: 'OFFICER',
-        isActive: true
+        isActive: true,
+        isNationalIdVerified: false
       }
     });
 
     await prisma.officer.create({
       data: {
         userId: user.userId,
-        officeId: officeId || 1,
+        officeId: officeId || '1',
         employeeId: `OFF-${Date.now()}`,
         position: position || null,
         assignedArea: assignedArea || null
       }
     });
+
+    // ============================================
+    // SEND USERNAME & PASSWORD VIA SMS
+    // ============================================
+    await afroSMSService.sendSMS(
+      phone,
+      `SmartRent: Your account has been created.\nUsername: ${username}\nPassword: ${password}\nPlease login to access the system.`
+    );
+
+    console.log('SMS sent to:', phone);
 
     const { passwordHash: _, ...sanitizedUser } = user;
     return sanitizedUser;
@@ -372,7 +660,8 @@ const createLandlord = async (landlordData) => {
         username: null,
         passwordHash: null,
         role: 'LANDLORD',
-        isActive: true
+        isActive: true,
+        isNationalIdVerified: false
       }
     });
 
@@ -406,7 +695,8 @@ const createTenant = async (tenantData) => {
         username: null,
         passwordHash: null,
         role: 'TENANT',
-        isActive: true
+        isActive: true,
+        isNationalIdVerified: false
       }
     });
 
@@ -434,6 +724,10 @@ module.exports = {
   registerUser,
   loginUser,
   verifyOTP,
+  changePassword,
+  updateUsername,
+  sendNationalIdVerificationCode,
+  verifyNationalIdWithOTP,
   getUserById,
   createOfficeAdmin,
   createOfficer,

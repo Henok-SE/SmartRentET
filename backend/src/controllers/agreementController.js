@@ -75,9 +75,11 @@ const createAgreement = async (req, res) => {
       });
     }
 
+    // Pass userId (for AuditLog) and officerId (for agreement)
     const agreement = await agreementService.createAgreement(
       req.body,
-      officerId,
+      req.user.userId,  
+      officerId,        
       officeId
     );
 
