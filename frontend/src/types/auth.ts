@@ -1,4 +1,4 @@
-export type UserRole = "ADMIN" | "OFFICER" | "LANDLORD" | "TENANT";
+export type UserRole = "SUPER_ADMIN" | "OFFICE_ADMIN" | "OFFICER";
 
 export interface User {
   userId: number;
@@ -43,7 +43,10 @@ export interface RegisterRequest {
 
 export interface AuthResponse {
   message: string;
-  data: {
+  requiresOTP?: boolean;
+  userId?: number;
+  debugOTP?: string;
+  data?: {
     user: User;
     token: string;
   };

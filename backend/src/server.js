@@ -1,8 +1,11 @@
 const express = require('express');
 const dotenv = require('dotenv');
-const cors = require('cors');
 
 dotenv.config();
+
+const cors = require('cors');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -35,7 +38,7 @@ app.use('/api/offices', officeRoutes);
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Route not found'
+    message: 'Route not found',
   });
 });
 
@@ -44,11 +47,15 @@ app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   res.status(500).json({
     success: false,
-    message: err.message || 'Internal server error'
+    message: err.message || 'Internal server error',
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Test login: POST http://localhost:${PORT}/api/auth/login`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`SmartRent ET Backend is running on port ${PORT}`);
 });
+
+// app.listen(PORT, () => {
+//   console.log(`Server is running on port ${PORT}`);
+//   console.log(`Test login: POST http://localhost:${PORT}/api/auth/login`);
+// });

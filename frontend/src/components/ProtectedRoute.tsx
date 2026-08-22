@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom";
 
-type AllowedRole = "SUPER_ADMIN" | "ADMIN" | "OFFICER";
+type AllowedRole = "SUPER_ADMIN" | "OFFICE_ADMIN" | "OFFICER";
 
 interface ProtectedRouteProps {
   allowedRoles?: AllowedRole[];
