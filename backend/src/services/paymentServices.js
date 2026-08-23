@@ -1,7 +1,7 @@
 const prisma = require('../config/db');
 
 const createPayment = async ({
-    contractReference,
+    referenceNumber,
     amount,
     paymentMethod
 }) => {
