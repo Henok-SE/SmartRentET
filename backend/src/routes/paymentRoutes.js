@@ -1,19 +1,9 @@
 const express = require('express');
+
+const paymentController = require('../controllers/paymentController')
+
 const router = express.Router();
 
-router.post('/', (req, res) => {
-    const { contractReference, amount, paymentMethod } = req.body;
-
-    res.status(201).json(
-        {
-            success: true,
-            message: 'Payment request received',
-            payment: {
-                contractReference,
-                amount,
-                paymentMethod
-            }
-        });
-});
+router.post('/', paymentController.createPayment);
 
 module.exports = router;
