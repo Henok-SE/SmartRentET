@@ -2,10 +2,10 @@ const paymentServices = require('../services/paymentServices');
 
 const createPayment = async (req, res) => {
     try {
-        const { contractReference, amount, paymentMethod } = req.body;
+        const { referenceNumber, amount, paymentMethod } = req.body;
 
         const payment = await paymentServices.createPayment({
-            contractReference,
+            referenceNumber,
             amount,
             paymentMethod
         });
