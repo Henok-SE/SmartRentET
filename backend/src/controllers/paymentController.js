@@ -13,18 +13,14 @@ const createPayment = async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'Payment request received',
-            payment: {
-                contractReference,
-                amount,
-                paymentMethod
-            }
+            payment
         });
     } catch (error) {
         console.error('create payment error:', error);
 
-        res.status(500).json({
+        res.status(400).json({
             success: false,
-            message: 'Failed to create payment'
+            message: error.message
         });
     }
 };
