@@ -55,7 +55,6 @@ const login = async (req, res) => {
         requiresOTP: true,
         userId: result.userId,
         message: result.message,
-        debugOTP: result.debugOTP,
         requiresPasswordChange: result.requiresPasswordChange
       });
     }
@@ -187,8 +186,7 @@ const sendNationalIdVerification = async (req, res) => {
     const result = await authService.sendNationalIdVerificationCode(userId);
     res.status(200).json({
       success: true,
-      message: result.message,
-      debugCode: result.debugCode
+      message: result.message
     });
   } catch (error) {
     console.error('Send national ID verification error:', error);
