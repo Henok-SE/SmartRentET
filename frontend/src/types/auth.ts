@@ -42,7 +42,15 @@ export interface RegisterRequest {
 }
 
 export interface AuthResponse {
-  message: string;
+  success?: boolean;
+  message?: string;
+
+  requiresOTP?: boolean;
+  userId?: number;
+  requiresPasswordChange?: boolean;
+  tempToken?: string;
+  debugOTP?: string;
+
   data: {
     user: User;
     token: string;
