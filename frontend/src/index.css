@@ -118,7 +118,7 @@
 
 .figma-login-form {
   width: 100%;
-  max-width: 610px;
+  max-width: 520px;
 
   margin: 0 auto;
 }
@@ -127,33 +127,30 @@
 /* =========================================================
    FORM FIELD
    ========================================================= */
-
 .figma-login-field {
   width: 100%;
 
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 
-  grid-template-columns: 135px minmax(0, 1fr);
+  gap: 8px;
 
-  align-items: center;
-
-  column-gap: 12px;
-
-  margin-bottom: 44px;
+  margin-bottom: 24px;
 }
 
-
 /* Labels */
-
 .figma-login-field label {
+  display: block;
+
   color: #111111;
 
-  font-size: 19px;
-  line-height: 1.2;
+  font-size: 17px;
+  line-height: 1.3;
 
   font-weight: 700;
 
-  white-space: nowrap;
+  white-space: normal;
 }
 
 
@@ -161,7 +158,7 @@
 
 .figma-login-field input {
   width: 100%;
-  height: 44px;
+  height: 48px;
 
   padding: 0 16px;
 
@@ -174,7 +171,7 @@
   font-family: inherit;
 
   font-size: 16px;
-  line-height: 44px;
+   line-height: normal;
 
   outline: none;
 
@@ -626,4 +623,9 @@
   .figma-login-button {
     transition: none;
   }
+}
+.figma-login-field input#otp {
+  text-align: center;
+  letter-spacing: 3px;
+  max-width: 260px;
 }
