@@ -22,7 +22,6 @@ const login = async (req, res) => {
     console.log('req.body:', req.body);
     console.log('Content-Type:', req.headers['content-type']);
     
-    // Check if body exists
     if (!req.body) {
       console.log('req.body is undefined!');
       return res.status(400).json({
@@ -55,7 +54,8 @@ const login = async (req, res) => {
         success: true,
         requiresOTP: true,
         userId: result.userId,
-        message: result.message
+        message: result.message,
+        requiresPasswordChange: result.requiresPasswordChange
       });
     }
     
@@ -95,7 +95,9 @@ const verifyOTP = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'OTP verified successfully',
-      data: result
+      data: result,
+      requiresPasswordChange: result.requiresPasswordChange,
+      tempToken: result.tempToken
     });
   } catch (error) {
     console.error('OTP verification error:', error);
@@ -106,9 +108,122 @@ const verifyOTP = async (req, res) => {
   }
 };
 
+// ============================================
+// CHANGE PASSWORD
+// ============================================
+const changePassword = async (req, res) => {
+  try {
+    console.log('=== CHANGE PASSWORD ===');
+    console.log('req.body:', req.body);
+    
+    const { userId, currentPassword, newPassword } = req.body;
+    
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId, currentPassword, and newPassword are required'
+      });
+    }
+    
+    const result = await authService.changePassword(userId, currentPassword, newPassword);
+    res.status(200).json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+// ============================================
+// UPDATE USERNAME (Optional)
+// ============================================
+const updateUsername = async (req, res) => {
+  try {
+    console.log('=== UPDATE USERNAME ===');
+    console.log('req.body:', req.body);
+    console.log('req.user:', req.user);
+    
+    const { newUsername } = req.body;
+    
+    if (!newUsername) {
+      return res.status(400).json({
+        success: false,
+        error: 'newUsername is required'
+      });
+    }
+    
+    const result = await authService.updateUsername(req.user.userId, newUsername);
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result.user
+    });
+  } catch (error) {
+    console.error('Update username error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+// ============================================
+// SEND NATIONAL ID VERIFICATION
+// ============================================
+const sendNationalIdVerification = async (req, res) => {
+  try {
+    console.log('=== SEND NATIONAL ID VERIFICATION ===');
+    console.log('req.body:', req.body);
+    
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId is required'
+      });
+    }
+    
+    const result = await authService.sendNationalIdVerificationCode(userId);
+    res.status(200).json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Send national ID verification error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+// ============================================
+// VERIFY NATIONAL ID
+// ============================================
+const verifyNationalId = async (req, res) => {
+  try {
+    console.log('=== VERIFY NATIONAL ID ===');
+    console.log('req.body:', req.body);
+    
+    const { userId, code } = req.body;
+    
+    if (!userId || !code) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId and code are required'
+      });
+    }
+    
+    const result = await authService.verifyNationalIdWithOTP(userId, code);
+    res.status(200).json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Verify national ID error:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
 const getMe = async (req, res) => {
   try {
-    // For now, just return a simple response
     res.status(200).json({
       success: true,
       message: 'User profile endpoint',
@@ -119,32 +234,45 @@ const getMe = async (req, res) => {
   }
 };
 
+// ============================================
+// CREATE OFFICE ADMIN
+// ============================================
 const createOfficeAdmin = async (req, res) => {
   try {
     console.log('=== CREATE OFFICE ADMIN ===');
     console.log('req.body:', req.body);
-    const admin = await authService.createOfficeAdmin(req.body, 1); // temporary userId
+    console.log('req.user:', req.user);
+    
+    // ✅ FIX: Use the authenticated user's ID
+    const admin = await authService.createOfficeAdmin(req.body, req.user.userId);
     res.status(201).json({
       success: true,
       message: 'Office Admin created successfully',
       data: admin
     });
   } catch (error) {
+    console.error('Create Office Admin error:', error);
     res.status(400).json({ success: false, error: error.message });
   }
 };
 
+// ============================================
+// CREATE OFFICER
+// ============================================
 const createOfficer = async (req, res) => {
   try {
     console.log('=== CREATE OFFICER ===');
     console.log('req.body:', req.body);
-    const officer = await authService.createOfficer(req.body, 1); // temporary userId
+    console.log('req.user:', req.user);
+    
+    const officer = await authService.createOfficer(req.body, req.user.userId);
     res.status(201).json({
       success: true,
       message: 'Officer created successfully',
       data: officer
     });
   } catch (error) {
+    console.error('Create Officer error:', error);
     res.status(400).json({ success: false, error: error.message });
   }
 };
@@ -153,6 +281,10 @@ module.exports = {
   register,
   login,
   verifyOTP,
+  changePassword,
+  updateUsername,
+  sendNationalIdVerification,
+  verifyNationalId,
   getMe,
   createOfficeAdmin,
   createOfficer

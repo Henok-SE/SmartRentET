@@ -20,6 +20,10 @@ const sendOTP = async (phone, code) => {
   return sendSMS(phone, `Your SmartRent verification code is: ${code}. Valid for 10 minutes.`);
 };
 
+const sendNationalIdVerification = async (phone, code) => {
+  return sendSMS(phone, `SmartRent: Verify your National ID with this code: ${code}. Valid for 10 minutes.`);
+};
+
 const sendUSSDVerification = async (phone, agreementId, code, expiresAt) => {
   const message = `SmartRent: Agreement #${agreementId}. Your verification code is: ${code}. Valid for 10 minutes. Reply with this code to sign.`;
   console.log(`Sending USSD to ${phone}: ${message}`);
@@ -49,6 +53,7 @@ module.exports = {
   sendSMS,
   sendUSSD,
   sendOTP,
+  sendNationalIdVerification,
   sendUSSDVerification,
   sendUSSDConsentWithCode,
   sendUSSD50BirrPayment,
