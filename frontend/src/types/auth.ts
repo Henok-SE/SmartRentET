@@ -51,7 +51,7 @@ export interface AuthResponse {
   tempToken?: string;
   debugOTP?: string;
 
-  data: {
+  data?: {
     user: User;
     token: string;
   };

@@ -48,6 +48,10 @@ function Register() {
         role: form.role,
       });
 
+      if (!response.data || !response.data.token || !response.data.user) {
+        throw new Error("Invalid registration response from server.");
+      }
+
       const { token, user } = response.data;
 
       localStorage.setItem("token", token);
