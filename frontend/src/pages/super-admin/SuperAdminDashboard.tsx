@@ -627,7 +627,7 @@ function SuperAdminDashboard() {
             <span className="super-admin-user-status" />
 
             <span className="super-admin-topbar-name">
-              {displayName}
+              {displayName} 
             </span>
           </div>
         </header>

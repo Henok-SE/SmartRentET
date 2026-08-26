@@ -189,7 +189,6 @@ const loginUser = async (username, password) => {
         requiresOTP: true, 
         userId: user.userId, 
         message: 'OTP sent to your phone',
-        debugOTP: otpCode,
         requiresPasswordChange: true
       };
     }
@@ -431,7 +430,6 @@ const sendNationalIdVerificationCode = async (userId) => {
     return { 
       success: true, 
       message: 'Verification code sent to your phone',
-      debugCode: code
     };
   } catch (error) {
     console.error('Send national ID verification error:', error);
