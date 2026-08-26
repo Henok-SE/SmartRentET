@@ -1,53 +1,78 @@
-const paymentServices = require('../services/paymentServices');
+const paymentService = require('../services/paymentServices');
 
-const createPayment = async (req, res) => {
+// Create payment
+const createPayment = async (req, res, next) => {
     try {
-        const { referenceNumber, amount, paymentMethod } = req.body;
+        const payment = await paymentService.createPayment(req.body);
 
-        const payment = await paymentServices.createPayment({
-            referenceNumber,
-            amount,
-            paymentMethod
-        });
-
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
-            message: 'Payment request received',
-            payment
+            message: 'Payment initiated successfully',
+            data: payment
         });
     } catch (error) {
-        console.error('create payment error:', error);
-
-        res.status(400).json({
-            success: false,
-            message: error.message
-        });
+        next(error);
     }
 };
 
-const getPaymentHistory = async (req, res) => {
+// Get payment history
+const getPaymentHistory = async (req, res, next) => {
     try {
         const { agreementId } = req.params;
 
-        const payments = await paymentService.getPaymentHistory(
-            Number(agreementId)
-        );
+        const payments = await paymentService.getPaymentHistory(agreementId);
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
-            payments
+            count: payments.length,
+            data: payments
         });
     } catch (error) {
-        console.error('Get payment history error:', error);
-
-        res.status(400).json({
-            success: false,
-            message: error.message
-        });
+        next(error);
     }
-}
+};
+
+// Get single payment
+const getPaymentById = async (req, res, next) => {
+    try {
+        const { paymentId } = req.params;
+
+        const payment = await paymentService.getPaymentById(paymentId);
+
+        return res.status(200).json({
+            success: true,
+            data: payment
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Update payment status
+const updatePaymentStatus = async (req, res, next) => {
+    try {
+        const { paymentId } = req.params;
+        const { status, transactionReference } = req.body;
+
+        const payment = await paymentService.updatePaymentStatus({
+            paymentId,
+            status,
+            transactionReference
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Payment status updated successfully',
+            data: payment
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
 module.exports = {
     createPayment,
-    getPaymentHistory
-}
+    getPaymentHistory,
+    getPaymentById,
+    updatePaymentStatus
+};
