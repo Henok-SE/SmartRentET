@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import LogoutButton from "../../components/LogoutButton";
 import { apiRequest } from "../../services/api";
 import "../../styles/super-admin-dashboard.css";
+import { useNavigate } from "react-router-dom";
 
 type GovernmentOffice = {
-  officeId: number;
+  officeId: string;
   officeCode: string;
   officeName: string;
   region?: string | null;
@@ -14,6 +15,31 @@ type GovernmentOffice = {
   address?: string | null;
   status?: "ACTIVE" | "INACTIVE";
   createdAt?: string;
+};
+type OfficeAdmin = {
+  officeAdminId: string;
+  employeeId: string;
+  createdAt: string;
+  user: {
+    userId: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    phone: string;
+    username?: string | null;
+    role: string;
+    isActive: boolean;
+  };
+  office: {
+    officeId: string;
+    officeCode: string;
+    officeName: string;
+    region?: string | null;
+    city?: string | null;
+    subCity?: string | null;
+    woreda?: string | null;
+    status?: "ACTIVE" | "INACTIVE";
+  };
 };
 
 type OfficeForm = {
@@ -56,6 +82,17 @@ type OfficeListResponse = {
   data: GovernmentOffice[];
 };
 
+type OfficeAdminListResponse = {
+  success: boolean;
+  message?: string;
+  filters?: {
+    officeId?: string;
+    subCity?: string;
+    isActive?: string;
+    officeCode?: string;
+  };
+  data: OfficeAdmin[];
+};
 type OfficeCreateResponse = {
   success: boolean;
   message: string;
@@ -90,6 +127,7 @@ const createEmptyAdminForm = (): AdminForm => ({
 });
 
 function SuperAdminDashboard() {
+  const navigate = useNavigate();
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [showCreateOffice, setShowCreateOffice] = useState(false);
 
@@ -105,7 +143,10 @@ function SuperAdminDashboard() {
   const [search, setSearch] = useState("");
 
   const [offices, setOffices] = useState<GovernmentOffice[]>([]);
-
+  const [admins, setAdmins] = useState<OfficeAdmin[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState("");
+  
   const [adminForm, setAdminForm] = useState<AdminForm>(
     createEmptyAdminForm
   );
@@ -259,6 +300,44 @@ function SuperAdminDashboard() {
     }
   };
 
+  const loadAdmins = async () => {
+  setAdminLoading(true);
+  setAdminError("");
+
+  try {
+    const token = localStorage.getItem("token");
+
+    const response =
+      await apiRequest<OfficeAdminListResponse>(
+        "/dashboard/office-admins",
+        {
+          method: "GET",
+          cache: "no-store",
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : undefined,
+        }
+      );
+
+    setAdmins(response.data);
+  } catch (err) {
+    if (err instanceof Error) {
+      setAdminError(err.message);
+    } else {
+      setAdminError(
+        "Failed to load administrators."
+      );
+    }
+  } finally {
+    setAdminLoading(false);
+  }
+};
+useEffect(() => {
+  void loadOffices();
+  void loadAdmins();
+}, []);
   /*
    * ---------------------------------------------------------
    * OPEN / CLOSE OFFICE MODAL
@@ -479,7 +558,7 @@ function SuperAdminDashboard() {
             phone: adminForm.phone.trim(),
             nationalId: adminForm.nationalId.trim(),
             employeeId: adminForm.employeeId.trim(),
-            officeId: Number(adminForm.officeId),
+            officeId: adminForm.officeId,
             password: adminForm.password,
           }),
         }
@@ -537,54 +616,59 @@ function SuperAdminDashboard() {
           aria-label="Super Admin navigation"
         >
           <button
-            type="button"
-            className="super-admin-nav-item active"
-          >
-            <span className="super-admin-nav-icon">
-              ▦
-            </span>
-            <span>Dashboard</span>
-          </button>
+  type="button"
+  className="super-admin-nav-item active"
+  onClick={() => navigate("/super-admin")}
+>
+  <span className="super-admin-nav-icon">
+    ▦
+  </span>
+  <span>Dashboard</span>
+</button>
 
           <button
-            type="button"
-            className="super-admin-nav-item"
-          >
-            <span className="super-admin-nav-icon">
-              ♟
-            </span>
-            <span>Administrators</span>
-          </button>
+  type="button"
+  className="super-admin-nav-item"
+  onClick={() => navigate("/super-admin/administrators")}
+>
+  <span className="super-admin-nav-icon">
+    ♟
+  </span>
+  <span>Administrators</span>
+</button>
+
+         <button
+  type="button"
+  className="super-admin-nav-item"
+  onClick={() => navigate("/super-admin/officers")}
+>
+  <span className="super-admin-nav-icon">
+    ♟
+  </span>
+  <span>Officers</span>
+</button>
 
           <button
-            type="button"
-            className="super-admin-nav-item"
-          >
-            <span className="super-admin-nav-icon">
-              ♟
-            </span>
-            <span>Officers</span>
-          </button>
+  type="button"
+  className="super-admin-nav-item"
+  onClick={() => navigate("/super-admin/offices")}
+>
+  <span className="super-admin-nav-icon">
+    ◎
+  </span>
+  <span>Government Offices</span>
+</button>
 
           <button
-            type="button"
-            className="super-admin-nav-item"
-          >
-            <span className="super-admin-nav-icon">
-              ◎
-            </span>
-            <span>Government Offices</span>
-          </button>
-
-          <button
-            type="button"
-            className="super-admin-nav-item"
-          >
-            <span className="super-admin-nav-icon">
-              ⚙
-            </span>
-            <span>System Settings</span>
-          </button>
+  type="button"
+  className="super-admin-nav-item"
+  onClick={() => navigate("/super-admin/settings")}
+>
+  <span className="super-admin-nav-icon">
+    ⚙
+  </span>
+  <span>System Settings</span>
+</button>
         </nav>
 
         <div className="super-admin-sidebar-bottom">
@@ -627,7 +711,7 @@ function SuperAdminDashboard() {
             <span className="super-admin-user-status" />
 
             <span className="super-admin-topbar-name">
-              {displayName}
+              {displayName} 
             </span>
           </div>
         </header>
@@ -681,7 +765,7 @@ function SuperAdminDashboard() {
 
               <div className="super-admin-stat-content">
                 <span>Total Administrators</span>
-                <strong>0</strong>
+                <strong>{admins.length}</strong>
                 <small>Registered accounts</small>
               </div>
             </article>
@@ -693,7 +777,9 @@ function SuperAdminDashboard() {
 
               <div className="super-admin-stat-content">
                 <span>Active Administrators</span>
-                <strong>0</strong>
+                <strong>
+  {admins.filter((admin) => admin.user.isActive).length}
+</strong>
                 <small>Currently active</small>
               </div>
             </article>
@@ -735,29 +821,138 @@ function SuperAdminDashboard() {
               </button>
             </div>
 
-            <div className="super-admin-empty-state">
-              <div className="super-admin-empty-icon">
-                ♟
-              </div>
+           {adminError && (
+  <div
+    className="super-admin-form-error"
+    role="alert"
+  >
+    {adminError}
+  </div>
+)}
 
-              <h3>No administrators yet</h3>
+{adminLoading ? (
+  <div className="super-admin-empty-state">
+    <div className="super-admin-empty-icon">
+      ⏳
+    </div>
 
-              <p>
-                {search
-                  ? `No administrators found for "${search}".`
-                  : "Create an administrator account to begin managing SmartRent officers and operations."}
-              </p>
+    <h3>Loading administrators...</h3>
 
-              {!search && (
-                <button
-                  type="button"
-                  className="super-admin-primary-button super-admin-empty-button"
-                  onClick={openCreateAdmin}
-                >
-                  Create First Admin
-                </button>
-              )}
-            </div>
+    <p>
+      Retrieving Office Administrator accounts.
+    </p>
+  </div>
+) : admins.length === 0 ? (
+  <div className="super-admin-empty-state">
+    <div className="super-admin-empty-icon">
+      ♟
+    </div>
+
+    <h3>No administrators yet</h3>
+
+    <p>
+      {search
+        ? `No administrators found for "${search}".`
+        : "Create an administrator account to begin managing SmartRent officers and operations."}
+    </p>
+
+    {!search && (
+      <button
+        type="button"
+        className="super-admin-primary-button super-admin-empty-button"
+        onClick={openCreateAdmin}
+      >
+        Create First Admin
+      </button>
+    )}
+  </div>
+) : (
+  <div
+    style={{
+      display: "grid",
+      gap: "12px",
+      padding: "20px 0",
+    }}
+  >
+    {admins
+      .filter((admin) => {
+        const query = search.trim().toLowerCase();
+
+        if (!query) {
+          return true;
+        }
+
+        return [
+          admin.user.firstName,
+          admin.user.lastName,
+          admin.user.username,
+          admin.user.email,
+          admin.user.phone,
+          admin.employeeId,
+          admin.office.officeCode,
+          admin.office.officeName,
+          admin.office.city,
+          admin.office.subCity,
+        ]
+          .filter(Boolean)
+          .some((value) =>
+            String(value)
+              .toLowerCase()
+              .includes(query)
+          );
+      })
+      .map((admin) => (
+        <article
+          key={admin.officeAdminId}
+          style={{
+            padding: "16px",
+            border: "1px solid #e5e7eb",
+            borderRadius: "10px",
+            background: "#ffffff",
+          }}
+        >
+          <strong>
+            {admin.user.firstName}{" "}
+            {admin.user.lastName}
+          </strong>
+
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: "#6b7280",
+            }}
+          >
+            @{admin.user.username || "No username"} ·{" "}
+            {admin.employeeId}
+          </p>
+
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: "#6b7280",
+            }}
+          >
+            {admin.office.officeCode} —{" "}
+            {admin.office.officeName}
+          </p>
+
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: admin.user.isActive
+                ? "#047857"
+                : "#b91c1c",
+              fontWeight: 600,
+            }}
+          >
+            {admin.user.isActive
+              ? "Active"
+              : "Inactive"}
+          </p>
+        </article>
+      ))}
+  </div>
+)}
           </section>
 
           <section className="super-admin-management-card">

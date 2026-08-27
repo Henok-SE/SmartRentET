@@ -1,11 +1,8 @@
 const express = require('express');
 const dotenv = require('dotenv');
+const cors = require('cors');
 
 dotenv.config();
-
-const cors = require('cors');
-const dashboardRoutes = require('./routes/dashboardRoutes');
-
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -16,15 +13,18 @@ app.use(express.urlencoded({ extended: true }));
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 const agreementRoutes = require('./routes/agreementRoutes');
 const approvalRoutes = require('./routes/approvalRoutes');
 const officeRoutes = require('./routes/officeRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 // Routes
 app.get('/', (req, res) => {
   res.json({
     message: 'SmartRent ET Backend API',
-    version: '2.0.0'
+    version: '2.0.0',
+    status: 'running'
   });
 });
 
@@ -33,6 +33,7 @@ app.use('/api/agreements', agreementRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/offices', officeRoutes);
+app.use('/api/payments', paymentRoutes)
 
 // 404 handler
 app.use((req, res) => {
