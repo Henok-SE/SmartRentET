@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
 
 type GovernmentOffice = {
-  officeId: number;
+  officeId: string;
   officeCode: string;
   officeName: string;
   region?: string | null;
@@ -235,7 +235,7 @@ function CreateAdmin() {
             phone: form.phone.trim(),
             nationalId: form.nationalId.trim(),
             employeeId: form.employeeId.trim(),
-            officeId: Number(form.officeId),
+            officeId: form.officeId,
             password: form.password,
           }),
         }

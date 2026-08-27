@@ -11,7 +11,10 @@ import CreateAdmin from "./pages/super-admin/CreateAdmin";
 import OfficerDashboard from "./pages/officer/OfficerDashboard";
 
 import ProtectedRoute from "./components/ProtectedRoute";
-
+import Administrators from "./pages/super-admin/Administrators";
+import Officers from "./pages/super-admin/Officers";
+import GovernmentOffices from "./pages/super-admin/GovernmentOffices";
+import SystemSettings from "./pages/super-admin/SystemSettings";
 function App() {
   return (
     <Routes>
@@ -47,7 +50,26 @@ function App() {
           path="/super-admin/create-admin"
           element={<CreateAdmin />}
         />
+
+        <Route
+          path="/super-admin/administrators"
+          element={<Administrators />}
+        />
+
+        <Route
+  path="/super-admin/offices"
+  element={<GovernmentOffices />}
+/>
+
+        <Route
+          path="/super-admin/officers"
+          element={<Officers />}
+        />
       </Route>
+      <Route
+  path="/super-admin/settings"
+  element={<SystemSettings />}
+/>
 
       {/* =========================
           ADMIN
