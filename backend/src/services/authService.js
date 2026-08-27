@@ -429,7 +429,7 @@ const sendNationalIdVerificationCode = async (userId) => {
 
     return { 
       success: true, 
-      message: 'Verification code sent to your phone',
+      message: 'Verification code sent to your phone'
     };
   } catch (error) {
     console.error('Send national ID verification error:', error);

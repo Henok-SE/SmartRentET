@@ -10,4 +10,8 @@ module.exports = defineConfig({
   datasource: {
     url: process.env.DATABASE_URL,
   },
+  // Add this to increase transaction timeout
+  engine: {
+    interactiveTransactionTimeout: 1800000, // 30 minutes
+  },
 });

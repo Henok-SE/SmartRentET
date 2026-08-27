@@ -10,20 +10,17 @@ import OfficersManagement from "./pages/admin/OfficersManagement";
 // Super Admin
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
 import CreateAdmin from "./pages/super-admin/CreateAdmin";
+import Administrators from "./pages/super-admin/Administrators";
+import Officers from "./pages/super-admin/Officers";
+import GovernmentOffices from "./pages/super-admin/GovernmentOffices";
+import SystemSettings from "./pages/super-admin/SystemSettings";
 
 // Officer
 import OfficerDashboard from "./pages/officer/OfficerDashboard";
 import RentalAgreements from "./pages/officer/RentalAgreements";
 
-<<<<<<< HEAD
 import ProtectedRoute from "./components/ProtectedRoute";
-import Administrators from "./pages/super-admin/Administrators";
-import Officers from "./pages/super-admin/Officers";
-import GovernmentOffices from "./pages/super-admin/GovernmentOffices";
-import SystemSettings from "./pages/super-admin/SystemSettings";
-=======
 
->>>>>>> 38d9206 (Update admin and officer dashboards)
 function App() {
   return (
     <Routes>
@@ -48,16 +45,15 @@ function App() {
       ========================== */}
 
       <Route
-        path="/super-admin"
-        element={<SuperAdminDashboard />}
-      />
+        element={
+          <ProtectedRoute allowedRoles={["SUPER_ADMIN"]} />
+        }
+      >
+        <Route
+          path="/super-admin"
+          element={<SuperAdminDashboard />}
+        />
 
-      <Route
-        path="/super-admin/create-admin"
-        element={<CreateAdmin />}
-      />
-
-<<<<<<< HEAD
         <Route
           path="/super-admin/create-admin"
           element={<CreateAdmin />}
@@ -69,57 +65,70 @@ function App() {
         />
 
         <Route
-  path="/super-admin/offices"
-  element={<GovernmentOffices />}
-/>
+          path="/super-admin/offices"
+          element={<GovernmentOffices />}
+        />
 
         <Route
           path="/super-admin/officers"
           element={<Officers />}
         />
+
+        <Route
+          path="/super-admin/settings"
+          element={<SystemSettings />}
+        />
       </Route>
-      <Route
-  path="/super-admin/settings"
-  element={<SystemSettings />}
-/>
-=======
->>>>>>> 38d9206 (Update admin and officer dashboards)
 
       {/* =========================
           OFFICE ADMIN
       ========================== */}
 
       <Route
-        path="/office-admin/dashboard"
-        element={<OfficeAdminDashboard />}
-      />
+        element={
+          <ProtectedRoute allowedRoles={["OFFICE_ADMIN"]} />
+        }
+      >
+        <Route
+          path="/office-admin/dashboard"
+          element={<OfficeAdminDashboard />}
+        />
 
-      <Route
-        path="/office-admin/officers"
-        element={<OfficersManagement />}
-      />
-
+        <Route
+          path="/office-admin/officers"
+          element={<OfficersManagement />}
+        />
+      </Route>
 
       {/* =========================
           OFFICER
       ========================== */}
 
       <Route
-        path="/officer"
-        element={<OfficerDashboard />}
-      />
+        element={
+          <ProtectedRoute allowedRoles={["OFFICER"]} />
+        }
+      >
+        <Route
+          path="/officer"
+          element={<OfficerDashboard />}
+        />
 
-      <Route
-        path="/officer/dashboard"
-        element={<OfficerDashboard />}
-      />
+        <Route
+          path="/officer/dashboard"
+          element={<OfficerDashboard />}
+        />
 
-      <Route
-        path="/officer/rental-agreements"
-        element={<RentalAgreements />}
-      />
+        <Route
+          path="/officer/rental-agreements"
+          element={<RentalAgreements />}
+        />
+      </Route>
 
-      
+      {/* =========================
+          DEFAULT
+      ========================== */}
+
       <Route
         path="/"
         element={
@@ -129,7 +138,6 @@ function App() {
           />
         }
       />
-
 
       {/* =========================
           UNKNOWN ROUTES

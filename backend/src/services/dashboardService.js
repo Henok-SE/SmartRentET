@@ -14,6 +14,10 @@ const getSummary = async () => {
     collectedPayments,
     overduePayments,
     pendingVerifications,
+    totalSuperAdmins,
+    activeSuperAdmins,
+    totalOfficeAdmins,
+    activeOfficeAdmins,
   ] = await Promise.all([
     prisma.rentalAgreement.count(),
     prisma.rentalAgreement.count({ where: { status: 'ACTIVE' } }),
@@ -26,6 +30,10 @@ const getSummary = async () => {
     prisma.payment.count({ where: { status: 'PAID' } }),
     prisma.payment.count({ where: { status: 'OVERDUE' } }),
     prisma.agreementVerification.count({ where: { status: 'PENDING' } }),
+    prisma.superAdmin.count(),
+    prisma.superAdmin.count({ where: { user: { isActive: true } } }),
+    prisma.officeAdmin.count(),
+    prisma.officeAdmin.count({ where: { user: { isActive: true } } })
   ]);
 
   return {
@@ -40,6 +48,10 @@ const getSummary = async () => {
     collectedPayments,
     overduePayments,
     pendingVerifications,
+    totalSuperAdmins,
+    activeSuperAdmins,
+    totalOfficeAdmins,
+    activeOfficeAdmins,
   };
 };
 
@@ -544,7 +556,7 @@ const getOfficeAdmins = async ({ officeId, subCity, isActive, officeCode } = {})
   return prisma.officeAdmin.findMany({
     where: {
       ...(officeId
-        ? { officeId: parseInt(officeId, 10) }
+        ? { officeId }
         : {}),
 
       ...(officeCode
@@ -615,12 +627,12 @@ const getOfficeAdmins = async ({ officeId, subCity, isActive, officeCode } = {})
 
 const getOfficeSummary = async ({ officeId, subCity } = {}) => {
   const officeWhere = {
-    ...(officeId ? { officeId: parseInt(officeId, 10) } : {}),
+    ...(officeId ? { officeId } : {}),
     ...(subCity ? { office: { subCity } } : {}),
   };
 
   const agreementWhere = {
-    ...(officeId ? { officeId: parseInt(officeId, 10) } : {}),
+    ...(officeId ? { officeId } : {}),
     ...(subCity ? { office: { subCity } } : {}),
   };
 
@@ -739,7 +751,7 @@ const createOfficeAdmin = async ({
   password,
 }) => {
   const office = await prisma.governmentOffice.findUnique({
-    where: { officeId: parseInt(officeId, 10) },
+    where: { officeId },
   });
 
   if (!office) {
@@ -779,7 +791,7 @@ const createOfficeAdmin = async ({
     const admin = await tx.officeAdmin.create({
       data: {
         userId: user.userId,
-        officeId: parseInt(officeId, 10),
+        officeId,
         employeeId,
       },
       include: {
@@ -825,7 +837,7 @@ const createOfficer = async ({
   password,
 }) => {
   const office = await prisma.governmentOffice.findUnique({
-    where: { officeId: parseInt(officeId, 10) },
+    where: { officeId },
   });
 
   if (!office) {
@@ -865,7 +877,7 @@ const createOfficer = async ({
     const officer = await tx.officer.create({
       data: {
         userId: user.userId,
-        officeId: parseInt(officeId, 10),
+        officeId,
         employeeId,
         position: position ?? null,
         assignedArea: assignedArea ?? null,

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
 
 type GovernmentOffice = {
@@ -43,6 +42,10 @@ type CreateOfficerResponse = {
   data?: unknown;
 };
 
+type CreateOfficerProps = {
+  onClose: () => void;
+};
+
 const createEmptyForm = (): OfficerForm => ({
   firstName: "",
   lastName: "",
@@ -56,8 +59,7 @@ const createEmptyForm = (): OfficerForm => ({
   officeId: "",
 });
 
-function CreateOfficer() {
-  const navigate = useNavigate();
+function CreateOfficer({ onClose }: CreateOfficerProps) {
 
   const [form, setForm] = useState<OfficerForm>(
     createEmptyForm
@@ -244,7 +246,7 @@ function CreateOfficer() {
       setForm(createEmptyForm());
 
       window.setTimeout(() => {
-        navigate("/super-admin");
+        onClose();
       }, 1200);
     } catch (err) {
       if (err instanceof Error) {
@@ -358,8 +360,6 @@ function CreateOfficer() {
                 required
               />
             </div>
-
-            
 
           </div>
 
@@ -540,7 +540,7 @@ function CreateOfficer() {
 
           <button
             type="button"
-            onClick={() => navigate("/OfficeAdminDashboard")}
+            onClick={onClose}
             disabled={loading}
             style={{
               marginTop: "10px",
