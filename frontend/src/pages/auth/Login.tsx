@@ -75,19 +75,19 @@ function Login() {
       );
 
       if (user.role === "SUPER_ADMIN") {
-        navigate("/super-admin");
-      } else if (user.role === "OFFICE_ADMIN") {
-        navigate("/admin");
-      } else if (user.role === "OFFICER") {
-        navigate("/officer");
-      } else {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+  navigate("/super-admin");
+} else if (user.role === "OFFICE_ADMIN") {
+  navigate("/office-admin/dashboard");
+} else if (user.role === "OFFICER") {
+  navigate("/officer");
+} else {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
 
-        setError(
-          "This account does not have dashboard access."
-        );
-      }
+  setError(
+    "This account does not have dashboard access."
+  );
+}
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -171,16 +171,16 @@ function Login() {
       );
 
       if (user.role === "OFFICE_ADMIN") {
-        navigate("/admin");
-      } else if (user.role === "OFFICER") {
-        navigate("/officer");
-      } else if (user.role === "SUPER_ADMIN") {
-        navigate("/super-admin");
-      } else {
-        setError(
-          "This account does not have dashboard access."
-        );
-      }
+  navigate("/office-admin/dashboard");
+} else if (user.role === "OFFICER") {
+  navigate("/officer");
+} else if (user.role === "SUPER_ADMIN") {
+  navigate("/super-admin");
+} else {
+  setError(
+    "This account does not have dashboard access."
+  );
+} 
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -259,7 +259,7 @@ function Login() {
         JSON.stringify(user)
       );
 
-      navigate("/admin");
+      navigate("/office-admin/dashboard");
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
