@@ -104,9 +104,7 @@ function CreateAdmin() {
         if (response.data.length === 1) {
           setForm((previous) => ({
             ...previous,
-            officeId: String(
-              response.data[0].officeId
-            ),
+            officeId: String(response.data[0].officeId),
           }));
         }
       } catch (err) {

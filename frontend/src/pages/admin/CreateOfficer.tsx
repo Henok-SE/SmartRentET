@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
 
 type GovernmentOffice = {
@@ -61,7 +60,6 @@ const createEmptyForm = (): OfficerForm => ({
 });
 
 function CreateOfficer({ onClose }: CreateOfficerProps) {
-  const navigate = useNavigate();
 
   const [form, setForm] = useState<OfficerForm>(
     createEmptyForm
