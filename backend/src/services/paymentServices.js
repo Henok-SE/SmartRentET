@@ -3,27 +3,21 @@ const prisma = require('../config/db');
 const telebirrService = require('./telebirrService');
 const cbeService = require('./cbeService');
 
-// GET PAYMENT PROVIDER
-
+// Get payment provider
 const getPaymentProvider = (paymentMethod) => {
-
     switch (paymentMethod) {
-
-        case "TELEBIRR":
+        case 'TELEBIRR':
             return telebirrService;
 
-        case "CBE":
+        case 'CBE':
             return cbeService;
 
         default:
-            throw new Error(
-                `Unsupported payment method: ${paymentMethod}`
-            );
+            throw new Error(`Unsupported payment method: ${paymentMethod}`);
     }
 };
 
-// CREATE PAYMENT
-
+// Create payment
 const createPayment = async ({
     referenceNumber,
     amount,
@@ -32,31 +26,28 @@ const createPayment = async ({
     customerPhoneNumber,
     dueDate
 }) => {
-
-    // 1. Validate required fields
-
+    // Validate required fields
     if (!referenceNumber) {
-        throw new Error("Reference number is required");
+        throw new Error('Reference number is required');
     }
 
     if (!amount || Number(amount) <= 0) {
-        throw new Error("Payment amount must be greater than zero");
+        throw new Error('Payment amount must be greater than zero');
     }
 
     if (!paymentMethod) {
-        throw new Error("Payment method is required");
+        throw new Error('Payment method is required');
     }
 
     if (!customerName) {
-        throw new Error("Customer name is required");
+        throw new Error('Customer name is required');
     }
 
     if (!customerPhoneNumber) {
-        throw new Error("Customer phone number is required");
+        throw new Error('Customer phone number is required');
     }
 
-    // 2. Find rental agreement
-
+    // Find rental agreement
     const agreement = await prisma.rentalAgreement.findUnique({
         where: {
             referenceNumber
@@ -64,308 +55,227 @@ const createPayment = async ({
     });
 
     if (!agreement) {
-        throw new Error("Rental agreement not found");
+        throw new Error('Rental agreement not found');
     }
 
-    // 3. Make sure agreement can receive payments
-    
+    // Check agreement status
     if (
-        agreement.status !== "ACTIVE" &&
-        agreement.status !== "APPROVED"
+        agreement.status !== 'ACTIVE' &&
+        agreement.status !== 'APPROVED'
     ) {
+        throw new Error('Payment cannot be made for this agreement');
+    }
+
+    // Validate exact payment amount
+    const paymentAmount = Number(amount);
+    const rentalAmount = Number(agreement.rentalAmount);
+
+    if (paymentAmount !== rentalAmount) {
         throw new Error(
-            "Payment cannot be made for this agreement"
+            `Payment amount must be exactly ${rentalAmount}`
         );
     }
 
+    // Check for existing active payment
+    const existingPayment = await prisma.payment.findFirst({
+        where: {
+            agreementId: agreement.agreementId,
+            status: {
+                in: ['PENDING', 'PAID']
+            }
+        }
+    });
 
-    
-    // 4. Select provider
+    if (existingPayment) {
+        throw new Error(
+            'A payment already exists for this agreement'
+        );
+    }
 
+    // Select provider
     const provider = getPaymentProvider(paymentMethod);
-  
-    // 5. Initiate payment with provider
 
+    // Initiate payment
     const providerResult = await provider.initiatePayment({
-
-        amount: Number(amount),
-
+        amount: paymentAmount,
         customerName,
-
         customerPhoneNumber,
-
         referenceNumber
     });
 
     if (!providerResult || !providerResult.success) {
-
         throw new Error(
             providerResult?.message ||
-            "Payment provider failed to initiate payment"
+            'Payment provider failed to initiate payment'
         );
     }
 
-    // 6. Map payment method to Prisma enum
-
+    // Map payment method
     let method;
 
-    if (paymentMethod === "TELEBIRR") {
-
-        method = "MOBILE_MONEY";
-
-    } else if (paymentMethod === "CBE") {
-
-        method = "BANK_TRANSFER";
-
-    } else {
-
-        throw new Error(
-            `Unsupported payment method: ${paymentMethod}`
-        );
+    if (paymentMethod === 'TELEBIRR') {
+        method = 'MOBILE_MONEY';
+    } else if (paymentMethod === 'CBE') {
+        method = 'BANK_TRANSFER';
     }
 
-    // 7. Map provider to Prisma enum
-
+    // Map payment provider
     let paymentProvider;
 
-    if (paymentMethod === "TELEBIRR") {
-
-        paymentProvider = "TELEBIRR";
-
-    } else if (paymentMethod === "CBE") {
-
-        paymentProvider = "BANK";
-
-    } else {
-
-        throw new Error(
-            `Unsupported payment method: ${paymentMethod}`
-        );
+    if (paymentMethod === 'TELEBIRR') {
+        paymentProvider = 'TELEBIRR';
+    } else if (paymentMethod === 'CBE') {
+        paymentProvider = 'BANK';
     }
 
-    // 8. Save payment in PostgreSQL
-
+    // Save payment
     const payment = await prisma.payment.create({
-
         data: {
-
-            agreementId:
-                agreement.agreementId,
-
-            amount:
-                Number(amount),
-
-            dueDate:
-                dueDate
-                    ? new Date(dueDate)
-                    : new Date(),
-
-            status:
-                "PENDING",
-
+            agreementId: agreement.agreementId,
+            amount: paymentAmount,
+            dueDate: dueDate
+                ? new Date(dueDate)
+                : new Date(),
+            status: 'PENDING',
             method,
-
-            provider:
-                paymentProvider,
-
+            provider: paymentProvider,
             transactionReference:
                 providerResult.transactionReference,
-
-            notes:
-                providerResult.message
+            notes: providerResult.message
         }
     });
- 
-    // 9. Return result
 
+    // Return payment
     return {
-
         success: true,
-
-        paymentId:
-            payment.paymentId,
-
-        agreementId:
-            agreement.agreementId,
-
-        referenceNumber:
-            agreement.referenceNumber,
-
-        amount:
-            payment.amount,
-
-        paymentMethod:
-            payment.method,
-
-        provider:
-            payment.provider,
-
-        status:
-            payment.status,
-
-        transactionReference:
-            payment.transactionReference,
-
-        message:
-            providerResult.message
+        paymentId: payment.paymentId,
+        agreementId: agreement.agreementId,
+        referenceNumber: agreement.referenceNumber,
+        amount: payment.amount,
+        paymentMethod: payment.method,
+        provider: payment.provider,
+        status: payment.status,
+        transactionReference: payment.transactionReference,
+        message: providerResult.message
     };
 };
 
-// GET PAYMENT HISTORY
-
+// Get payment history
 const getPaymentHistory = async (agreementId) => {
-
     if (!agreementId) {
-        throw new Error("Agreement ID is required");
+        throw new Error('Agreement ID is required');
     }
 
-    // Verify agreement exists
-
-    const agreement =
-        await prisma.rentalAgreement.findUnique({
-
-            where: {
-                agreementId
-            }
-        });
-
+    const agreement = await prisma.rentalAgreement.findUnique({
+        where: {
+            agreementId
+        }
+    });
 
     if (!agreement) {
-        throw new Error(
-            "Rental agreement not found"
-        );
+        throw new Error('Rental agreement not found');
     }
 
-    // Get payments
-
-    const payments =
-        await prisma.payment.findMany({
-
-            where: {
-                agreementId
-            },
-
-            orderBy: {
-                dueDate: "desc"
-            }
-        });
-
+    const payments = await prisma.payment.findMany({
+        where: {
+            agreementId
+        },
+        orderBy: {
+            dueDate: 'desc'
+        }
+    });
 
     return payments;
 };
 
-// GET SINGLE PAYMENT
-
+// Get single payment
 const getPaymentById = async (paymentId) => {
-
-    const payment =
-        await prisma.payment.findUnique({
-
-            where: {
-                paymentId
-            },
-
-            include: {
-
-                agreement: {
-                    select: {
-                        agreementId: true,
-                        referenceNumber: true,
-                        rentalAmount: true,
-                        status: true
-                    }
-                }
-            }
-        });
-
-
-    if (!payment) {
-        throw new Error(
-            "Payment not found"
-        );
+    if (!paymentId) {
+        throw new Error('Payment ID is required');
     }
 
+    const payment = await prisma.payment.findUnique({
+        where: {
+            paymentId
+        },
+        include: {
+            agreement: {
+                select: {
+                    agreementId: true,
+                    referenceNumber: true,
+                    rentalAmount: true,
+                    status: true
+                }
+            }
+        }
+    });
+
+    if (!payment) {
+        throw new Error('Payment not found');
+    }
 
     return payment;
 };
 
-// UPDATE PAYMENT STATUS
-
+// Update payment status
 const updatePaymentStatus = async ({
     paymentId,
     status,
     transactionReference
 }) => {
+    if (!paymentId) {
+        throw new Error('Payment ID is required');
+    }
+
+    if (!status) {
+        throw new Error('Payment status is required');
+    }
 
     const allowedStatuses = [
-        "PENDING",
-        "PAID",
-        "FAILED",
-        "CANCELLED",
-        "OVERDUE"
+        'PENDING',
+        'PAID',
+        'FAILED',
+        'CANCELLED',
+        'OVERDUE'
     ];
 
-
     if (!allowedStatuses.includes(status)) {
-
-        throw new Error(
-            `Invalid payment status: ${status}`
-        );
+        throw new Error(`Invalid payment status: ${status}`);
     }
 
-
-    const payment =
-        await prisma.payment.findUnique({
-
-            where: {
-                paymentId
-            }
-        });
-
+    const payment = await prisma.payment.findUnique({
+        where: {
+            paymentId
+        }
+    });
 
     if (!payment) {
-        throw new Error(
-            "Payment not found"
-        );
+        throw new Error('Payment not found');
     }
 
-
-    const updatedPayment =
-        await prisma.payment.update({
-
-            where: {
-                paymentId
-            },
-
-            data: {
-
-                status,
-
-                transactionReference:
-                    transactionReference ||
-                    payment.transactionReference,
-
-                paidDate:
-                    status === "PAID"
-                        ? new Date()
-                        : payment.paidDate
-            }
-        });
-
+    const updatedPayment = await prisma.payment.update({
+        where: {
+            paymentId
+        },
+        data: {
+            status,
+            transactionReference:
+                transactionReference ||
+                payment.transactionReference,
+            paidDate:
+                status === 'PAID'
+                    ? new Date()
+                    : payment.paidDate
+        }
+    });
 
     return updatedPayment;
 };
 
-
 module.exports = {
-
     createPayment,
-
     getPaymentHistory,
-
     getPaymentById,
-
     updatePaymentStatus,
-
     getPaymentProvider
 };
