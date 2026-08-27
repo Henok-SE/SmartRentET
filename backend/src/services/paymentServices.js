@@ -235,8 +235,7 @@ const updatePaymentStatus = async ({
         'PENDING',
         'PAID',
         'FAILED',
-        'CANCELLED',
-        'OVERDUE'
+        'CANCELLED'
     ];
 
     if (!allowedStatuses.includes(status)) {
@@ -253,6 +252,18 @@ const updatePaymentStatus = async ({
         throw new Error('Payment not found');
     }
 
+    if (payment.status !== 'PENDING') {
+        throw new Error(
+            `Payment cannot be changed from ${payment.status}`
+        );
+    }
+
+    if (status === 'PAID' && !transactionReference) {
+        throw new Error(
+            'Transaction reference is required when marking payment as PAID'
+        );
+    }
+
     const updatedPayment = await prisma.payment.update({
         where: {
             paymentId
@@ -265,7 +276,7 @@ const updatePaymentStatus = async ({
             paidDate:
                 status === 'PAID'
                     ? new Date()
-                    : payment.paidDate
+                    : null
         }
     });
 
