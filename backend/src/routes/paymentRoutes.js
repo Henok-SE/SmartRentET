@@ -1,6 +1,7 @@
 const express = require('express');
 
 const {
+    getPaymentInquiry,
     createPayment,
     getPaymentHistory,
     getPaymentById,
@@ -8,6 +9,9 @@ const {
 } = require('../controllers/paymentController');
 
 const router = express.Router();
+
+// Payment inquiry
+router.get('/inquiry/:referenceNumber', getPaymentInquiry);
 
 // Create payment
 router.post('/', createPayment);
