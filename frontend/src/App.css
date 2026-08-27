@@ -285,21 +285,36 @@ button {
 /* =========================
    Modal
 ========================= */
-
 .modal-overlay {
   position: fixed;
   inset: 0;
   z-index: 1000;
 
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
 
-  padding: 24px;
+  padding: 20px;
+  box-sizing: border-box;
 
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(0, 0, 0, 0.55);
 }
 
+.agreement-modal {
+  width: 100%;
+  max-width: 1100px;
+
+  /* Important: modal can scroll */
+  max-height: 90vh;
+  overflow-y: auto;
+
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 30px;
+
+  box-sizing: border-box;
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.2);
+}
 .modal {
   width: 100%;
   max-width: 560px;
@@ -446,3 +461,3100 @@ button {
     width: 100%;
   }
 }
+/* =========================================================
+   OFFICE ADMIN DASHBOARD
+========================================================= */
+
+.office-admin-page {
+  min-height: 100vh;
+  display: flex;
+  background: #f6f8fa;
+  color: #1f2937;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
+
+.office-admin-sidebar {
+  width: 270px;
+  min-height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.office-admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 24px;
+}
+
+.office-admin-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.office-admin-brand h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.office-admin-brand span {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #06b485;
+}
+
+.office-admin-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 0 18px;
+}
+
+/* =========================
+   NAVIGATION
+========================= */
+
+.office-admin-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px 16px;
+}
+
+.office-admin-nav-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 13px 15px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  transition: 0.2s ease;
+}
+
+.office-admin-nav-item:hover {
+  background: #f0fdf8;
+  color: #06b485;
+}
+
+.office-admin-nav-item.active {
+  background: #e6f8f2;
+  color: #06b485;
+  font-weight: 700;
+}
+
+.nav-icon {
+  width: 22px;
+  text-align: center;
+  font-size: 18px;
+}
+
+/* =========================
+   SIDEBAR PROFILE
+========================= */
+
+.office-admin-sidebar-bottom {
+  margin-top: auto;
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.office-admin-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.office-admin-avatar,
+.office-admin-user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #06b485;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.office-admin-profile strong {
+  display: block;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.office-admin-profile span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #98a2b3;
+}
+
+/* =========================
+   MAIN
+========================= */
+
+.office-admin-main {
+  flex: 1;
+  margin-left: 270px;
+  min-width: 0;
+}
+
+/* =========================
+   TOPBAR
+========================= */
+
+.office-admin-topbar {
+  height: 80px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 40px;
+}
+
+.office-admin-search {
+  width: 360px;
+  height: 42px;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 0 14px;
+
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.office-admin-search span {
+  font-size: 20px;
+  color: #98a2b3;
+}
+
+.office-admin-search input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.office-admin-search input::placeholder {
+  color: #98a2b3;
+}
+
+.office-admin-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #344054;
+}
+
+/* =========================
+   CONTENT
+========================= */
+
+.office-admin-content {
+  padding: 40px;
+  max-width: 1500px;
+}
+
+.office-admin-heading {
+  margin-bottom: 30px;
+}
+
+.office-admin-eyebrow {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: #06b485;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+.office-admin-heading h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+  color: #1f2937;
+}
+
+.office-admin-heading p {
+  margin: 0;
+  color: #667085;
+  font-size: 15px;
+}
+
+/* =========================
+   STATISTICS
+========================= */
+
+.office-admin-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  margin-bottom: 30px;
+}
+
+.office-admin-stat-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  padding: 24px;
+
+  display: flex;
+  align-items: center;
+  gap: 18px;
+
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
+}
+
+.office-admin-stat-icon {
+  width: 52px;
+  height: 52px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 12px;
+
+  background: #e6f8f2;
+  color: #06b485;
+
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.inactive-icon {
+  background: #fff4e5;
+  color: #f79009;
+}
+
+.office-admin-stat-card span {
+  display: block;
+  color: #667085;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.office-admin-stat-card strong {
+  display: block;
+  color: #1f2937;
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.office-admin-stat-card small {
+  color: #98a2b3;
+  font-size: 12px;
+}
+
+/* =========================
+   TABLE CARD
+========================= */
+
+.office-admin-table-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
+}
+
+.office-admin-table-header {
+  padding: 25px 28px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.office-admin-table-header h2 {
+  margin: 0 0 7px;
+  color: #1f2937;
+  font-size: 21px;
+}
+
+.office-admin-table-header p {
+  margin: 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.office-admin-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* =========================
+   TABLE
+========================= */
+
+.office-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 850px;
+}
+
+.office-admin-table th {
+  padding: 14px 24px;
+  background: #f9fafb;
+
+  text-align: left;
+
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.office-admin-table td {
+  padding: 18px 24px;
+
+  color: #475467;
+  font-size: 14px;
+
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.office-admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.office-admin-table tbody tr:hover {
+  background: #f9fefc;
+}
+
+/* =========================
+   OFFICER NAME
+========================= */
+
+.officer-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.officer-name strong {
+  color: #344054;
+  font-size: 14px;
+}
+
+.officer-table-avatar {
+  width: 38px;
+  height: 38px;
+
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #e6f8f2;
+  color: #06b485;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* =========================
+   STATUS
+========================= */
+
+.officer-status {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 5px 10px;
+
+  border-radius: 20px;
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-active {
+  background: #e6f8f2;
+  color: #058b68;
+}
+
+.status-inactive {
+  background: #fff1f1;
+  color: #d92d20;
+}
+
+/* =========================
+   NO RESULTS
+========================= */
+
+.no-results {
+  text-align: center;
+  padding: 40px !important;
+  color: #98a2b3 !important;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 1000px) {
+  .office-admin-sidebar {
+    width: 230px;
+  }
+
+  .office-admin-main {
+    margin-left: 230px;
+  }
+
+  .office-admin-content {
+    padding: 30px;
+  }
+
+  .office-admin-topbar {
+    padding: 0 30px;
+  }
+
+  .office-admin-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .office-admin-sidebar {
+    display: none;
+  }
+
+  .office-admin-main {
+    margin-left: 0;
+  }
+
+  .office-admin-topbar {
+    height: auto;
+    padding: 16px 20px;
+    gap: 15px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .office-admin-search {
+    width: 100%;
+  }
+
+  .office-admin-user {
+    justify-content: flex-end;
+  }
+
+  .office-admin-content {
+    padding: 24px 16px;
+  }
+
+  .office-admin-heading h1 {
+    font-size: 26px;
+  }
+}
+/* =========================================================
+   OFFICE ADMIN - SHARED LAYOUT
+========================================================= */
+
+.office-admin-page {
+  min-height: 100vh;
+  display: flex;
+  background: #f6f8f7;
+  color: #1f2937;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
+
+.office-admin-sidebar {
+  width: 270px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  padding: 24px 16px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.office-admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+}
+
+.office-admin-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.office-admin-brand h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #172033;
+}
+
+.office-admin-brand span {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #06b485;
+}
+
+.office-admin-divider {
+  height: 1px;
+  width: 100%;
+  margin: 24px 0;
+  background: #e5e7eb;
+}
+
+/* =========================
+   NAVIGATION
+========================= */
+
+.office-admin-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.office-admin-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  padding: 13px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  transition: 0.2s ease;
+}
+
+.office-admin-nav-item:hover {
+  background: #eafaf5;
+  color: #06b485;
+}
+
+.office-admin-nav-item.active {
+  background: #06b485;
+  color: #ffffff;
+}
+
+.nav-icon {
+  width: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+}
+
+/* =========================
+   SIDEBAR PROFILE
+========================= */
+
+.office-admin-sidebar-bottom {
+  margin-top: auto;
+  padding-top: 24px;
+}
+
+.office-admin-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.office-admin-avatar {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #06b485;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.office-admin-profile strong {
+  display: block;
+  font-size: 14px;
+  color: #172033;
+}
+
+.office-admin-profile span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* =========================================================
+   MAIN CONTENT
+========================================================= */
+
+.office-admin-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: 270px;
+}
+
+/* =========================
+   TOP BAR
+========================= */
+
+.office-admin-topbar {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 40px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.office-admin-search {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border: 1px solid #dbe2e8;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.office-admin-search span {
+  font-size: 22px;
+  color: #94a3b8;
+}
+
+.office-admin-search input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 11px 0;
+  color: #172033;
+  font-size: 14px;
+}
+
+.office-admin-search:focus-within {
+  border-color: #06b485;
+  box-shadow: 0 0 0 3px rgba(6, 180, 133, 0.1);
+}
+
+.office-admin-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.office-admin-user-avatar {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eafaf5;
+  color: #06b485;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* =========================
+   CONTENT AREA
+========================= */
+
+.office-admin-content {
+  padding: 36px 40px;
+}
+
+/* =========================================================
+   OFFICERS MANAGEMENT PAGE
+========================================================= */
+
+.officers-management-page {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+/* =========================
+   PAGE HEADER
+========================= */
+
+.officers-management-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.officers-management-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: #06b485;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.officers-management-header h1 {
+  margin: 0 0 8px;
+  font-size: 30px;
+  font-weight: 700;
+  color: #172033;
+}
+
+.officers-management-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* =========================
+   CREATE OFFICER BUTTON
+========================= */
+
+.create-officer-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 9px;
+  background: #06b485;
+  color: #ffffff;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(6, 180, 133, 0.2);
+  transition: 0.2s ease;
+}
+
+.create-officer-button:hover {
+  background: #05966f;
+  transform: translateY(-1px);
+}
+
+.create-officer-button:active {
+  transform: translateY(0);
+}
+
+/* =========================================================
+   TABLE CARD
+========================================================= */
+
+.officers-management-card {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+}
+
+.officers-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* =========================
+   TABLE
+========================= */
+
+.officers-table {
+  width: 100%;
+  min-width: 1050px;
+  border-collapse: collapse;
+}
+
+.officers-table thead {
+  background: #f8fafc;
+}
+
+.officers-table th {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.officers-table td {
+  padding: 17px 20px;
+  border-bottom: 1px solid #eef1f4;
+  color: #475569;
+  font-size: 14px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.officers-table tbody tr {
+  transition: background 0.2s ease;
+}
+
+.officers-table tbody tr:hover {
+  background: #f8fffc;
+}
+
+.officers-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* =========================
+   OFFICER NAME
+========================= */
+
+.officer-management-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.officer-management-avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eafaf5;
+  color: #06b485;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.officer-management-name strong {
+  color: #172033;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* =========================
+   STATUS
+========================= */
+
+.officer-management-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.officer-status-active {
+  background: #e8f8f1;
+  color: #07835f;
+}
+
+.officer-status-inactive {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* =========================================================
+   ACTION BUTTONS
+========================================================= */
+
+.officer-management-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.officer-management-actions button {
+  border-radius: 7px;
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: 0.2s ease;
+  white-space: nowrap;
+}
+
+/* EDIT */
+
+.officer-action-edit {
+  border: 1px solid #06b485;
+  background: #ffffff;
+  color: #06b485;
+}
+
+.officer-action-edit:hover {
+  background: #eafaf5;
+}
+
+/* RESET PASSWORD */
+
+.officer-action-reset {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+}
+
+.officer-action-reset:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+/* DEACTIVATE */
+
+.officer-action-deactivate {
+  border: 1px solid #fecaca;
+  background: #fff5f5;
+  color: #dc2626;
+}
+
+.officer-action-deactivate:hover {
+  background: #fee2e2;
+}
+
+/* ACTIVATE */
+
+.officer-action-activate {
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.officer-action-activate:hover {
+  background: #d1fae5;
+}
+
+/* =========================
+   NO RESULTS
+========================= */
+
+.officers-no-results {
+  padding: 50px !important;
+  text-align: center;
+  color: #94a3b8 !important;
+  font-size: 14px;
+}
+
+/* =========================================================
+   RESPONSIVE DESIGN
+========================================================= */
+
+@media (max-width: 1100px) {
+  .office-admin-sidebar {
+    width: 230px;
+  }
+
+  .office-admin-main {
+    margin-left: 230px;
+  }
+
+  .office-admin-topbar {
+    padding: 0 28px;
+  }
+
+  .office-admin-content {
+    padding: 28px;
+  }
+}
+
+@media (max-width: 800px) {
+  .office-admin-page {
+    display: block;
+  }
+
+  .office-admin-sidebar {
+    width: 100%;
+    min-height: auto;
+    position: static;
+    padding: 16px;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .office-admin-navigation {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .office-admin-nav-item {
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .office-admin-sidebar-bottom {
+    display: none;
+  }
+
+  .office-admin-divider {
+    margin: 14px 0;
+  }
+
+  .office-admin-main {
+    margin-left: 0;
+  }
+
+  .office-admin-topbar {
+    padding: 16px 20px;
+  }
+
+  .office-admin-content {
+    padding: 24px 20px;
+  }
+
+  .officers-management-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .create-officer-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 550px) {
+  .office-admin-brand h2 {
+    font-size: 17px;
+  }
+
+  .office-admin-topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .office-admin-search {
+    max-width: none;
+  }
+
+  .office-admin-user {
+    justify-content: flex-end;
+  }
+
+  .office-admin-content {
+    padding: 20px 14px;
+  }
+
+  .officers-management-header h1 {
+    font-size: 26px;
+  }
+
+  .officers-management-card {
+    border-radius: 10px;
+  }
+}
+/* =========================================================
+   OFFICER DASHBOARD
+========================================================= */
+
+.officer-dashboard-page {
+  min-height: 100vh;
+  display: flex;
+  background: #f5f7fb;
+  color: #172033;
+}
+
+
+/* =========================
+   SIDEBAR
+========================= */
+
+.officer-dashboard-sidebar {
+  width: 270px;
+  min-height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e7eaf0;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+
+/* =========================
+   BRAND
+========================= */
+
+.officer-dashboard-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 10px 20px;
+}
+
+.officer-dashboard-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.officer-dashboard-brand h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #172033;
+}
+
+.officer-dashboard-brand span {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #06b485;
+}
+
+
+/* =========================
+   DIVIDER
+========================= */
+
+.officer-dashboard-divider {
+  height: 1px;
+  background: #e7eaf0;
+  margin-bottom: 18px;
+}
+
+
+/* =========================
+   NAVIGATION
+========================= */
+
+.officer-dashboard-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.officer-dashboard-nav-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #687386;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  transition: 0.2s ease;
+}
+
+.officer-dashboard-nav-item:hover {
+  background: #e9fbf6;
+  color: #06b485;
+}
+
+.officer-dashboard-nav-item.active {
+  background: #06b485;
+  color: #ffffff;
+}
+
+
+/* =========================
+   SIDEBAR BOTTOM
+========================= */
+
+.officer-dashboard-sidebar-bottom {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid #e7eaf0;
+}
+
+.officer-dashboard-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.officer-dashboard-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #e9fbf6;
+  color: #06b485;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.officer-dashboard-profile-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.officer-dashboard-profile-info strong {
+  font-size: 14px;
+  color: #172033;
+}
+
+.officer-dashboard-profile-info span {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #687386;
+}
+
+
+/* =========================
+   LOGOUT BUTTON
+========================= */
+
+.officer-dashboard-logout {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #d14343;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.officer-dashboard-logout:hover {
+  background: #fff1f1;
+}
+
+
+/* =========================
+   MAIN
+========================= */
+
+.officer-dashboard-main {
+  flex: 1;
+  min-height: 100vh;
+  margin-left: 270px;
+}
+
+
+/* =========================
+   TOP BAR
+========================= */
+
+.officer-dashboard-topbar {
+  height: 78px;
+  background: #ffffff;
+  border-bottom: 1px solid #e7eaf0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  gap: 24px;
+}
+
+.officer-dashboard-search {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f5f7fb;
+  border: 1px solid #e7eaf0;
+  border-radius: 9px;
+  padding: 0 14px;
+}
+
+.officer-dashboard-search svg {
+  color: #687386;
+  flex-shrink: 0;
+}
+
+.officer-dashboard-search input {
+  width: 100%;
+  height: 42px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #172033;
+  font-size: 14px;
+}
+
+.officer-dashboard-search:focus-within {
+  border-color: #06b485;
+  box-shadow: 0 0 0 3px rgba(6, 180, 133, 0.1);
+}
+
+
+/* =========================
+   TOPBAR USER
+========================= */
+
+.officer-dashboard-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.officer-dashboard-user-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #06b485;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.officer-dashboard-user strong {
+  display: block;
+  font-size: 14px;
+  color: #172033;
+}
+
+.officer-dashboard-user span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #687386;
+}
+
+
+/* =========================
+   CONTENT
+========================= */
+
+.officer-dashboard-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 36px 40px;
+}
+
+
+/* =========================
+   PAGE HEADING
+========================= */
+
+.officer-dashboard-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 30px;
+}
+
+.officer-dashboard-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #06b485;
+}
+
+.officer-dashboard-heading h1 {
+  margin: 0 0 8px;
+  font-size: 30px;
+  color: #172033;
+}
+
+.officer-dashboard-heading p {
+  margin: 0;
+  max-width: 650px;
+  color: #687386;
+  line-height: 1.6;
+}
+
+
+/* =========================
+   CREATE AGREEMENT BUTTON
+========================= */
+
+.officer-dashboard-create-button {
+  border: none;
+  border-radius: 9px;
+  background: #06b485;
+  color: #ffffff;
+  padding: 13px 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 5px 14px rgba(6, 180, 133, 0.2);
+  transition: 0.2s ease;
+}
+
+.officer-dashboard-create-button:hover {
+  background: #059a72;
+  transform: translateY(-1px);
+}
+
+
+/* =========================
+   STATISTICS
+========================= */
+
+.officer-dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.officer-dashboard-stat-card {
+  background: #ffffff;
+  border: 1px solid #e7eaf0;
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  box-shadow: 0 4px 15px rgba(23, 32, 51, 0.04);
+}
+
+.officer-dashboard-stat-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: #e9fbf6;
+  color: #06b485;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.officer-dashboard-stat-card span {
+  display: block;
+  color: #687386;
+  font-size: 13px;
+}
+
+.officer-dashboard-stat-card strong {
+  display: block;
+  margin: 4px 0;
+  font-size: 28px;
+  color: #172033;
+}
+
+.officer-dashboard-stat-card small {
+  color: #9aa3b2;
+  font-size: 12px;
+}
+
+
+/* =========================
+   RENTAL AGREEMENTS SECTION
+========================= */
+
+.officer-dashboard-section {
+  background: #ffffff;
+  border: 1px solid #e7eaf0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.officer-dashboard-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 26px;
+  border-bottom: 1px solid #e7eaf0;
+}
+
+.officer-dashboard-section-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #06b485;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.officer-dashboard-section-header h2 {
+  margin: 0 0 7px;
+  font-size: 21px;
+  color: #172033;
+}
+
+.officer-dashboard-section-header p {
+  margin: 0;
+  color: #687386;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+
+/* =========================
+   VIEW AGREEMENTS BUTTON
+========================= */
+
+.officer-dashboard-view-button {
+  border: 1px solid #06b485;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #06b485;
+  padding: 11px 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: 0.2s ease;
+}
+
+.officer-dashboard-view-button:hover {
+  background: #e9fbf6;
+}
+
+
+/* =========================
+   EMPTY STATE
+========================= */
+
+.officer-dashboard-empty-state {
+  text-align: center;
+  padding: 65px 24px;
+}
+
+.officer-dashboard-empty-icon {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  background: #e9fbf6;
+  color: #06b485;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.officer-dashboard-empty-state h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: #172033;
+}
+
+.officer-dashboard-empty-state p {
+  max-width: 520px;
+  margin: 0 auto 24px;
+  color: #687386;
+  line-height: 1.6;
+}
+
+.officer-dashboard-empty-button {
+  border: none;
+  border-radius: 8px;
+  background: #06b485;
+  color: #ffffff;
+  padding: 12px 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  transition: 0.2s ease;
+}
+
+.officer-dashboard-empty-button:hover {
+  background: #059a72;
+}
+
+
+/* =========================================================
+   RESPONSIVE DESIGN
+========================================================= */
+
+@media (max-width: 1000px) {
+  .officer-dashboard-sidebar {
+    width: 230px;
+  }
+
+  .officer-dashboard-main {
+    margin-left: 230px;
+  }
+
+  .officer-dashboard-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+@media (max-width: 750px) {
+  .officer-dashboard-sidebar {
+    position: relative;
+    width: 100%;
+    min-height: auto;
+  }
+
+  .officer-dashboard-page {
+    flex-direction: column;
+  }
+
+  .officer-dashboard-main {
+    margin-left: 0;
+  }
+
+  .officer-dashboard-sidebar-bottom {
+    margin-top: 30px;
+  }
+
+  .officer-dashboard-topbar {
+    height: auto;
+    padding: 18px 24px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .officer-dashboard-search {
+    max-width: none;
+  }
+
+  .officer-dashboard-user {
+    justify-content: flex-end;
+  }
+
+  .officer-dashboard-content {
+    padding: 28px 24px;
+  }
+
+  .officer-dashboard-heading {
+    flex-direction: column;
+  }
+
+  .officer-dashboard-create-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .officer-dashboard-section-header {
+    flex-direction: column;
+  }
+}
+
+
+@media (max-width: 500px) {
+  .officer-dashboard-content {
+    padding: 20px 16px;
+  }
+
+  .officer-dashboard-heading h1 {
+    font-size: 25px;
+  }
+
+  .officer-dashboard-stat-card {
+    padding: 18px;
+  }
+
+  .officer-dashboard-section-header {
+    padding: 20px;
+  }
+
+  .officer-dashboard-empty-state {
+    padding: 45px 20px;
+  }
+
+  .officer-dashboard-user {
+    justify-content: flex-start;
+  }
+}
+/* =========================================================
+   OFFICER RENTAL AGREEMENTS PAGE
+========================================================= */
+
+.officer-layout {
+  min-height: 100vh;
+  display: flex;
+  background: #f6f8fb;
+  color: #1f2937;
+}
+
+
+/* =========================================================
+   SIDEBAR
+========================================================= */
+
+.officer-sidebar {
+  width: 270px;
+  min-height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e8edf3;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+}
+
+.officer-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 10px 28px;
+}
+
+.officer-brand-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+.officer-sidebar-brand h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #152536;
+}
+
+.officer-sidebar-brand span {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #06b485;
+}
+
+
+/* =========================================================
+   SIDEBAR NAVIGATION
+========================================================= */
+
+.officer-sidebar-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.officer-nav-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #667085;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.officer-nav-item:hover {
+  background: #f0faf7;
+  color: #06b485;
+}
+
+.officer-nav-item-active {
+  background: #e8f8f3;
+  color: #06b485;
+}
+
+
+/* =========================================================
+   SIDEBAR BOTTOM
+========================================================= */
+
+.officer-sidebar-bottom {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid #edf0f3;
+}
+
+.officer-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px;
+  margin-bottom: 8px;
+}
+
+.officer-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e8f8f3;
+  color: #06b485;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.officer-profile-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.officer-profile-details strong {
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.officer-profile-details span {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #8a94a6;
+}
+
+.officer-logout-button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #e05252;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.officer-logout-button:hover {
+  background: #fff1f1;
+}
+
+
+/* =========================================================
+   MAIN CONTENT
+========================================================= */
+
+.officer-main {
+  margin-left: 270px;
+  width: calc(100% - 270px);
+  min-height: 100vh;
+}
+
+
+/* =========================================================
+   TOP BAR
+========================================================= */
+
+.officer-topbar {
+  height: 76px;
+  background: #ffffff;
+  border-bottom: 1px solid #e8edf3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+}
+
+.officer-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.officer-search {
+  width: 330px;
+  height: 42px;
+  border: 1px solid #e2e7ed;
+  border-radius: 10px;
+  background: #fafbfc;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 13px;
+  color: #98a2b3;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.officer-search:focus-within {
+  border-color: #06b485;
+  box-shadow: 0 0 0 3px rgba(6, 180, 133, 0.1);
+}
+
+.officer-search input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #344054;
+  font-size: 13px;
+}
+
+.officer-search input::placeholder {
+  color: #98a2b3;
+}
+
+.officer-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.officer-account-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e8f8f3;
+  color: #06b485;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.officer-account div:last-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.officer-account strong {
+  font-size: 13px;
+  color: #344054;
+}
+
+.officer-account span {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #98a2b3;
+}
+
+
+/* =========================================================
+   MOBILE MENU
+========================================================= */
+
+.officer-mobile-menu-button {
+  display: none;
+  border: none;
+  background: transparent;
+  color: #344054;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.officer-mobile-overlay {
+  display: none;
+}
+
+
+/* =========================================================
+   PAGE CONTENT
+========================================================= */
+
+.officer-page-content {
+  padding: 32px;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+
+/* =========================================================
+   PAGE HEADER
+========================================================= */
+
+.agreements-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.agreements-page-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.agreements-back-button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #e4e8ee;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #475467;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.agreements-back-button:hover {
+  border-color: #06b485;
+  color: #06b485;
+  background: #f0faf7;
+}
+
+.officer-eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  color: #06b485;
+  margin-bottom: 6px;
+}
+
+.agreements-page-title h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  color: #182230;
+}
+
+.agreements-page-title p {
+  margin: 9px 0 0;
+  max-width: 650px;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+.agreement-primary-button {
+  border: none;
+  background: #06b485;
+  color: #ffffff;
+  min-height: 42px;
+  padding: 0 17px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.agreement-primary-button:hover {
+  background: #059a72;
+  transform: translateY(-1px);
+}
+
+.agreement-primary-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.agreements-create-button {
+  flex-shrink: 0;
+}
+
+.agreement-secondary-button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid #d9e0e7;
+  background: #ffffff;
+  color: #475467;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.agreement-secondary-button:hover {
+  background: #f8fafc;
+  border-color: #bfc8d3;
+}
+
+.agreement-secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+/* =========================================================
+   AGREEMENTS TABLE CARD
+========================================================= */
+
+.agreements-table-card {
+  background: #ffffff;
+  border: 1px solid #e8edf3;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 3px 10px rgba(16, 24, 40, 0.03);
+}
+
+.agreements-table-header {
+  padding: 22px 24px;
+  border-bottom: 1px solid #edf0f3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.agreements-table-header h2 {
+  margin: 0;
+  color: #1d2939;
+  font-size: 17px;
+}
+
+.agreements-table-header p {
+  margin: 6px 0 0;
+  color: #98a2b3;
+  font-size: 13px;
+}
+
+.agreements-count {
+  min-width: 105px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #e8f8f3;
+  color: #058c68;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.agreements-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.agreements-table {
+  width: 100%;
+  min-width: 1050px;
+  border-collapse: collapse;
+}
+
+.agreements-table th {
+  background: #fafbfc;
+  color: #667085;
+  padding: 14px 18px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.agreements-table td {
+  padding: 16px 18px;
+  color: #475467;
+  font-size: 13px;
+  border-bottom: 1px solid #edf0f3;
+  vertical-align: middle;
+}
+
+.agreements-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.agreements-table tbody tr {
+  transition: background 0.2s ease;
+}
+
+.agreements-table tbody tr:hover {
+  background: #fbfefd;
+}
+
+.agreement-reference {
+  font-weight: 700;
+  color: #06a87c;
+  white-space: nowrap;
+}
+
+.agreement-person-name {
+  font-weight: 600;
+  color: #344054;
+  white-space: nowrap;
+}
+
+.agreement-rent {
+  font-weight: 600;
+  color: #344054;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   STATUS BADGES
+========================================================= */
+
+.agreement-status-badge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agreement-status-approved {
+  background: #e8f8f3;
+  color: #058c68;
+}
+
+.agreement-status-pending {
+  background: #fff7df;
+  color: #b7791f;
+}
+
+.agreement-status-draft {
+  background: #f1f3f5;
+  color: #667085;
+}
+
+.agreement-status-rejected {
+  background: #fff0f0;
+  color: #d14343;
+}
+
+
+/* =========================================================
+   VIEW BUTTON
+========================================================= */
+
+.agreement-view-button {
+  border: 1px solid #dce3ea;
+  background: #ffffff;
+  color: #475467;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.agreement-view-button:hover {
+  border-color: #06b485;
+  color: #06b485;
+  background: #f0faf7;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+.agreements-empty-cell {
+  padding: 0 !important;
+}
+
+.agreements-empty-state {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.agreements-empty-icon {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: #e8f8f3;
+  color: #06b485;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.agreements-empty-state h3 {
+  margin: 0;
+  color: #344054;
+  font-size: 17px;
+}
+
+.agreements-empty-state p {
+  max-width: 430px;
+  margin: 8px 0 20px;
+  color: #98a2b3;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   MODAL OVERLAY
+========================================================= */
+
+.agreement-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+  backdrop-filter: blur(3px);
+}
+
+
+/* =========================================================
+   CREATE AGREEMENT MODAL
+========================================================= */
+
+
+.agreement-modal-header {
+  padding: 24px 28px;
+  border-bottom: 1px solid #edf0f3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.agreement-modal-eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: #06b485;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.agreement-modal-header h2 {
+  margin: 0;
+  color: #182230;
+  font-size: 22px;
+}
+
+.agreement-modal-header p {
+  margin: 7px 0 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.modal-close-button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #f7f8fa;
+  color: #667085;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.modal-close-button:hover {
+  background: #f1f3f5;
+  color: #344054;
+}
+
+
+/* =========================================================
+   FORM
+========================================================= */
+
+.agreement-modal-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.agreement-modal-body {
+  overflow-y: auto;
+  padding: 24px 28px;
+}
+
+.agreement-form-section {
+  padding-bottom: 28px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.agreement-form-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.agreement-section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.agreement-section-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #e8f8f3;
+  color: #06b485;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.agreement-section-heading h3 {
+  margin: 0;
+  color: #344054;
+  font-size: 15px;
+}
+
+.agreement-section-heading p {
+  margin: 4px 0 0;
+  color: #98a2b3;
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   FORM GRID
+========================================================= */
+
+.agreement-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.agreement-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.agreement-full-width {
+  grid-column: 1 / -1;
+}
+
+.agreement-form-group label {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agreement-form-group label span {
+  margin-left: 3px;
+  color: #e05252;
+}
+
+.agreement-form-group input,
+.agreement-form-group select,
+.agreement-form-group textarea {
+  width: 100%;
+  border: 1px solid #dce3ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #344054;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.agreement-form-group input,
+.agreement-form-group select {
+  height: 43px;
+  padding: 0 12px;
+}
+
+.agreement-form-group textarea {
+  padding: 12px;
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+.agreement-form-group input::placeholder,
+.agreement-form-group textarea::placeholder {
+  color: #a8b0bc;
+}
+
+.agreement-form-group input:focus,
+.agreement-form-group select:focus,
+.agreement-form-group textarea:focus {
+  border-color: #06b485;
+  box-shadow: 0 0 0 3px rgba(6, 180, 133, 0.1);
+}
+
+
+/* =========================================================
+   CUSTOM SELECT
+========================================================= */
+
+.agreement-select-wrapper {
+  position: relative;
+}
+
+.agreement-select-wrapper select {
+  appearance: none;
+  padding-right: 42px;
+  cursor: pointer;
+}
+
+.agreement-select-wrapper svg {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #98a2b3;
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   INPUT WITH SUFFIX
+========================================================= */
+
+.agreement-input-with-suffix {
+  position: relative;
+}
+
+.agreement-input-with-suffix input {
+  padding-right: 55px;
+}
+
+.agreement-input-with-suffix span {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   INPUT WITH ICON
+========================================================= */
+
+.agreement-input-with-icon {
+  position: relative;
+}
+
+.agreement-input-with-icon input {
+  padding-right: 42px;
+}
+
+.agreement-input-with-icon svg {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #98a2b3;
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   MODAL FOOTER
+========================================================= */
+
+.agreement-modal-footer {
+  padding: 16px 28px;
+  border-top: 1px solid #edf0f3;
+  background: #ffffff;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+
+/* =========================================================
+   VIEW AGREEMENT MODAL
+========================================================= */
+
+.agreement-view-modal {
+  width: 100%;
+  max-width: 650px;
+  max-height: 90vh;
+  background: #ffffff;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(16, 24, 40, 0.2);
+}
+
+.agreement-view-body {
+  padding: 24px 28px;
+  overflow-y: auto;
+}
+
+.agreement-view-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.agreement-view-status-row > span:first-child {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agreement-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.agreement-detail-grid > div {
+  padding: 14px;
+  border: 1px solid #edf0f3;
+  border-radius: 10px;
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agreement-detail-grid span {
+  color: #98a2b3;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agreement-detail-grid strong {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.agreement-detail-notes {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid #edf0f3;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+
+.agreement-detail-notes span {
+  display: block;
+  margin-bottom: 8px;
+  color: #98a2b3;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agreement-detail-notes p {
+  margin: 0;
+  color: #475467;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   TABLET RESPONSIVE
+========================================================= */
+
+@media (max-width: 1024px) {
+  .officer-sidebar {
+    width: 230px;
+  }
+
+  .officer-main {
+    margin-left: 230px;
+    width: calc(100% - 230px);
+  }
+
+  .officer-page-content {
+    padding: 24px;
+  }
+
+  .officer-topbar {
+    padding: 0 24px;
+  }
+
+  .officer-search {
+    width: 250px;
+  }
+}
+
+
+/* =========================================================
+   MOBILE RESPONSIVE
+========================================================= */
+
+@media (max-width: 768px) {
+  .officer-sidebar {
+    width: 270px;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: none;
+  }
+
+  .officer-sidebar-open {
+    transform: translateX(0);
+    box-shadow: 10px 0 30px rgba(16, 24, 40, 0.12);
+  }
+
+  .officer-main {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .officer-mobile-menu-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .officer-mobile-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 24, 40, 0.4);
+    z-index: 90;
+  }
+
+  .officer-topbar {
+    height: 68px;
+    padding: 0 16px;
+  }
+
+  .officer-search {
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .officer-account span {
+    display: none;
+  }
+
+  .officer-account strong {
+    display: none;
+  }
+
+  .officer-page-content {
+    padding: 20px 16px;
+  }
+
+  .agreements-page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .agreements-create-button {
+    width: 100%;
+  }
+
+  .agreements-table-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .agreement-modal-overlay {
+    padding: 10px;
+  }
+
+  .agreement-modal {
+    max-height: 96vh;
+  }
+
+  .agreement-modal-header,
+  .agreement-modal-body,
+  .agreement-modal-footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .agreement-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agreement-full-width {
+    grid-column: auto;
+  }
+
+  .agreement-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agreement-view-body {
+    padding: 20px 18px;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+========================================================= */
+
+@media (max-width: 480px) {
+  .officer-search {
+    max-width: 210px;
+  }
+
+  .officer-search input {
+    font-size: 12px;
+  }
+
+  .agreements-page-title h1 {
+    font-size: 23px;
+  }
+
+  .agreements-page-title p {
+    font-size: 13px;
+  }
+
+  .agreement-modal-header h2 {
+    font-size: 19px;
+  }
+
+  .agreement-modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .agreement-modal-footer button {
+    width: 100%;
+  }
+
+  .agreement-section-heading h3 {
+    font-size: 14px;
+  }
+}
+
+/* =========================================================
+   CREATE RENTAL AGREEMENT MODAL
+   ========================================================= */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 30px 20px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+/* Main modal */
+.agreement-modal {
+  width: 100%;
+  max-width: 1100px;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 30px;
+  margin: 20px auto;
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 20px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.page-header p {
+  margin: 8px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   ALERTS
+   ========================================================= */
+
+.alert {
+  padding: 14px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.alert-success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
+
+/* =========================================================
+   FORM SECTIONS
+   ========================================================= */
+
+.form-section {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.section-header {
+  margin-bottom: 22px;
+}
+
+.section-header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.section-header p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* =========================================================
+   FORM GRID
+   ========================================================= */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+/* =========================================================
+   LABELS
+   ========================================================= */
+
+.form-group label {
+  margin-bottom: 7px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   INPUTS / SELECT / TEXTAREA
+   ========================================================= */
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition:
+  0.2s ease;}

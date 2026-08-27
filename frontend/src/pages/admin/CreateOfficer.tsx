@@ -13,7 +13,7 @@ type GovernmentOffice = {
   woreda?: string | null;
 };
 
-type AdminForm = {
+type OfficerForm = {
   firstName: string;
   lastName: string;
   phone: string;
@@ -21,8 +21,9 @@ type AdminForm = {
   username: string;
   password: string;
   confirmPassword: string;
-  employeeId: string;
+  position: string;
   officeId: string;
+  assignedArea: string;
 };
 
 type OfficeListResponse = {
@@ -36,13 +37,13 @@ type OfficeListResponse = {
   data: GovernmentOffice[];
 };
 
-type CreateAdminResponse = {
+type CreateOfficerResponse = {
   success: boolean;
   message: string;
   data?: unknown;
 };
 
-const createEmptyForm = (): AdminForm => ({
+const createEmptyForm = (): OfficerForm => ({
   firstName: "",
   lastName: "",
   phone: "",
@@ -50,14 +51,15 @@ const createEmptyForm = (): AdminForm => ({
   username: "",
   password: "",
   confirmPassword: "",
-  employeeId: "",
+  position: "",
+  assignedArea: "",
   officeId: "",
 });
 
-function CreateAdmin() {
+function CreateOfficer() {
   const navigate = useNavigate();
 
-  const [form, setForm] = useState<AdminForm>(
+  const [form, setForm] = useState<OfficerForm>(
     createEmptyForm
   );
 
@@ -188,11 +190,6 @@ function CreateAdmin() {
       return;
     }
 
-    if (!form.employeeId.trim()) {
-      setError("Employee ID is required.");
-      return;
-    }
-
     if (form.password.length < 6) {
       setError(
         "Password must be at least 6 characters."
@@ -217,8 +214,8 @@ function CreateAdmin() {
     try {
       const token = localStorage.getItem("token");
 
-      await apiRequest<CreateAdminResponse>(
-        "/dashboard/office-admins",
+      await apiRequest<CreateOfficerResponse>(
+        "/auth/officer",
         {
           method: "POST",
           headers: token
@@ -232,7 +229,8 @@ function CreateAdmin() {
             username: form.username.trim(),
             phone: form.phone.trim(),
             nationalId: form.nationalId.trim(),
-            employeeId: form.employeeId.trim(),
+            position: form.position.trim(),
+            assignedArea: form.assignedArea.trim(),
             officeId: form.officeId,
             password: form.password,
           }),
@@ -240,7 +238,7 @@ function CreateAdmin() {
       );
 
       setSuccess(
-        "Administrator created successfully."
+        "Officer created successfully."
       );
 
       setForm(createEmptyForm());
@@ -253,7 +251,7 @@ function CreateAdmin() {
         setError(err.message);
       } else {
         setError(
-          "Failed to create administrator."
+          "Failed to create officer."
         );
       }
     } finally {
@@ -266,10 +264,10 @@ function CreateAdmin() {
       <div className="auth-card">
 
         <div className="auth-header">
-          <h1>Create Administrator</h1>
+          <h1>Create Officer</h1>
 
           <p>
-            Create an Office Administrator and assign an
+            Create an Officer and assign an
             existing Government Office.
           </p>
         </div>
@@ -361,22 +359,7 @@ function CreateAdmin() {
               />
             </div>
 
-            <div className="form-group">
-              <label htmlFor="employeeId">
-                Employee ID
-              </label>
-
-              <input
-                id="employeeId"
-                name="employeeId"
-                type="text"
-                value={form.employeeId}
-                onChange={handleChange}
-                placeholder="e.g. EMP-001"
-                disabled={loading}
-                required
-              />
-            </div>
+            
 
           </div>
 
@@ -435,7 +418,7 @@ function CreateAdmin() {
                 color: "#6b7280",
               }}
             >
-              Assign this administrator to an existing
+              Assign this officer to an existing
               Government Office.
             </p>
           </div>
@@ -551,13 +534,13 @@ function CreateAdmin() {
             }
           >
             {loading
-              ? "Creating Administrator..."
-              : "Create Administrator"}
+              ? "Creating Officer..."
+              : "Create Officer"}
           </button>
 
           <button
             type="button"
-            onClick={() => navigate("/super-admin")}
+            onClick={() => navigate("/OfficeAdminDashboard")}
             disabled={loading}
             style={{
               marginTop: "10px",
@@ -574,4 +557,4 @@ function CreateAdmin() {
   );
 }
 
-export default CreateAdmin;
+export default CreateOfficer;

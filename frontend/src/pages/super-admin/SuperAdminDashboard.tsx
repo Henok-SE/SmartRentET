@@ -455,7 +455,7 @@ useEffect(() => {
 
       setAdminForm((previous) => ({
         ...previous,
-        officeId: String(response.data.officeId),
+        officeId: response.data.officeId,
       }));
 
       setOfficeSuccess(

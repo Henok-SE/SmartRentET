@@ -3,21 +3,31 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import Login from "./pages/auth/Login";
 import Unauthorized from "./pages/auth/Unauthorized";
 
-import AdminDashboard from "./pages/admin/AdminDashboard";
+// Office Admin
+import OfficeAdminDashboard from "./pages/admin/OfficeAdminDashboard";
+import OfficersManagement from "./pages/admin/OfficersManagement";
 
+// Super Admin
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
 import CreateAdmin from "./pages/super-admin/CreateAdmin";
 
+// Officer
 import OfficerDashboard from "./pages/officer/OfficerDashboard";
+import RentalAgreements from "./pages/officer/RentalAgreements";
 
+<<<<<<< HEAD
 import ProtectedRoute from "./components/ProtectedRoute";
 import Administrators from "./pages/super-admin/Administrators";
 import Officers from "./pages/super-admin/Officers";
 import GovernmentOffices from "./pages/super-admin/GovernmentOffices";
 import SystemSettings from "./pages/super-admin/SystemSettings";
+=======
+
+>>>>>>> 38d9206 (Update admin and officer dashboards)
 function App() {
   return (
     <Routes>
+
       {/* =========================
           AUTHENTICATION
       ========================== */}
@@ -32,20 +42,22 @@ function App() {
         element={<Unauthorized />}
       />
 
+
       {/* =========================
           SUPER ADMIN
       ========================== */}
 
       <Route
-        element={
-          <ProtectedRoute allowedRoles={["SUPER_ADMIN"]} />
-        }
-      >
-        <Route
-          path="/super-admin"
-          element={<SuperAdminDashboard />}
-        />
+        path="/super-admin"
+        element={<SuperAdminDashboard />}
+      />
 
+      <Route
+        path="/super-admin/create-admin"
+        element={<CreateAdmin />}
+      />
+
+<<<<<<< HEAD
         <Route
           path="/super-admin/create-admin"
           element={<CreateAdmin />}
@@ -70,47 +82,54 @@ function App() {
   path="/super-admin/settings"
   element={<SystemSettings />}
 />
+=======
+>>>>>>> 38d9206 (Update admin and officer dashboards)
 
       {/* =========================
-          ADMIN
+          OFFICE ADMIN
       ========================== */}
 
       <Route
-        element={
-  <ProtectedRoute allowedRoles={["OFFICE_ADMIN"]} />
-        }
-      >
-        <Route
-          path="/admin"
-          element={<AdminDashboard />}
-        />
-      </Route>
+        path="/office-admin/dashboard"
+        element={<OfficeAdminDashboard />}
+      />
+
+      <Route
+        path="/office-admin/officers"
+        element={<OfficersManagement />}
+      />
+
 
       {/* =========================
           OFFICER
       ========================== */}
 
       <Route
-        element={
-          <ProtectedRoute allowedRoles={["OFFICER"]} />
-        }
-      >
-        <Route
-          path="/officer"
-          element={<OfficerDashboard />}
-        />
-      </Route>
+        path="/officer"
+        element={<OfficerDashboard />}
+      />
 
-      {/* =========================
-          DEFAULT
-      ========================== */}
+      <Route
+        path="/officer/dashboard"
+        element={<OfficerDashboard />}
+      />
 
+      <Route
+        path="/officer/rental-agreements"
+        element={<RentalAgreements />}
+      />
+
+      
       <Route
         path="/"
         element={
-          <Navigate to="/login" replace />
+          <Navigate
+            to="/login"
+            replace
+          />
         }
       />
+
 
       {/* =========================
           UNKNOWN ROUTES
@@ -119,9 +138,13 @@ function App() {
       <Route
         path="*"
         element={
-          <Navigate to="/login" replace />
+          <Navigate
+            to="/login"
+            replace
+          />
         }
       />
+
     </Routes>
   );
 }
