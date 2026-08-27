@@ -76,10 +76,29 @@ const createPayment = async ({
         );
     }
 
-    // Check for existing active payment
+    // Set payment due date
+    const paymentDueDate = dueDate
+        ? new Date(dueDate)
+        : new Date();
+
+    if (Number.isNaN(paymentDueDate.getTime())) {
+        throw new Error('Invalid due date');
+    }
+
+    // Check for duplicate payment for the same due date
+    const startOfDay = new Date(paymentDueDate);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(paymentDueDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
     const existingPayment = await prisma.payment.findFirst({
         where: {
             agreementId: agreement.agreementId,
+            dueDate: {
+                gte: startOfDay,
+                lte: endOfDay
+            },
             status: {
                 in: ['PENDING', 'PAID']
             }
@@ -88,7 +107,7 @@ const createPayment = async ({
 
     if (existingPayment) {
         throw new Error(
-            'A payment already exists for this agreement'
+            'A payment already exists for this due date'
         );
     }
 
@@ -133,9 +152,7 @@ const createPayment = async ({
         data: {
             agreementId: agreement.agreementId,
             amount: paymentAmount,
-            dueDate: dueDate
-                ? new Date(dueDate)
-                : new Date(),
+            dueDate: paymentDueDate,
             status: 'PENDING',
             method,
             provider: paymentProvider,
