@@ -444,8 +444,11 @@ function CreateAgreement({ onClose }: CreateAgreementProps) {
       console.log("=== SENDING AGREEMENT ===");
       console.log(payload);
 
+      const API_URL =
+        import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
       const response = await fetch(
-        "http://localhost:5000/api/agreements",
+        `${API_URL}/agreements`,
         {
           method: "POST",
           headers: {
