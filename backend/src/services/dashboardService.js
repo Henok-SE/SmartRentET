@@ -242,22 +242,34 @@ const getContracts = async ({
   });
 };
 
-// ============================================
-// GET AUDIT LOGS
-// ============================================
+const getAuditLogs = async ({ action, userId, startDate, endDate, user } = {}) => {
+  let officeId = null;
 
-const getAuditLogs = async ({ action, userId, startDate, endDate } = {}) => {
+  // If the requester is an OFFICE_ADMIN, scope logs to their office
+  if (user && user.role === 'OFFICE_ADMIN') {
+    const admin = await prisma.officeAdmin.findUnique({
+      where: { userId: user.userId },
+      select: { officeId: true },
+    });
+    officeId = admin?.officeId;
+  }
+
   return prisma.auditLog.findMany({
     where: {
       ...(action ? { action } : {}),
-
-      ...(userId ? { userId: parseInt(userId, 10) } : {}),
-
+      ...(userId ? { userId } : {}), 
       ...(startDate ? { createdAt: { gte: new Date(startDate) } } : {}),
-
       ...(endDate ? { createdAt: { lte: new Date(endDate) } } : {}),
+      // Scoping for Office Admin: only see logs from users in their office
+      ...(officeId ? {
+        user: {
+          OR: [
+            { officeAdmin: { officeId } },
+            { officer: { officeId } }
+          ]
+        }
+      } : {}),
     },
-
     select: {
       auditId: true,
       action: true,
@@ -501,13 +513,21 @@ const getNotifications = async ({ userId, isRead } = {}) => {
   return notifications;
 };
 
-// ============================================
-// GET OFFICERS
-// ============================================
+const getOfficers = async ({ subCity, isActive, user } = {}) => {
+  let officeId = null;
 
-const getOfficers = async ({ subCity, isActive } = {}) => {
+  // If the requester is an OFFICE_ADMIN, scope officers to their office
+  if (user && user.role === 'OFFICE_ADMIN') {
+    const admin = await prisma.officeAdmin.findUnique({
+      where: { userId: user.userId },
+      select: { officeId: true },
+    });
+    officeId = admin?.officeId;
+  }
+
   return prisma.officer.findMany({
     where: {
+      ...(officeId ? { officeId } : {}), // Enforce office scoping
       ...(subCity
         ? {
             office: {

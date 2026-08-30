@@ -2,26 +2,53 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/authMiddleware');
 const {
-    getPaymentInquiry,
     createPayment,
+    getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
-    updatePaymentStatus
+    updatePaymentStatus,
+    handleMockPaymentCallback
 } = require('../controllers/paymentController');
 
-// ============================================
-// ALL ROUTES - Authentication required
-// ============================================
-router.use(authenticateToken);
+const validate = require('../middleware/validate');
 
-// ============================================
-// PAYMENT ROUTES
-// ============================================
+const {
+    createPaymentSchema,
+    updatePaymentStatusSchema
+} = require('../validations/paymentValidation');
 
-router.get('/inquiry/:referenceNumber', getPaymentInquiry);
-router.post('/', createPayment);
-router.get('/agreement/:agreementId', getPaymentHistory);
-router.get('/:paymentId', getPaymentById);
-router.patch('/:paymentId/status', updatePaymentStatus);
+const router = express.Router();
+
+router.post(
+    '/',
+    validate(createPaymentSchema),
+    createPayment
+);
+
+router.get(
+    '/inquiry/:referenceNumber',
+    getPaymentInquiry
+);
+
+router.get(
+    '/agreement/:agreementId',
+    getPaymentHistory
+);
+
+router.post(
+    '/mock-callback',
+    handleMockPaymentCallback
+);
+
+router.get(
+    '/:paymentId',
+    getPaymentById
+);
+
+router.patch(
+    '/:paymentId/status',
+    validate(updatePaymentStatusSchema),
+    updatePaymentStatus
+);
 
 module.exports = router;

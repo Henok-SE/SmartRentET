@@ -3,21 +3,28 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import Login from "./pages/auth/Login";
 import Unauthorized from "./pages/auth/Unauthorized";
 
-import AdminDashboard from "./pages/admin/AdminDashboard";
+// Office Admin
+import OfficeAdminDashboard from "./pages/admin/OfficeAdminDashboard";
+import OfficersManagement from "./pages/admin/OfficersManagement";
 
+// Super Admin
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
 import CreateAdmin from "./pages/super-admin/CreateAdmin";
-
-import OfficerDashboard from "./pages/officer/OfficerDashboard";
-
-import ProtectedRoute from "./components/ProtectedRoute";
 import Administrators from "./pages/super-admin/Administrators";
 import Officers from "./pages/super-admin/Officers";
 import GovernmentOffices from "./pages/super-admin/GovernmentOffices";
 import SystemSettings from "./pages/super-admin/SystemSettings";
+
+// Officer
+import OfficerDashboard from "./pages/officer/OfficerDashboard";
+import RentalAgreements from "./pages/officer/RentalAgreements";
+
+import ProtectedRoute from "./components/ProtectedRoute";
+
 function App() {
   return (
     <Routes>
+
       {/* =========================
           AUTHENTICATION
       ========================== */}
@@ -31,6 +38,7 @@ function App() {
         path="/unauthorized"
         element={<Unauthorized />}
       />
+
 
       {/* =========================
           SUPER ADMIN
@@ -57,32 +65,38 @@ function App() {
         />
 
         <Route
-  path="/super-admin/offices"
-  element={<GovernmentOffices />}
-/>
+          path="/super-admin/offices"
+          element={<GovernmentOffices />}
+        />
 
         <Route
           path="/super-admin/officers"
           element={<Officers />}
         />
+
+        <Route
+          path="/super-admin/settings"
+          element={<SystemSettings />}
+        />
       </Route>
-      <Route
-  path="/super-admin/settings"
-  element={<SystemSettings />}
-/>
 
       {/* =========================
-          ADMIN
+          OFFICE ADMIN
       ========================== */}
 
       <Route
         element={
-  <ProtectedRoute allowedRoles={["OFFICE_ADMIN"]} />
+          <ProtectedRoute allowedRoles={["OFFICE_ADMIN"]} />
         }
       >
         <Route
-          path="/admin"
-          element={<AdminDashboard />}
+          path="/office-admin/dashboard"
+          element={<OfficeAdminDashboard />}
+        />
+
+        <Route
+          path="/office-admin/officers"
+          element={<OfficersManagement />}
         />
       </Route>
 
@@ -99,6 +113,16 @@ function App() {
           path="/officer"
           element={<OfficerDashboard />}
         />
+
+        <Route
+          path="/officer/dashboard"
+          element={<OfficerDashboard />}
+        />
+
+        <Route
+          path="/officer/rental-agreements"
+          element={<RentalAgreements />}
+        />
       </Route>
 
       {/* =========================
@@ -108,7 +132,10 @@ function App() {
       <Route
         path="/"
         element={
-          <Navigate to="/login" replace />
+          <Navigate
+            to="/login"
+            replace
+          />
         }
       />
 
@@ -119,9 +146,13 @@ function App() {
       <Route
         path="*"
         element={
-          <Navigate to="/login" replace />
+          <Navigate
+            to="/login"
+            replace
+          />
         }
       />
+
     </Routes>
   );
 }
