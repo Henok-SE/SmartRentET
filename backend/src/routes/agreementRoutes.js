@@ -1,21 +1,87 @@
 const express = require('express');
 const router = express.Router();
 const agreementController = require('../controllers/agreementController');
-const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { authorizeRoles } = require('../middleware/roleMiddleware');
+const { validate } = require('../middleware/validationMiddleware');
+const {
+  createAgreementSchema,
+  verifyCodeSchema,
+  paymentSchema,
+  verifyNationalIdSchema,
+  verifyOTPSchema
+} = require('../validations/schemas');
 
-// All routes require authentication
+// ============================================
+// ALL ROUTES - Authentication required
+// ============================================
 router.use(authenticateToken);
 
-// Create agreement (Officer or Office Admin only)
-router.post('/', authorizeRoles('OFFICER', 'OFFICE_ADMIN'), agreementController.createAgreement);
+// ============================================
+// NATIONAL ID VERIFICATION - Officers and Office Admins
+// ============================================
 
-// Verify USSD code (Officer or Office Admin only)
-router.post('/:id/verify', authorizeRoles('OFFICER', 'OFFICE_ADMIN'), agreementController.verifyCode);
+// Step 1: Verify Landlord National ID
+router.post(
+  '/verify-landlord',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(verifyNationalIdSchema),
+  agreementController.verifyLandlordNationalId
+);
 
-// Process service fee payment (Officer or Office Admin only)
-router.post('/:id/pay-service-fee', authorizeRoles('OFFICER', 'OFFICE_ADMIN'), agreementController.processServiceFeePayment);
+// Step 2: Verify Landlord OTP
+router.post(
+  '/verify-landlord-otp',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(verifyOTPSchema),
+  agreementController.verifyLandlordOTP
+);
 
-// Get agreement by ID (Authenticated users)
+// Step 3: Verify Tenant National ID
+router.post(
+  '/verify-tenant',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(verifyNationalIdSchema),
+  agreementController.verifyTenantNationalId
+);
+
+// Step 4: Verify Tenant OTP
+router.post(
+  '/verify-tenant-otp',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(verifyOTPSchema),
+  agreementController.verifyTenantOTP
+);
+
+// ============================================
+// AGREEMENT OPERATIONS - Officers and Office Admins
+// ============================================
+
+// Step 5: Create Agreement
+router.post(
+  '/',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(createAgreementSchema),
+  agreementController.createAgreement
+);
+
+// Verify USSD consent code
+router.post(
+  '/:id/verify',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(verifyCodeSchema),
+  agreementController.verifyCode
+);
+
+// Process service fee payment
+router.post(
+  '/:id/pay-service-fee',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(paymentSchema),
+  agreementController.processServiceFeePayment
+);
+
+// Get agreement by ID
 router.get('/:id', agreementController.getAgreement);
 
 module.exports = router;
