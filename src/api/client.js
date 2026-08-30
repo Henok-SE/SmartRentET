@@ -20,9 +20,14 @@ apiClient.interceptors.response.use(
 
     if (error.response) {
       status = error.response.status;
-      message = error.response.data?.message || 
-                error.response.data?.error || 
-                (status === 404 ? 'Rental agreement reference not found.' : `Server returned error (${status})`);
+      const data = error.response.data;
+      if (data?.errors && Array.isArray(data.errors)) {
+        message = data.errors.map(e => e.message).join('. ');
+      } else {
+        message = data?.error || 
+                  data?.message || 
+                  (status === 404 ? 'Rental agreement reference not found.' : `Server returned error (${status})`);
+      }
     } else if (error.request) {
       message = 'Unable to connect to SmartRent backend server. Please verify your connection or try again later.';
     } else {

@@ -610,7 +610,7 @@ export default function PayRentPage() {
               </h2>
 
               <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                Your payment request has been registered in the SmartRent ET registry. Final settlement will be confirmed once the {paymentResult.paymentMethod || selectedMethod} provider webhook is processed.
+                Your payment request has been registered in the SmartRent ET registry. Final settlement will be confirmed once the {selectedMethod === 'TELEBIRR' ? 'Telebirr' : 'CBE'} provider webhook is processed.
               </p>
             </div>
 
@@ -621,12 +621,12 @@ export default function PayRentPage() {
                 <div>
                   <span className="text-xs text-slate-500 block">Transaction Reference</span>
                   <span className="font-mono font-bold text-slate-900 text-sm">
-                    {paymentResult.transactionReference || paymentResult.id || 'TXN-PENDING-REF'}
+                    {paymentResult.transactionReference || paymentResult.paymentId || paymentResult.id || 'TXN-PENDING-REF'}
                   </span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleCopyTx(paymentResult.transactionReference || paymentResult.id || '')}
+                  onClick={() => handleCopyTx(paymentResult.transactionReference || paymentResult.paymentId || paymentResult.id || '')}
                   className="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-brand-600 hover:border-brand-300 text-xs flex items-center gap-1 cursor-pointer"
                   title="Copy Transaction Reference"
                 >
@@ -651,7 +651,7 @@ export default function PayRentPage() {
                 <div>
                   <span className="text-slate-500 block">Payment Channel</span>
                   <div className="mt-1">
-                    {(paymentResult.paymentMethod || selectedMethod) === 'TELEBIRR' ? (
+                    {(paymentResult.provider === 'TELEBIRR' || paymentResult.paymentMethod === 'TELEBIRR' || paymentResult.paymentMethod === 'MOBILE_MONEY' || selectedMethod === 'TELEBIRR') ? (
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#0072CE] text-white text-[11px] font-bold">
                         telebirr <span className="w-1 h-1 rounded-full bg-[#F8B700]"></span>
                       </span>
