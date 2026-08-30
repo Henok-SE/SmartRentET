@@ -1,28 +1,41 @@
 const express = require('express');
 
 const {
-    getPaymentInquiry,
     createPayment,
     getPaymentHistory,
     getPaymentById,
     updatePaymentStatus
 } = require('../controllers/paymentController');
 
+const validate = require('../middleware/validate');
+
+const {
+    createPaymentSchema,
+    updatePaymentStatusSchema
+} = require('../validations/paymentValidation');
+
 const router = express.Router();
 
-// Payment inquiry
-router.get('/inquiry/:referenceNumber', getPaymentInquiry);
+router.post(
+    '/',
+    validate(createPaymentSchema),
+    createPayment
+);
 
-// Create payment
-router.post('/', createPayment);
+router.get(
+    '/agreement/:agreementId',
+    getPaymentHistory
+);
 
-// Get payment history
-router.get('/agreement/:agreementId', getPaymentHistory);
+router.get(
+    '/:paymentId',
+    getPaymentById
+);
 
-// Get single payment
-router.get('/:paymentId', getPaymentById);
-
-// Update payment status
-router.patch('/:paymentId/status', updatePaymentStatus);
+router.patch(
+    '/:paymentId/status',
+    validate(updatePaymentStatusSchema),
+    updatePaymentStatus
+);
 
 module.exports = router;
