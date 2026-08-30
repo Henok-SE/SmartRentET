@@ -1,0 +1,39 @@
+import axios from 'axios';
+
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+export const apiClient = axios.create({
+  baseURL,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+  timeout: 15000,
+});
+
+// Response interceptor for consistent error extraction
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    let message = 'An unexpected error occurred. Please try again.';
+    let status = null;
+
+    if (error.response) {
+      status = error.response.status;
+      message = error.response.data?.message || 
+                error.response.data?.error || 
+                (status === 404 ? 'Rental agreement reference not found.' : `Server returned error (${status})`);
+    } else if (error.request) {
+      message = 'Unable to connect to SmartRent backend server. Please verify your connection or try again later.';
+    } else {
+      message = error.message || message;
+    }
+
+    const enhancedError = new Error(message);
+    enhancedError.status = status;
+    enhancedError.originalError = error;
+    return Promise.reject(enhancedError);
+  }
+);
+
+export default apiClient;
