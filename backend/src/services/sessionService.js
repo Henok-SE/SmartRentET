@@ -42,6 +42,7 @@ const createSession = async (userId, userData) => {
 };
 
 // used in setAccountStatus when deactivating users
+// Keep this - used in setAccountStatus when deactivating users
 const revokeAllSessions = async (userId) => {
   return prisma.session.updateMany({
     where: { userId: userId, revoked: false },
@@ -49,6 +50,7 @@ const revokeAllSessions = async (userId) => {
   });
 };
 
+// Remove this if not used anywhere else
 const revokeSession = async (sessionId) => {
   return prisma.session.update({
     where: { sessionId: sessionId },
@@ -84,6 +86,7 @@ const cleanupExpiredSessions = async () => {
 
 module.exports = {
   createSession,
+  revokeSession, 
   revokeSession, 
   revokeAllSessions,
   getActiveSessions,

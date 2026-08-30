@@ -14,6 +14,7 @@ const sanitizeUserWithRelations = (user) => {
   
   const { passwordHash, ...sanitized } = user;
   
+  // Sanitize related user data if present
   if (sanitized.superAdmin?.user) {
     const { passwordHash: _, ...userData } = sanitized.superAdmin.user;
     sanitized.superAdmin.user = userData;
@@ -81,12 +82,14 @@ const generateSecurePassword = (length = 14) => {
   
   const allChars = uppercase + lowercase + numbers + specials;
   
+  // Ensure at least one of each type
   let password = '';
   password += uppercase[Math.floor(Math.random() * uppercase.length)];
   password += lowercase[Math.floor(Math.random() * lowercase.length)];
   password += numbers[Math.floor(Math.random() * numbers.length)];
   password += specials[Math.floor(Math.random() * specials.length)];
   
+  // Fill the rest
   const remaining = length - 4;
   const randomBytes = crypto.randomBytes(remaining);
   
@@ -94,6 +97,7 @@ const generateSecurePassword = (length = 14) => {
     password += allChars[randomBytes[i] % allChars.length];
   }
   
+  // Shuffle the password
   return password.split('').sort(() => Math.random() - 0.5).join('');
 };
 
