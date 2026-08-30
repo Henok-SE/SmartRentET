@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   ArrowLeft,
@@ -15,7 +15,6 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import CreateAgreement from "./CreateAgreement";
 
 
 
@@ -57,10 +56,9 @@ interface RentalAgreement {
 
 const RentalAgreements: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
+  
 
-  const [isCreateModalOpen, setIsCreateModalOpen] =
-    useState(false);
+  
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -84,28 +82,7 @@ const RentalAgreements: React.FC = () => {
      OPEN CREATE MODAL FROM OFFICER DASHBOARD
   ======================================================= */
 
-  useEffect(() => {
-    const state = location.state as
-      | { openCreateAgreement?: boolean }
-      | null;
-
-    if (state?.openCreateAgreement) {
-      setIsCreateModalOpen(true);
-
-      /*
-       * Clear navigation state so refreshing the page
-       * does not repeatedly open the modal.
-       */
-      navigate(location.pathname, {
-        replace: true,
-        state: {},
-      });
-    }
-  }, [
-    location.state,
-    location.pathname,
-    navigate,
-  ]);
+  
 
   /* =======================================================
      SEARCH
@@ -197,7 +174,7 @@ const RentalAgreements: React.FC = () => {
             type="button"
             className="officer-nav-item"
             onClick={() =>
-              navigate("/officer/dashboard")
+              navigate("/officer/Agreement/dashboard")
             }
           >
             <Building2 size={19} />
@@ -329,15 +306,13 @@ const RentalAgreements: React.FC = () => {
             </div>
 
             <button
-              type="button"
-              className="agreement-primary-button agreements-create-button"
-              onClick={() =>
-                setIsCreateModalOpen(true)
-              }
-            >
-              <FileText size={17} />
-              Create Agreement
-            </button>
+  type="button"
+  className="agreement-primary-button agreements-create-button"
+  onClick={() => navigate("/officer/create-agreement")}
+>
+  <FileText size={17} />
+  Create Agreement
+</button>
           </div>
 
           {/* TABLE CARD */}
@@ -474,9 +449,7 @@ const RentalAgreements: React.FC = () => {
                               type="button"
                               className="agreement-primary-button"
                               onClick={() =>
-                                setIsCreateModalOpen(
-                                  true
-                                )
+                                navigate("/officer/create-agreement")
                               }
                             >
                               <FileText size={17} />
@@ -498,14 +471,7 @@ const RentalAgreements: React.FC = () => {
           CREATE AGREEMENT MODAL
       ===================================================== */}
 
-      {isCreateModalOpen && (
-        <CreateAgreement
-          onClose={() =>
-            setIsCreateModalOpen(false)
-          }
-        />
-      )}
-
+      
       {/* =====================================================
           VIEW AGREEMENT MODAL
       ===================================================== */}

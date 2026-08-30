@@ -18,7 +18,7 @@ import SystemSettings from "./pages/super-admin/SystemSettings";
 // Officer
 import OfficerDashboard from "./pages/officer/OfficerDashboard";
 import RentalAgreements from "./pages/officer/RentalAgreements";
-
+import CreateAgreement from "./pages/officer/Agreements/CreateAgreement";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -122,6 +122,10 @@ function App() {
         <Route
           path="/officer/rental-agreements"
           element={<RentalAgreements />}
+        />
+        <Route
+          path="/officer/create-agreement"
+          element={<CreateAgreement />}
         />
       </Route>
 
