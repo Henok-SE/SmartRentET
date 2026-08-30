@@ -1,5 +1,11 @@
 const prisma = require('../config/db');
 const bcrypt = require('bcryptjs');
+const { generateSecurePassword, userDTO, officeDTO } = require('../utils/userUtils');
+const afroSMSService = require('./afroSMSService');
+
+// ============================================
+// GET SUMMARY
+// ============================================
 
 const getSummary = async () => {
   const [
@@ -55,6 +61,10 @@ const getSummary = async () => {
   };
 };
 
+// ============================================
+// GET SUPER ADMINS
+// ============================================
+
 const getSuperAdmins = async () => {
   return prisma.superAdmin.findMany({
     select: {
@@ -79,6 +89,10 @@ const getSuperAdmins = async () => {
   });
 };
 
+// ============================================
+// GET CONTRACTS (Rental Agreements)
+// ============================================
+
 const getContracts = async ({
   referenceNumber,
   status,
@@ -99,10 +113,8 @@ const getContracts = async ({
 
       ...(status ? { status } : {}),
 
-      // Property location filters
       ...(subCity ? { unit: { property: { subCity } } } : {}),
 
-      // Landlord name filters first/last name (case-insensitive)
       ...(landlord
         ? {
             landlord: {
@@ -116,7 +128,6 @@ const getContracts = async ({
           }
         : {}),
 
-      // Tenant name filters first/last name (case-insensitive)
       ...(tenant
         ? {
             tenant: {
@@ -142,7 +153,6 @@ const getContracts = async ({
       terminationDate: true,
       createdAt: true,
 
-      // Landlord -> User full name
       landlord: {
         select: {
           landlordId: true,
@@ -156,7 +166,6 @@ const getContracts = async ({
         },
       },
 
-      // Tenant -> User full name
       tenant: {
         select: {
           tenantId: true,
@@ -170,7 +179,6 @@ const getContracts = async ({
         },
       },
 
-      // Unit -> Property location
       unit: {
         select: {
           unitId: true,
@@ -185,7 +193,6 @@ const getContracts = async ({
         },
       },
 
-      // Office that processed the agreement
       office: {
         select: {
           officeId: true,
@@ -194,7 +201,6 @@ const getContracts = async ({
         },
       },
 
-      // Processing officer
       createdByOfficer: {
         select: {
           officerId: true,
@@ -208,7 +214,6 @@ const getContracts = async ({
         },
       },
 
-      // Service fee payment status
       serviceFeePayment: {
         select: {
           serviceFeePaymentId: true,
@@ -216,7 +221,6 @@ const getContracts = async ({
         },
       },
 
-      // Latest agreement-level payments (PAID / PENDING)
       payments: {
         select: {
           paymentId: true,
@@ -237,6 +241,10 @@ const getContracts = async ({
     },
   });
 };
+
+// ============================================
+// GET AUDIT LOGS
+// ============================================
 
 const getAuditLogs = async ({ action, userId, startDate, endDate } = {}) => {
   return prisma.auditLog.findMany({
@@ -275,12 +283,15 @@ const getAuditLogs = async ({ action, userId, startDate, endDate } = {}) => {
   });
 };
 
+// ============================================
+// GET REPORTS
+// ============================================
+
 const getReports = async ({ subCity, startDate, endDate } = {}) => {
   const where = {
     ...(subCity ? { unit: { property: { subCity } } } : {}),
   };
 
-  // Agreements within an optional date window (by effective date)
   const agreementWhere = {
     ...where,
     ...(startDate ? { effectiveDate: { gte: new Date(startDate) } } : {}),
@@ -314,7 +325,6 @@ const getReports = async ({ subCity, startDate, endDate } = {}) => {
       },
     }),
 
-    // Sum of rentalAmount over the period (raw, no duration conversion)
     prisma.rentalAgreement.aggregate({
       where: agreementWhere,
       _sum: {
@@ -322,7 +332,6 @@ const getReports = async ({ subCity, startDate, endDate } = {}) => {
       },
     }),
 
-    // Collected income = sum of PAID rent payments
     prisma.payment.aggregate({
       where: { status: 'PAID', agreement: where },
       _sum: {
@@ -352,11 +361,11 @@ const getReports = async ({ subCity, startDate, endDate } = {}) => {
   };
 };
 
-const getNotifications = async ({ userId, isRead } = {}) => {
-  // The schema has no Notification model, so notifications are derived from
-  // real database events: pending verifications, pending service fees,
-  // and overdue payments for the given user's agreements.
+// ============================================
+// GET NOTIFICATIONS
+// ============================================
 
+const getNotifications = async ({ userId, isRead } = {}) => {
   if (!userId) {
     return [];
   }
@@ -377,7 +386,6 @@ const getNotifications = async ({ userId, isRead } = {}) => {
 
   const notifications = [];
 
-  // Agreement references for this user (as landlord and/or tenant)
   const agreementIds = (
     await prisma.rentalAgreement.findMany({
       where: {
@@ -484,16 +492,18 @@ const getNotifications = async ({ userId, isRead } = {}) => {
     });
   }
 
-  // Sort newest first
   notifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-  // Apply optional isRead filter
   if (isRead !== undefined) {
     return notifications.filter((n) => n.isRead === (isRead === 'true'));
   }
 
   return notifications;
 };
+
+// ============================================
+// GET OFFICERS
+// ============================================
 
 const getOfficers = async ({ subCity, isActive } = {}) => {
   return prisma.officer.findMany({
@@ -551,6 +561,10 @@ const getOfficers = async ({ subCity, isActive } = {}) => {
     },
   });
 };
+
+// ============================================
+// GET OFFICE ADMINS
+// ============================================
 
 const getOfficeAdmins = async ({ officeId, subCity, isActive, officeCode } = {}) => {
   return prisma.officeAdmin.findMany({
@@ -625,6 +639,10 @@ const getOfficeAdmins = async ({ officeId, subCity, isActive, officeCode } = {})
   });
 };
 
+// ============================================
+// GET OFFICE SUMMARY
+// ============================================
+
 const getOfficeSummary = async ({ officeId, subCity } = {}) => {
   const officeWhere = {
     ...(officeId ? { officeId } : {}),
@@ -681,8 +699,12 @@ const getOfficeSummary = async ({ officeId, subCity } = {}) => {
   };
 };
 
+// ============================================
+// GET OFFICES
+// ============================================
+
 const getOffices = async ({ status, subCity, city } = {}) => {
-  return prisma.governmentOffice.findMany({
+  const offices = await prisma.governmentOffice.findMany({
     where: {
       ...(status ? { status } : {}),
       ...(subCity ? { subCity } : {}),
@@ -714,7 +736,13 @@ const getOffices = async ({ status, subCity, city } = {}) => {
       createdAt: 'desc',
     },
   });
+
+  return offices.map(officeDTO);
 };
+
+// ============================================
+// CREATE OFFICE
+// ============================================
 
 const createOffice = async ({ officeName, officeCode, region, city, subCity, woreda, address }) => {
   const existing = await prisma.governmentOffice.findUnique({
@@ -725,7 +753,7 @@ const createOffice = async ({ officeName, officeCode, region, city, subCity, wor
     throw Object.assign(new Error('Office code already exists'), { code: 'OFFICE_CODE_EXISTS' });
   }
 
-  return prisma.governmentOffice.create({
+  const office = await prisma.governmentOffice.create({
     data: {
       officeName,
       officeCode,
@@ -736,8 +764,13 @@ const createOffice = async ({ officeName, officeCode, region, city, subCity, wor
       address: address ?? null,
     },
   });
+
+  return officeDTO(office);
 };
 
+// ============================================
+// CREATE OFFICE ADMIN - Auto-generate password only
+// ============================================
 
 const createOfficeAdmin = async ({
   firstName,
@@ -748,7 +781,7 @@ const createOfficeAdmin = async ({
   employeeId,
   email,
   officeId,
-  password,
+  password, // This will be ignored - auto-generated
 }) => {
   const office = await prisma.governmentOffice.findUnique({
     where: { officeId },
@@ -758,23 +791,20 @@ const createOfficeAdmin = async ({
     throw Object.assign(new Error('Government office not found'), { code: 'OFFICE_NOT_FOUND' });
   }
 
-  const dupCheck = await prisma.officeAdmin.findFirst({
-    where: {
-      OR: [
-        { employeeId },
-        { user: { OR: [{ username }, ...(phone ? [{ phone }] : []), ...(email ? [{ email }] : []), ...(nationalId ? [{ nationalId }] : [])] } },
-      ],
-    },
-    include: { user: { select: { username: true, email: true, phone: true } } },
+  
+  const existingUsername = await prisma.user.findUnique({
+    where: { username: username }
   });
 
-  if (dupCheck) {
-    throw Object.assign(new Error('An admin with this employee ID, username, phone, email, or national ID already exists'), { code: 'DUPLICATE_ADMIN' });
+  if (existingUsername) {
+    throw Object.assign(new Error('Username already taken. Please choose another.'), { code: 'USERNAME_EXISTS' });
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
 
-  return prisma.$transaction(async (tx) => {
+  const plainPassword = generateSecurePassword(14);
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+  const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
         firstName,
@@ -785,6 +815,8 @@ const createOfficeAdmin = async ({
         nationalId: nationalId ?? null,
         passwordHash,
         role: 'OFFICE_ADMIN',
+        isActive: true,
+        isNationalIdVerified: false
       },
     });
 
@@ -819,9 +851,21 @@ const createOfficeAdmin = async ({
       },
     });
 
+    // Send credentials via SMS
+    await afroSMSService.sendSMS(
+      phone,
+      `SmartRent: Your account has been created.\nUsername: ${username}\nPassword: ${plainPassword}\nPlease login and change your password.`
+    );
+
     return admin;
   });
+
+  return result;
 };
+
+// ============================================
+// CREATE OFFICER - Auto-generate password only
+// ============================================
 
 const createOfficer = async ({
   firstName,
@@ -834,7 +878,7 @@ const createOfficer = async ({
   officeId,
   position,
   assignedArea,
-  password,
+  password, // This will be ignored - auto-generated
 }) => {
   const office = await prisma.governmentOffice.findUnique({
     where: { officeId },
@@ -844,23 +888,20 @@ const createOfficer = async ({
     throw Object.assign(new Error('Government office not found'), { code: 'OFFICE_NOT_FOUND' });
   }
 
-  const dupCheck = await prisma.officer.findFirst({
-    where: {
-      OR: [
-        { employeeId },
-        { user: { OR: [{ username }, ...(phone ? [{ phone }] : []), ...(email ? [{ email }] : []), ...(nationalId ? [{ nationalId }] : [])] } },
-      ],
-    },
-    include: { user: { select: { username: true, email: true, phone: true } } },
+  // check username uniqueness
+  const existingUsername = await prisma.user.findUnique({
+    where: { username: username }
   });
 
-  if (dupCheck) {
-    throw Object.assign(new Error('An officer with this employee ID, username, phone, email, or national ID already exists'), { code: 'DUPLICATE_OFFICER' });
+  if (existingUsername) {
+    throw Object.assign(new Error('Username already taken. Please choose another.'), { code: 'USERNAME_EXISTS' });
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  // Auto-generate password 
+  const plainPassword = generateSecurePassword(14);
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
         firstName,
@@ -871,6 +912,8 @@ const createOfficer = async ({
         nationalId: nationalId ?? null,
         passwordHash,
         role: 'OFFICER',
+        isActive: true,
+        isNationalIdVerified: false
       },
     });
 
@@ -907,14 +950,26 @@ const createOfficer = async ({
       },
     });
 
+    // Send credentials via SMS
+    await afroSMSService.sendSMS(
+      phone,
+      `SmartRent: Your account has been created.\nUsername: ${username}\nPassword: ${plainPassword}\nPlease login and change your password.`
+    );
+
     return officer;
   });
+
+  return result;
 };
+
+// ============================================
+// EXPORT
+// ============================================
 
 module.exports = {
   getSummary,
-  getOfficers,
   getSuperAdmins,
+  getOfficers,
   getContracts,
   getAuditLogs,
   getReports,

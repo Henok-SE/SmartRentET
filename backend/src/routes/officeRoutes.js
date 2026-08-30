@@ -1,24 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const officeController = require('../controllers/officeController');
-const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { authorizeRoles } = require('../middleware/roleMiddleware');
 
-// All routes require authentication
+// ============================================
+// ALL ROUTES - Authentication required
+// ============================================
 router.use(authenticateToken);
 
-// Get all government offices
-router.get('/', officeController.getOffices);
+// ============================================
+// READ ROUTES - All authenticated users
+// ============================================
 
-// Get single office by ID
+router.get('/', officeController.getOffices);
 router.get('/:id', officeController.getOfficeById);
 
-// Create new government office (Super Admin only)
+// ============================================
+// WRITE ROUTES - SUPER ADMIN ONLY
+// ============================================
+
 router.post('/', authorizeRoles('SUPER_ADMIN'), officeController.createOffice);
-
-// Update government office (Super Admin only)
 router.put('/:id', authorizeRoles('SUPER_ADMIN'), officeController.updateOffice);
-
-// Toggle office status (Super Admin only)
 router.patch('/:id/status', authorizeRoles('SUPER_ADMIN'), officeController.toggleOfficeStatus);
 
 module.exports = router;

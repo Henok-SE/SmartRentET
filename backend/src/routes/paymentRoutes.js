@@ -1,5 +1,6 @@
 const express = require('express');
-
+const router = express.Router();
+const { authenticateToken } = require('../middleware/authMiddleware');
 const {
     getPaymentInquiry,
     createPayment,
@@ -8,21 +9,19 @@ const {
     updatePaymentStatus
 } = require('../controllers/paymentController');
 
-const router = express.Router();
+// ============================================
+// ALL ROUTES - Authentication required
+// ============================================
+router.use(authenticateToken);
 
-// Payment inquiry
+// ============================================
+// PAYMENT ROUTES
+// ============================================
+
 router.get('/inquiry/:referenceNumber', getPaymentInquiry);
-
-// Create payment
 router.post('/', createPayment);
-
-// Get payment history
 router.get('/agreement/:agreementId', getPaymentHistory);
-
-// Get single payment
 router.get('/:paymentId', getPaymentById);
-
-// Update payment status
 router.patch('/:paymentId/status', updatePaymentStatus);
 
 module.exports = router;
