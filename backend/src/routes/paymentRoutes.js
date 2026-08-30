@@ -2,9 +2,11 @@ const express = require('express');
 
 const {
     createPayment,
+    getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
-    updatePaymentStatus
+    updatePaymentStatus,
+    handleMockPaymentCallback
 } = require('../controllers/paymentController');
 
 const validate = require('../middleware/validate');
@@ -23,8 +25,18 @@ router.post(
 );
 
 router.get(
+    '/inquiry/:referenceNumber',
+    getPaymentInquiry
+);
+
+router.get(
     '/agreement/:agreementId',
     getPaymentHistory
+);
+
+router.post(
+    '/mock-callback',
+    handleMockPaymentCallback
 );
 
 router.get(

@@ -299,11 +299,70 @@ const updatePaymentStatus = async ({
     });
 };
 
+// Handle mock provider callback
+const handleMockPaymentCallback = async ({
+    paymentId,
+    transactionReference,
+    status
+}) => {
+    if (!paymentId) {
+        throw new Error('Payment ID is required');
+    }
+
+    if (!transactionReference) {
+        throw new Error('Transaction reference is required');
+    }
+
+    if (status !== 'SUCCESS' && status !== 'FAILED') {
+        throw new Error('Invalid callback status');
+    }
+
+    const payment = await prisma.payment.findUnique({
+        where: {
+            paymentId
+        }
+    });
+
+    if (!payment) {
+        throw new Error('Payment not found');
+    }
+
+    if (payment.status !== 'PENDING') {
+        throw new Error(
+            `Payment cannot be changed from ${payment.status}`
+        );
+    }
+
+    if (
+        payment.transactionReference !== transactionReference
+    ) {
+        throw new Error(
+            'Transaction reference does not match payment'
+        );
+    }
+
+    const updatedPayment = await prisma.payment.update({
+        where: {
+            paymentId
+        },
+        data: {
+            status: status === 'SUCCESS' ? 'PAID' : 'FAILED',
+            paidDate:
+                status === 'SUCCESS'
+                    ? new Date()
+                    : null
+        }
+    });
+
+    return updatedPayment;
+};
+
 module.exports = {
-    getPaymentInquiry,
     createPayment,
+    getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
     updatePaymentStatus,
+    handleMockPaymentCallback,
     getPaymentProvider
 };

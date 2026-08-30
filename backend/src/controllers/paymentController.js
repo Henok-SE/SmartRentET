@@ -91,10 +91,29 @@ const updatePaymentStatus = async (req, res, next) => {
     }
 };
 
+// Handle mock provider callback
+const handleMockPaymentCallback = async (req, res, next) => {
+    try {
+        const payment =
+            await paymentService.handleMockPaymentCallback(
+                req.body
+            );
+
+        return res.status(200).json({
+            success: true,
+            message: 'Payment callback processed successfully',
+            data: payment
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     getPaymentInquiry,
     createPayment,
     getPaymentHistory,
     getPaymentById,
-    updatePaymentStatus
+    updatePaymentStatus,
+    handleMockPaymentCallback
 };
