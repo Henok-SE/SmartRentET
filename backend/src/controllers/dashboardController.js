@@ -79,6 +79,7 @@ const getAuditLogs = async (req, res) => {
       userId,
       startDate,
       endDate,
+      user: req.user, 
     });
 
     res.status(200).json({
@@ -167,6 +168,7 @@ const getOfficers = async (req, res) => {
     const data = await dashboardService.getOfficers({
       subCity,
       isActive,
+      user: req.user, 
     });
 
     res.status(200).json({
@@ -333,8 +335,7 @@ const createOfficeAdmin = async (req, res) => {
       return res.status(409).json({ success: false, message: 'An admin with these details already exists' });
     }
 
-    res.status(500).json({ success: false, message: error.message || 'Failed to create office admin' });
-
+    res.status(500).json({ success: false, message: 'Failed to create office admin' });
   }
 };
 
