@@ -1,4 +1,4 @@
-const prisma = require('../config/db');
+const prisma = require('../config/database');
 
 const generateReferenceNumber = async (prefix = 'RES') => {
   const year = new Date().getFullYear();

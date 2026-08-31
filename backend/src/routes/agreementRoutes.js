@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const agreementController = require('../controllers/agreementController');
 const { authenticateToken } = require('../middleware/authMiddleware');
-const { authorizeRoles } = require('../middleware/role');
-const { validate } = require('../middleware/validate');
+const { authorizeRoles } = require('../middleware/roleMiddleware');
+const { validate } = require('../middleware/validationMiddleware');
 const {
   createAgreementSchema,
   verifyCodeSchema,
@@ -19,7 +19,7 @@ router.use(authenticateToken);
 // AGREEMENT OPERATIONS - Officers and Office Admins
 // ============================================
 
-// Create Agreement
+// Step 5: Create Agreement
 router.post(
   '/',
   authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
@@ -27,23 +27,23 @@ router.post(
   agreementController.createAgreement
 );
 
-// Verify USSD consent code (agreementId in body)
+// Verify USSD consent code
 router.post(
-  '/verify',
+  '/:id/verify',
   authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
   validate(verifyCodeSchema),
   agreementController.verifyCode
 );
 
-// Process service fee payment (agreementId in body)
+// Process service fee payment
 router.post(
-  '/pay-service-fee',
+  '/:id/pay-service-fee',
   authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
   validate(paymentSchema),
   agreementController.processServiceFeePayment
 );
 
-// Get agreement by ID (agreementId in URL param)
+// Get agreement by ID
 router.get('/:id', agreementController.getAgreement);
 
 module.exports = router;
