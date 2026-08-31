@@ -6,7 +6,7 @@ import Unauthorized from "./pages/auth/Unauthorized";
 // Office Admin
 import OfficeAdminDashboard from "./pages/admin/OfficeAdminDashboard";
 import OfficersManagement from "./pages/admin/OfficersManagement";
-
+import AuditLogs from "./pages/admin/AuditLogs";
 // Super Admin
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
 import CreateAdmin from "./pages/super-admin/CreateAdmin";
@@ -80,26 +80,30 @@ function App() {
         />
       </Route>
 
-      {/* =========================
-          OFFICE ADMIN
-      ========================== */}
+     {/* =========================
+    OFFICE ADMIN
+========================== */}
 
-      <Route
-        element={
-          <ProtectedRoute allowedRoles={["OFFICE_ADMIN"]} />
-        }
-      >
-        <Route
-          path="/office-admin/dashboard"
-          element={<OfficeAdminDashboard />}
-        />
+<Route
+  element={
+    <ProtectedRoute allowedRoles={["OFFICE_ADMIN"]} />
+  }
+>
+  <Route
+    path="/office-admin/dashboard"
+    element={<OfficeAdminDashboard />}
+  />
 
-        <Route
-          path="/office-admin/officers"
-          element={<OfficersManagement />}
-        />
-      </Route>
+  <Route
+    path="/office-admin/officers"
+    element={<OfficersManagement />}
+  />
 
+  <Route
+    path="/office-admin/audit-logs"
+    element={<AuditLogs />}
+  />
+</Route>
       {/* =========================
           OFFICER
       ========================== */}

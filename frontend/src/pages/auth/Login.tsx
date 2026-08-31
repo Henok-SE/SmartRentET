@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -19,6 +19,7 @@ function Login() {
   const [requiresOTP, setRequiresOTP] = useState(false);
   const [otpUserId, setOtpUserId] = useState<number | null>(null);
   const [otpCode, setOtpCode] = useState("");
+  const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -98,7 +99,65 @@ function Login() {
       setLoading(false);
     }
   };
+const handleOtpDigitChange = (
+  index: number,
+  value: string
+) => {
+  const digit = value
+    .replace(/\D/g, "")
+    .slice(-1);
 
+  const digits = otpCode.padEnd(6, "").split("");
+
+  digits[index] = digit;
+
+  const nextCode = digits.join("").slice(0, 6);
+
+  setOtpCode(nextCode);
+
+  if (digit && index < 5) {
+    otpInputRefs.current[index + 1]?.focus();
+  }
+};
+
+const handleOtpKeyDown = (
+  index: number,
+  event: React.KeyboardEvent<HTMLInputElement>
+) => {
+  if (
+    event.key === "Backspace" &&
+    !event.currentTarget.value &&
+    index > 0
+  ) {
+    otpInputRefs.current[index - 1]?.focus();
+  }
+};
+
+const handleOtpPaste = (
+  event: React.ClipboardEvent<HTMLInputElement>
+) => {
+  event.preventDefault();
+
+  const pastedCode = event.clipboardData
+    .getData("text")
+    .replace(/\D/g, "")
+    .slice(0, 6);
+
+  if (!pastedCode) {
+    return;
+  }
+
+  setOtpCode(pastedCode);
+
+  const lastIndex = Math.min(
+    pastedCode.length,
+    6
+  ) - 1;
+
+  if (lastIndex >= 0) {
+    otpInputRefs.current[lastIndex]?.focus();
+  }
+};
   const handleOTPSubmit = async (
     event: FormEvent<HTMLFormElement>
   ) => {
@@ -358,56 +417,114 @@ function Login() {
               continuing.
             </div>
           </form>
-        ) : requiresOTP ? (
-          <form
-            className="figma-login-form"
-            onSubmit={handleOTPSubmit}
-          >
-            {error && (
-              <div
-                className="figma-login-error"
-                role="alert"
-              >
-                {error}
-              </div>
-            )}
+       ) : requiresOTP ? (
+  <form
+    className="figma-login-form otp-login-form"
+    onSubmit={handleOTPSubmit}
+  >
+    <div className="otp-card">
+      <div
+        className="otp-security-icon"
+        aria-hidden="true"
+      >
+        <span>✓</span>
+      </div>
 
-            <div className="figma-login-field">
-              <label htmlFor="otp">
-                Verification Code
-              </label>
+      <h2>Verify Your Identity</h2>
 
+      <p className="otp-description">
+        We've sent a 6-digit verification code to
+        your registered phone number.
+      </p>
+
+      {error && (
+        <div
+          className="figma-login-error"
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
+
+      <div className="otp-field">
+        <label htmlFor="otp-0">
+          Verification Code
+        </label>
+
+        <div className="otp-input-group">
+          {Array.from({ length: 6 }).map(
+            (_, index) => (
               <input
-                id="otp"
-                name="otp"
+                key={index}
+                ref={(element) => {
+                  otpInputRefs.current[index] =
+                    element;
+                }}
+                id={`otp-${index}`}
                 type="text"
                 inputMode="numeric"
-                value={otpCode}
+                maxLength={1}
+                value={otpCode[index] || ""}
                 onChange={(event) =>
-                  setOtpCode(event.target.value)
+                  handleOtpDigitChange(
+                    index,
+                    event.target.value
+                  )
                 }
-                placeholder="Enter the code sent to your phone"
-                autoComplete="one-time-code"
+                onKeyDown={(event) =>
+                  handleOtpKeyDown(
+                    index,
+                    event
+                  )
+                }
+                onPaste={
+                  index === 0
+                    ? handleOtpPaste
+                    : undefined
+                }
+                autoComplete={
+                  index === 0
+                    ? "one-time-code"
+                    : "off"
+                }
                 disabled={loading}
+                aria-label={`Verification digit ${
+                  index + 1
+                }`}
                 required
               />
-            </div>
+            )
+          )}
+        </div>
 
-            <button
-              type="submit"
-              className="figma-login-button"
-              disabled={loading}
-            >
-              {loading
-                ? "Verifying..."
-                : "Verify Code"}
-            </button>
+        <small className="otp-help-text">
+          Enter the 6-digit code sent to your phone.
+        </small>
+      </div>
 
-            <div className="figma-forgot-password">
-              A verification code has been sent to your
-              phone.
-            </div>
-          </form>
+      <button
+        type="submit"
+        className="figma-login-button"
+        disabled={
+          loading || otpCode.length !== 6
+        }
+      >
+        {loading
+          ? "Verifying..."
+          : "Verify Code"}
+      </button>
+
+      <div className="otp-footer-message">
+        <span aria-hidden="true">🔒</span>
+
+        <span>
+          Your verification code helps protect your
+          SmartRent ET account.
+        </span>
+      </div>
+    </div>
+  </form>
+
         ) : (
           <form
             className="figma-login-form"
