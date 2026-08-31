@@ -1,5 +1,5 @@
 const bcrypt = require('bcrypt');
-const prisma = require('../config/db');
+const prisma = require('../config/database');
 const {
   validateRequiredFields,
   isValidPhone,
@@ -47,14 +47,26 @@ const createUser = async (userData) => {
     throw new Error('Username must be 3-30 characters (letters, numbers, underscore only)');
   }
 
-  // Only username needs to be unique — phone, nationalId, and email
-  // are intentionally allowed to repeat across users.
-  const existingUser = await prisma.user.findUnique({
-    where: { username }
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { username },
+        { nationalId },
+        { phone }
+      ]
+    }
   });
 
   if (existingUser) {
-    throw new Error('Username already exists');
+    if (existingUser.username === username) {
+      throw new Error('Username already exists');
+    }
+    if (existingUser.nationalId === nationalId) {
+      throw new Error('National ID already exists');
+    }
+    if (existingUser.phone === phone) {
+      throw new Error('Phone number already exists');
+    }
   }
 
   const validRoles = ['LANDLORD', 'TENANT', 'OFFICER', 'ADMIN'];
