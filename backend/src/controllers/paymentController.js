@@ -1,12 +1,13 @@
 const paymentService = require('../services/paymentServices');
 
-// Get payment inquiry
+// ============================================
+// GET PAYMENT INQUIRY
+// ============================================
+
 const getPaymentInquiry = async (req, res, next) => {
     try {
         const { referenceNumber } = req.params;
-
-        const inquiry =
-            await paymentService.getPaymentInquiry(referenceNumber);
+        const inquiry = await paymentService.getPaymentInquiry(referenceNumber);
 
         return res.status(200).json({
             success: true,
@@ -17,11 +18,13 @@ const getPaymentInquiry = async (req, res, next) => {
     }
 };
 
-// Create payment
+// ============================================
+// CREATE PAYMENT
+// ============================================
+
 const createPayment = async (req, res, next) => {
     try {
-        const payment =
-            await paymentService.createPayment(req.body);
+        const payment = await paymentService.createPayment(req.body);
 
         return res.status(201).json({
             success: true,
@@ -33,13 +36,14 @@ const createPayment = async (req, res, next) => {
     }
 };
 
-// Get payment history
+// ============================================
+// GET PAYMENT HISTORY
+// ============================================
+
 const getPaymentHistory = async (req, res, next) => {
     try {
         const { agreementId } = req.params;
-
-        const payments =
-            await paymentService.getPaymentHistory(agreementId);
+        const payments = await paymentService.getPaymentHistory(agreementId);
 
         return res.status(200).json({
             success: true,
@@ -51,13 +55,14 @@ const getPaymentHistory = async (req, res, next) => {
     }
 };
 
-// Get single payment
+// ============================================
+// GET SINGLE PAYMENT
+// ============================================
+
 const getPaymentById = async (req, res, next) => {
     try {
         const { paymentId } = req.params;
-
-        const payment =
-            await paymentService.getPaymentById(paymentId);
+        const payment = await paymentService.getPaymentById(paymentId);
 
         return res.status(200).json({
             success: true,
@@ -68,18 +73,20 @@ const getPaymentById = async (req, res, next) => {
     }
 };
 
-// Update payment status
+// ============================================
+// UPDATE PAYMENT STATUS
+// ============================================
+
 const updatePaymentStatus = async (req, res, next) => {
     try {
         const { paymentId } = req.params;
         const { status, transactionReference } = req.body;
 
-        const payment =
-            await paymentService.updatePaymentStatus({
-                paymentId,
-                status,
-                transactionReference
-            });
+        const payment = await paymentService.updatePaymentStatus({
+            paymentId,
+            status,
+            transactionReference
+        });
 
         return res.status(200).json({
             success: true,
@@ -91,13 +98,13 @@ const updatePaymentStatus = async (req, res, next) => {
     }
 };
 
-// Handle mock provider callback
+// ============================================
+// HANDLE MOCK PAYMENT CALLBACK
+// ============================================
+
 const handleMockPaymentCallback = async (req, res, next) => {
     try {
-        const payment =
-            await paymentService.handleMockPaymentCallback(
-                req.body
-            );
+        const payment = await paymentService.handleMockPaymentCallback(req.body);
 
         return res.status(200).json({
             success: true,

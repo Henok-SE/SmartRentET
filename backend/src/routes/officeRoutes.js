@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const officeController = require('../controllers/officeController');
 const { authenticateToken } = require('../middleware/authMiddleware');
-const { authorizeRoles } = require('../middleware/roleMiddleware');
+const { authorizeRoles } = require('../middleware/role');
 
 // ============================================
 // ALL ROUTES - Authentication required

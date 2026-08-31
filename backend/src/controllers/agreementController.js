@@ -76,7 +76,6 @@ const createAgreement = async (req, res) => {
       officeId
     );
 
-    // ✅ If verification is required, return SUCCESS with verification info
     if (result.requiresVerification) {
       return res.status(200).json({
         success: true,
@@ -106,7 +105,7 @@ const createAgreement = async (req, res) => {
 };
 
 // ============================================
-// VERIFY USSD CODE (Consent)
+// VERIFY USSD CODE (Consent) - agreementId from body
 // ============================================
 
 const verifyCode = async (req, res) => {
@@ -128,7 +127,7 @@ const verifyCode = async (req, res) => {
 };
 
 // ============================================
-// PROCESS SERVICE FEE PAYMENT
+// PROCESS SERVICE FEE PAYMENT - agreementId from body
 // ============================================
 
 const processServiceFeePayment = async (req, res) => {

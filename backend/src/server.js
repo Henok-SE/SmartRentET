@@ -35,10 +35,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// ============================================
-// MOUNT ROUTES - NO AUTH MIDDLEWARE HERE
-// Each route file handles its own auth
-// ============================================
+
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/agreements', agreementRoutes);
@@ -62,6 +59,14 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   console.error('Stack:', err.stack);
+
+  
+  if (err.message && err.message.includes('transaction') && err.message.includes('timeout')) {
+    return res.status(408).json({
+      success: false,
+      error: 'The operation is taking longer than expected. Please try again.'
+    });
+  }
 
   // Prisma errors
   if (err.code === 'P2002') {

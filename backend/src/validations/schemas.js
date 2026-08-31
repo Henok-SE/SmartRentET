@@ -68,7 +68,20 @@ const updateUserStatusSchema = Joi.object({
 });
 
 // ============================================
-// AGREEMENT SCHEMAS - OLD FLOW (All data in one request)
+// NATIONAL ID VERIFICATION SCHEMAS
+// ============================================
+
+const verifyNationalIdSchema = Joi.object({
+  userId: Joi.string().required().uuid(),
+  code: Joi.string().required().length(6).pattern(/^\d{6}$/)
+});
+
+const sendNationalIdSchema = Joi.object({
+  userId: Joi.string().required().uuid()
+});
+
+// ============================================
+// AGREEMENT SCHEMAS
 // ============================================
 
 const createAgreementSchema = Joi.object({
@@ -76,7 +89,7 @@ const createAgreementSchema = Joi.object({
   landlordFirstName: Joi.string().required().min(2).max(50),
   landlordLastName: Joi.string().required().min(2).max(50),
   landlordPhone: Joi.string().required().pattern(/^(09|07)\d{8}$/),
-  landlordNationalId: Joi.string().optional().pattern(/^\d{16}$/),
+  landlordNationalId: Joi.string().required().pattern(/^\d{16}$/),
   landlordAddress: Joi.string().optional(),
   landlordSubCity: Joi.string().optional(),
   landlordWoreda: Joi.string().optional(),
@@ -88,7 +101,7 @@ const createAgreementSchema = Joi.object({
   tenantFirstName: Joi.string().required().min(2).max(50),
   tenantLastName: Joi.string().required().min(2).max(50),
   tenantPhone: Joi.string().required().pattern(/^(09|07)\d{8}$/),
-  tenantNationalId: Joi.string().optional().pattern(/^\d{16}$/),
+  tenantNationalId: Joi.string().required().pattern(/^\d{16}$/),
   tenantAddress: Joi.string().optional(),
   tenantSubCity: Joi.string().optional(),
   tenantWoreda: Joi.string().optional(),
@@ -231,6 +244,18 @@ const getOfficesSchema = Joi.object({
 });
 
 // ============================================
+// APPROVAL SCHEMAS
+// ============================================
+
+const approveAgreementSchema = Joi.object({
+  comments: Joi.string().optional()
+});
+
+const rejectAgreementSchema = Joi.object({
+  comments: Joi.string().required()
+});
+
+// ============================================
 // EXPORT ALL SCHEMAS
 // ============================================
 
@@ -245,6 +270,10 @@ module.exports = {
   createOfficeAdminSchema,
   createOfficerSchema,
   updateUserStatusSchema,
+
+  // National ID Verification
+  verifyNationalIdSchema,
+  sendNationalIdSchema,
 
   // Agreement
   createAgreementSchema,
@@ -266,5 +295,9 @@ module.exports = {
   getOfficersSchema,
   getOfficeAdminsSchema,
   getOfficeSummarySchema,
-  getOfficesSchema
+  getOfficesSchema,
+
+  // Approval
+  approveAgreementSchema,
+  rejectAgreementSchema
 };

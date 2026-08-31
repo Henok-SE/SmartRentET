@@ -10,14 +10,21 @@ const {
     handleMockPaymentCallback
 } = require('../controllers/paymentController');
 
-const validate = require('../middleware/validate');
+const { validate } = require('../middleware/validate');
 
 const {
     createPaymentSchema,
     updatePaymentStatusSchema
 } = require('../validations/paymentValidation');
 
-const router = express.Router();
+// ============================================
+// ALL ROUTES - Authentication required
+// ============================================
+router.use(authenticateToken);
+
+// ============================================
+// PAYMENT ROUTES
+// ============================================
 
 router.post(
     '/',
