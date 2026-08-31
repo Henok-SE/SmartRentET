@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  Building2, 
+  Building2,
   ShieldCheck, 
   ArrowRight, 
   CreditCard, 
@@ -22,6 +22,7 @@ import Button from '../components/ui/Button';
 import Card, { CardBody } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Input from '../components/ui/Input';
+import { LogoIcon } from '../components/ui/Logo';
 
 export default function HomePage() {
   const [quickRef, setQuickRef] = useState('');
@@ -132,9 +133,7 @@ export default function HomePage() {
                 
                 <div className="flex items-center justify-between pb-5 border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-sm">
-                      SR
-                    </div>
+                    <LogoIcon className="w-8 h-8" />
                     <div>
                       <h3 className="font-bold text-sm text-slate-900">Rental Reference Inquiry</h3>
                       <p className="text-xs text-slate-500">Enter your official lease code</p>
