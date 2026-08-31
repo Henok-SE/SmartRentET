@@ -1,43 +1,66 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { authorizeRoles } = require('../middleware/role');
+const { validate } = require('../middleware/validate');
+const {
+  loginSchema,
+  verifyOTPSchema,
+  changePasswordSchema,
+  createOfficeAdminSchema,
+  createOfficerSchema,
+  updateUserStatusSchema
+} = require('../validations/schemas');
 
 // ============================================
-// PUBLIC ROUTES - No authentication needed
+// PUBLIC ROUTES - No authentication
 // ============================================
+
+router.post('/login', validate(loginSchema), authController.login);
+router.post('/verify-otp', validate(verifyOTPSchema), authController.verifyOTP);
+router.post('/change-password', validate(changePasswordSchema), authController.changePassword);
 router.post('/register', authController.register);
-router.post('/login', authController.login);
-router.post('/verify-otp', authController.verifyOTP);
-router.post('/change-password', authController.changePassword);
-
-// ============================================
-// NATIONAL ID VERIFICATION ROUTES
-// ============================================
 router.post('/send-national-id-verification', authController.sendNationalIdVerification);
 router.post('/verify-national-id', authController.verifyNationalId);
 
 // ============================================
-// PROTECTED ROUTES - Authentication needed
+// PROTECTED ROUTES - Authentication required
 // ============================================
+
 router.get('/me', authenticateToken, authController.getMe);
 router.post('/update-username', authenticateToken, authController.updateUsername);
 
 // ============================================
-// ADMIN ROUTES - Authentication + Role required
+// SUPER ADMIN ONLY
 // ============================================
+
 router.post(
-  '/office-admin', 
-  authenticateToken, 
-  authorizeRoles('SUPER_ADMIN'), 
+  '/office-admin',
+  authenticateToken,
+  authorizeRoles('SUPER_ADMIN'),
+  validate(createOfficeAdminSchema),
   authController.createOfficeAdmin
 );
 
+// ============================================
+// SUPER ADMIN OR OFFICE ADMIN
+// ============================================
+
 router.post(
-  '/officer', 
-  authenticateToken, 
-  authorizeRoles('SUPER_ADMIN', 'OFFICE_ADMIN'), 
+  '/officer',
+  authenticateToken,
+  authorizeRoles('SUPER_ADMIN', 'OFFICE_ADMIN'),
+  validate(createOfficerSchema),
   authController.createOfficer
+);
+
+router.patch(
+  '/users/:id/status',
+  authenticateToken,
+  authorizeRoles('SUPER_ADMIN', 'OFFICE_ADMIN'),
+  validate(updateUserStatusSchema),
+  authController.setAccountStatus
 );
 
 module.exports = router;

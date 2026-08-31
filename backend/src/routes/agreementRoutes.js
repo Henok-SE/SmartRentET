@@ -1,21 +1,49 @@
 const express = require('express');
 const router = express.Router();
 const agreementController = require('../controllers/agreementController');
-const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { authorizeRoles } = require('../middleware/role');
+const { validate } = require('../middleware/validate');
+const {
+  createAgreementSchema,
+  verifyCodeSchema,
+  paymentSchema
+} = require('../validations/schemas');
 
-// All routes require authentication
+// ============================================
+// ALL ROUTES - Authentication required
+// ============================================
 router.use(authenticateToken);
 
-// Create agreement (Officer or Office Admin only)
-router.post('/', authorizeRoles('OFFICER', 'OFFICE_ADMIN'), agreementController.createAgreement);
+// ============================================
+// AGREEMENT OPERATIONS - Officers and Office Admins
+// ============================================
 
-// Verify USSD code (Officer or Office Admin only)
-router.post('/:id/verify', authorizeRoles('OFFICER', 'OFFICE_ADMIN'), agreementController.verifyCode);
+// Create Agreement
+router.post(
+  '/',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(createAgreementSchema),
+  agreementController.createAgreement
+);
 
-// Process service fee payment (Officer or Office Admin only)
-router.post('/:id/pay-service-fee', authorizeRoles('OFFICER', 'OFFICE_ADMIN'), agreementController.processServiceFeePayment);
+// Verify USSD consent code (agreementId in body)
+router.post(
+  '/verify',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(verifyCodeSchema),
+  agreementController.verifyCode
+);
 
-// Get agreement by ID (Authenticated users)
+// Process service fee payment (agreementId in body)
+router.post(
+  '/pay-service-fee',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(paymentSchema),
+  agreementController.processServiceFeePayment
+);
+
+// Get agreement by ID (agreementId in URL param)
 router.get('/:id', agreementController.getAgreement);
 
 module.exports = router;

@@ -1,12 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const approvalController = require('../controllers/approvalController');
-const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { authorizeRoles } = require('../middleware/role');
 
+// ============================================
+// ALL ROUTES - Authentication required
+// ============================================
 router.use(authenticateToken);
+
+// ============================================
+// ROUTES - Officers, Office Admins, Super Admins
+// ============================================
 
 router.post('/:id/approve', authorizeRoles('OFFICER', 'OFFICE_ADMIN', 'SUPER_ADMIN'), approvalController.approveAgreement);
 router.post('/:id/reject', authorizeRoles('OFFICER', 'OFFICE_ADMIN', 'SUPER_ADMIN'), approvalController.rejectAgreement);
 router.get('/:id/history', approvalController.getApprovalHistory);
+
+// ============================================
+// AUTO-APPROVE - SUPER ADMIN ONLY
+// ============================================
+
+router.post('/:id/auto-approve', authorizeRoles('SUPER_ADMIN'), approvalController.autoApproveAgreement);
 
 module.exports = router;

@@ -1,16 +1,23 @@
-const requireRole = (...allowedRoles) => {
+const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required'
+        error: 'Authentication required'
+      });
+    }
+
+    if (!req.user.role) {
+      return res.status(403).json({
+        success: false,
+        error: 'User role not found'
       });
     }
 
     if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Required roles: ' + allowedRoles.join(', ') + '. Your role: ' + req.user.role
+        error: `Access denied. Required roles: ${allowedRoles.join(', ')}. Your role: ${req.user.role}`
       });
     }
 
@@ -18,17 +25,13 @@ const requireRole = (...allowedRoles) => {
   };
 };
 
-const requireAdmin = requireRole('ADMIN');
-const requireOfficer = requireRole('OFFICER');
-const requireLandlord = requireRole('LANDLORD');
-const requireTenant = requireRole('TENANT');
-const requireOfficerOrAdmin = requireRole('OFFICER', 'ADMIN');
+const requireSuperAdmin = authorizeRoles('SUPER_ADMIN');
+const requireOfficeAdmin = authorizeRoles('OFFICE_ADMIN', 'SUPER_ADMIN');
+const requireOfficer = authorizeRoles('OFFICER', 'OFFICE_ADMIN', 'SUPER_ADMIN');
 
 module.exports = {
-  requireRole,
-  requireAdmin,
-  requireOfficer,
-  requireLandlord,
-  requireTenant,
-  requireOfficerOrAdmin
+  authorizeRoles,
+  requireSuperAdmin,
+  requireOfficeAdmin,
+  requireOfficer
 };
