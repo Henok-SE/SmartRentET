@@ -1,32 +1,35 @@
 const prisma = require('../config/db');
-
 const telebirrService = require('./telebirrService');
 const cbeService = require('./cbeService');
+const agreementService = require('./agreementService');
+const afroSMSService = require('./afroSMSService');
 
-// Get payment provider
+// ============================================
+// GET PAYMENT PROVIDER
+// ============================================
+
 const getPaymentProvider = (paymentMethod) => {
     switch (paymentMethod) {
         case 'TELEBIRR':
             return telebirrService;
-
         case 'CBE':
             return cbeService;
-
         default:
             throw new Error(`Unsupported payment method: ${paymentMethod}`);
     }
 };
 
-// Get payment due information
+// ============================================
+// GET PAYMENT INQUIRY
+// ============================================
+
 const getPaymentInquiry = async (referenceNumber) => {
     if (!referenceNumber) {
         throw new Error('Reference number is required');
     }
 
     const agreement = await prisma.rentalAgreement.findUnique({
-        where: {
-            referenceNumber
-        },
+        where: { referenceNumber },
         include: {
             tenant: {
                 include: {
@@ -47,20 +50,13 @@ const getPaymentInquiry = async (referenceNumber) => {
         throw new Error('Rental agreement not found');
     }
 
-    if (
-        agreement.status !== 'ACTIVE' &&
-        agreement.status !== 'APPROVED'
-    ) {
+    if (agreement.status !== 'ACTIVE' && agreement.status !== 'APPROVED') {
         throw new Error('Payment cannot be made for this agreement');
     }
 
     const latestPayment = await prisma.payment.findFirst({
-        where: {
-            agreementId: agreement.agreementId
-        },
-        orderBy: {
-            dueDate: 'desc'
-        }
+        where: { agreementId: agreement.agreementId },
+        orderBy: { dueDate: 'desc' }
     });
 
     if (latestPayment && latestPayment.status === 'PENDING') {
@@ -68,22 +64,17 @@ const getPaymentInquiry = async (referenceNumber) => {
     }
 
     const amount = Number(agreement.rentalAmount);
-
     let dueDate = agreement.effectiveDate;
 
     if (latestPayment && latestPayment.status === 'PAID') {
         dueDate = new Date(latestPayment.dueDate);
-        dueDate.setDate(
-            dueDate.getDate() +
-            agreement.paymentFrequency.minimumInterval
-        );
+        dueDate.setDate(dueDate.getDate() + agreement.paymentFrequency.minimumInterval);
     }
 
     return {
         referenceNumber: agreement.referenceNumber,
         agreementId: agreement.agreementId,
-        customerName:
-            `${agreement.tenant.user.firstName} ${agreement.tenant.user.lastName}`,
+        customerName: `${agreement.tenant.user.firstName} ${agreement.tenant.user.lastName}`,
         customerPhoneNumber: agreement.tenant.user.phone,
         amount,
         currency: 'ETB',
@@ -92,7 +83,10 @@ const getPaymentInquiry = async (referenceNumber) => {
     };
 };
 
-// Create payment
+// ============================================
+// CREATE PAYMENT
+// ============================================
+
 const createPayment = async ({
     referenceNumber,
     amount,
@@ -113,42 +107,26 @@ const createPayment = async ({
     }
 
     const inquiry = await getPaymentInquiry(referenceNumber);
-
     const paymentAmount = Number(amount);
 
     if (paymentAmount !== inquiry.amount) {
-        throw new Error(
-            `Payment amount must be exactly ${inquiry.amount} ETB`
-        );
+        throw new Error(`Payment amount must be exactly ${inquiry.amount} ETB`);
     }
 
     const provider = getPaymentProvider(paymentMethod);
-
     const providerResult = await provider.initiatePayment({
         amount: inquiry.amount,
-        customerName:
-            customerName || inquiry.customerName,
-        customerPhoneNumber:
-            customerPhoneNumber || inquiry.customerPhoneNumber,
+        customerName: customerName || inquiry.customerName,
+        customerPhoneNumber: customerPhoneNumber || inquiry.customerPhoneNumber,
         referenceNumber
     });
 
     if (!providerResult || !providerResult.success) {
-        throw new Error(
-            providerResult?.message ||
-            'Payment provider failed to initiate payment'
-        );
+        throw new Error(providerResult?.message || 'Payment provider failed to initiate payment');
     }
 
-    const method =
-        paymentMethod === 'TELEBIRR'
-            ? 'MOBILE_MONEY'
-            : 'BANK_TRANSFER';
-
-    const paymentProvider =
-        paymentMethod === 'TELEBIRR'
-            ? 'TELEBIRR'
-            : 'BANK';
+    const method = paymentMethod === 'TELEBIRR' ? 'MOBILE_MONEY' : 'BANK_TRANSFER';
+    const paymentProvider = paymentMethod === 'TELEBIRR' ? 'TELEBIRR' : 'BANK';
 
     const payment = await prisma.payment.create({
         data: {
@@ -158,8 +136,7 @@ const createPayment = async ({
             status: 'PENDING',
             method,
             provider: paymentProvider,
-            transactionReference:
-                providerResult.transactionReference,
+            transactionReference: providerResult.transactionReference,
             notes: providerResult.message
         }
     });
@@ -174,22 +151,22 @@ const createPayment = async ({
         paymentMethod: payment.method,
         provider: payment.provider,
         status: payment.status,
-        transactionReference:
-            payment.transactionReference,
+        transactionReference: payment.transactionReference,
         message: providerResult.message
     };
 };
 
-// Get payment history
+// ============================================
+// GET PAYMENT HISTORY
+// ============================================
+
 const getPaymentHistory = async (agreementId) => {
     if (!agreementId) {
         throw new Error('Agreement ID is required');
     }
 
     const agreement = await prisma.rentalAgreement.findUnique({
-        where: {
-            agreementId
-        }
+        where: { agreementId }
     });
 
     if (!agreement) {
@@ -197,25 +174,22 @@ const getPaymentHistory = async (agreementId) => {
     }
 
     return prisma.payment.findMany({
-        where: {
-            agreementId
-        },
-        orderBy: {
-            dueDate: 'desc'
-        }
+        where: { agreementId },
+        orderBy: { dueDate: 'desc' }
     });
 };
 
-// Get single payment
+// ============================================
+// GET SINGLE PAYMENT
+// ============================================
+
 const getPaymentById = async (paymentId) => {
     if (!paymentId) {
         throw new Error('Payment ID is required');
     }
 
     const payment = await prisma.payment.findUnique({
-        where: {
-            paymentId
-        },
+        where: { paymentId },
         include: {
             agreement: {
                 select: {
@@ -235,7 +209,10 @@ const getPaymentById = async (paymentId) => {
     return payment;
 };
 
-// Update payment status
+// ============================================
+// UPDATE PAYMENT STATUS
+// ============================================
+
 const updatePaymentStatus = async ({
     paymentId,
     status,
@@ -249,21 +226,13 @@ const updatePaymentStatus = async ({
         throw new Error('Payment status is required');
     }
 
-    const allowedStatuses = [
-        'PENDING',
-        'PAID',
-        'FAILED',
-        'CANCELLED'
-    ];
-
+    const allowedStatuses = ['PENDING', 'PAID', 'FAILED', 'CANCELLED'];
     if (!allowedStatuses.includes(status)) {
         throw new Error(`Invalid payment status: ${status}`);
     }
 
     const payment = await prisma.payment.findUnique({
-        where: {
-            paymentId
-        }
+        where: { paymentId }
     });
 
     if (!payment) {
@@ -271,35 +240,34 @@ const updatePaymentStatus = async ({
     }
 
     if (payment.status !== 'PENDING') {
-        throw new Error(
-            `Payment cannot be changed from ${payment.status}`
-        );
+        throw new Error(`Payment cannot be changed from ${payment.status}`);
     }
 
     if (status === 'PAID' && !transactionReference) {
-        throw new Error(
-            'Transaction reference is required when marking payment as PAID'
-        );
+        throw new Error('Transaction reference is required when marking payment as PAID');
     }
 
-    return prisma.payment.update({
-        where: {
-            paymentId
-        },
+    const updatedPayment = await prisma.payment.update({
+        where: { paymentId },
         data: {
             status,
-            transactionReference:
-                transactionReference ||
-                payment.transactionReference,
-            paidDate:
-                status === 'PAID'
-                    ? new Date()
-                    : null
+            transactionReference: transactionReference || payment.transactionReference,
+            paidDate: status === 'PAID' ? new Date() : null
         }
     });
+
+    // ✅ If payment is PAID, auto-approve the agreement
+    if (status === 'PAID') {
+        await autoApproveAgreementAfterPayment(payment.agreementId);
+    }
+
+    return updatedPayment;
 };
 
-// Handle mock provider callback
+// ============================================
+// HANDLE MOCK PAYMENT CALLBACK
+// ============================================
+
 const handleMockPaymentCallback = async ({
     paymentId,
     transactionReference,
@@ -318,9 +286,7 @@ const handleMockPaymentCallback = async ({
     }
 
     const payment = await prisma.payment.findUnique({
-        where: {
-            paymentId
-        }
+        where: { paymentId }
     });
 
     if (!payment) {
@@ -328,34 +294,123 @@ const handleMockPaymentCallback = async ({
     }
 
     if (payment.status !== 'PENDING') {
-        throw new Error(
-            `Payment cannot be changed from ${payment.status}`
-        );
+        throw new Error(`Payment cannot be changed from ${payment.status}`);
     }
 
-    if (
-        payment.transactionReference !== transactionReference
-    ) {
-        throw new Error(
-            'Transaction reference does not match payment'
-        );
+    if (payment.transactionReference !== transactionReference) {
+        throw new Error('Transaction reference does not match payment');
     }
+
+    const newStatus = status === 'SUCCESS' ? 'PAID' : 'FAILED';
 
     const updatedPayment = await prisma.payment.update({
-        where: {
-            paymentId
-        },
+        where: { paymentId },
         data: {
-            status: status === 'SUCCESS' ? 'PAID' : 'FAILED',
-            paidDate:
-                status === 'SUCCESS'
-                    ? new Date()
-                    : null
+            status: newStatus,
+            paidDate: status === 'SUCCESS' ? new Date() : null
         }
     });
 
+    // ✅ If payment is SUCCESS, auto-approve the agreement
+    if (status === 'SUCCESS') {
+        await autoApproveAgreementAfterPayment(payment.agreementId);
+    }
+
     return updatedPayment;
 };
+
+// ============================================
+// AUTO-APPROVE AGREEMENT AFTER PAYMENT
+// ============================================
+
+const autoApproveAgreementAfterPayment = async (agreementId) => {
+    try {
+        console.log('=== AUTO-APPROVE AGREEMENT AFTER PAYMENT ===');
+        console.log('agreementId:', agreementId);
+
+        // Get agreement with related data
+        const agreement = await prisma.rentalAgreement.findUnique({
+            where: { agreementId },
+            include: {
+                serviceFeePayment: true,
+                tenant: { include: { user: true } },
+                landlord: { include: { user: true } }
+            }
+        });
+
+        if (!agreement) {
+            console.log('Agreement not found:', agreementId);
+            return;
+        }
+
+        // ✅ Only auto-approve if status is APPROVED (waiting for final approval)
+        if (agreement.status !== 'APPROVED') {
+            console.log('Agreement status is not APPROVED, skipping auto-approval');
+            console.log('Current status:', agreement.status);
+            return;
+        }
+
+        // ✅ Check if service fee is paid
+        if (!agreement.serviceFeePayment || agreement.serviceFeePayment.status !== 'PAID') {
+            console.log('Service fee not paid yet, waiting for payment confirmation');
+            return;
+        }
+
+        // ✅ Check if there are any PAID rent payments
+        const payments = await prisma.payment.findMany({
+            where: {
+                agreementId: agreementId,
+                status: 'PAID'
+            }
+        });
+
+        if (payments.length === 0) {
+            console.log('No paid rent payments found, waiting for first rent payment');
+            return;
+        }
+
+        // Find the officer who created the agreement
+        const officer = await prisma.officer.findUnique({
+            where: { officerId: agreement.createdByOfficerId }
+        });
+
+        if (!officer) {
+            console.log('Officer not found, cannot auto-approve');
+            return;
+        }
+
+        // ✅ Auto-approve the agreement using the agreement service
+        console.log('✅ Auto-approving agreement:', agreementId);
+        
+        const result = await agreementService.approveAgreement(
+            agreementId,
+            officer.userId,
+            `Auto-approved after successful rent payment of ${payments[0].amount} ETB`
+        );
+
+        // ✅ Send SMS notifications
+        await afroSMSService.sendSMS(
+            agreement.tenant.user.phone,
+            `SmartRent: Your rental agreement ${agreement.referenceNumber} has been approved after payment.`
+        );
+
+        await afroSMSService.sendSMS(
+            agreement.landlord.user.phone,
+            `SmartRent: Rental agreement ${agreement.referenceNumber} approved after tenant payment.`
+        );
+
+        console.log('✅ Agreement auto-approved:', result.referenceNumberGenerated);
+        return result;
+
+    } catch (error) {
+        console.error('Auto-approve agreement error:', error);
+        // Don't throw - we don't want to break the payment flow
+    }
+};
+
+// ============================================
+// EXPORT
+// ============================================
 
 module.exports = {
     createPayment,
@@ -364,5 +419,6 @@ module.exports = {
     getPaymentById,
     updatePaymentStatus,
     handleMockPaymentCallback,
-    getPaymentProvider
+    getPaymentProvider,
+    autoApproveAgreementAfterPayment
 };

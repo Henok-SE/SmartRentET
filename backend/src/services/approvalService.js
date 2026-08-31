@@ -2,6 +2,10 @@ const prisma = require('../config/db');
 const { generateReferenceNumber } = require('./agreementService');
 const afroSMSService = require('./afroSMSService');
 
+// ============================================
+// APPROVE AGREEMENT
+// ============================================
+
 const approveAgreement = async (agreementId, officerUserId, comments = null) => {
   return prisma.$transaction(async (tx) => {
     const agreement = await tx.rentalAgreement.findUnique({
@@ -64,7 +68,7 @@ const approveAgreement = async (agreementId, officerUserId, comments = null) => 
       data: {
         agreementId: agreementId,
         officerId: officer.officerId,
-        approvalType: 'FINAL_APPROVAL',
+        approvalType: comments?.includes('Auto-approved') ? 'AUTO_APPROVAL' : 'FINAL_APPROVAL',
         decision: 'APPROVED',
         comments: comments || 'Approved after verification and payment'
       }
@@ -101,6 +105,23 @@ const approveAgreement = async (agreementId, officerUserId, comments = null) => 
     return { agreement: updated, approval, referenceNumberGenerated: ref };
   });
 };
+
+// ============================================
+// AUTO-APPROVE AGREEMENT (Called by payment service)
+// ============================================
+
+const autoApproveAgreement = async (agreementId, officerUserId, comments = null) => {
+  console.log('=== AUTO-APPROVE AGREEMENT (approvalService) ===');
+  console.log('agreementId:', agreementId);
+  console.log('officerUserId:', officerUserId);
+
+  // Reuse the existing approveAgreement logic
+  return approveAgreement(agreementId, officerUserId, comments || 'Auto-approved after successful payment');
+};
+
+// ============================================
+// REJECT AGREEMENT
+// ============================================
 
 const rejectAgreement = async (agreementId, officerUserId, comments) => {
   return prisma.$transaction(async (tx) => {
@@ -152,6 +173,10 @@ const rejectAgreement = async (agreementId, officerUserId, comments) => {
   });
 };
 
+// ============================================
+// GET APPROVAL HISTORY
+// ============================================
+
 const getApprovalHistory = async (agreementId) => {
   return prisma.agreementApproval.findMany({
     where: { agreementId: agreementId },
@@ -163,5 +188,6 @@ const getApprovalHistory = async (agreementId) => {
 module.exports = {
   approveAgreement,
   rejectAgreement,
-  getApprovalHistory
+  getApprovalHistory,
+  autoApproveAgreement
 };
