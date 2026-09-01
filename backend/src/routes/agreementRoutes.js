@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const agreementController = require('../controllers/agreementController');
-const { authenticateToken } = require('../middleware/authMiddleware');
-const { authorizeRoles } = require('../middleware/roleMiddleware');
-const { validate } = require('../middleware/validationMiddleware');
+const { authenticateToken } = require('../middleware/auth');
+const { authorizeRoles } = require('../middleware/role');
+const { validate } = require('../middleware/validate');
 const {
   createAgreementSchema,
   verifyCodeSchema,
@@ -19,7 +19,7 @@ router.use(authenticateToken);
 // AGREEMENT OPERATIONS - Officers and Office Admins
 // ============================================
 
-// Step 5: Create Agreement
+// Create Agreement
 router.post(
   '/',
   authorizeRoles('OFFICER', 'OFFICE_ADMIN'),

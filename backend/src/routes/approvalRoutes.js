@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const approvalController = require('../controllers/approvalController');
-const { authenticateToken } = require('../middleware/authMiddleware');
-const { authorizeRoles } = require('../middleware/roleMiddleware');
+const { authenticateToken } = require('../middleware/auth');
+const { authorizeRoles } = require('../middleware/role');
 
 // ============================================
 // ALL ROUTES - Authentication required

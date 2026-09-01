@@ -13,7 +13,7 @@ const MAX_PAYMENT_ATTEMPTS = 3;
 // ============================================
 
 const validateNationalId = (nationalId) => {
-  if (!nationalId) return true;
+  if (!nationalId) return false;
   const numericRegex = /^\d{16}$/;
   return numericRegex.test(nationalId);
 };
@@ -36,7 +36,10 @@ const hashCode = async (code) => {
 // ============================================
 
 const checkVerificationStatus = async (phone, nationalId, role) => {
- 
+  // Only reuse a user if there's an EXACT match — same phone, same role,
+  // same National ID, and it's already verified. Anything else (no match,
+  // unverified match, mismatched ID) always creates a brand new user record
+  // requiring a fresh National ID verification.
   const verifiedUser = await prisma.user.findFirst({
     where: {
       phone: phone,
@@ -50,10 +53,10 @@ const checkVerificationStatus = async (phone, nationalId, role) => {
     return { needsVerification: false, user: verifiedUser, isNew: false };
   }
 
-  return { needsVerification: false, user: null, isNew: false };
+  return { needsVerification: true, user: null, isNew: true };
 };
 
-const createUserWithVerification = async (phone, firstName, lastName, nationalId, role) => {
+const createPendingPartyUser = async (phone, firstName, lastName, nationalId, role) => {
   const username = await generateUsername(firstName, lastName);
 
   const user = await prisma.user.create({
@@ -70,24 +73,12 @@ const createUserWithVerification = async (phone, firstName, lastName, nationalId
     }
   });
 
-  const code = generateVerificationCode();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-  await prisma.nationalIdVerification.create({
-    data: {
-      userId: user.userId,
-      code: code,
-      expiresAt: expiresAt,
-      used: false
-    }
-  });
-
-  console.log(`Created ${role} with verification. User ID: ${user.userId}`);
-  return { user, code };
+  console.log(`Created ${role} record pending National ID verification. User ID: ${user.userId}`);
+  return { user };
 };
 
 // ============================================
-// ROLLBACK AGREEMENT
+// ROLLBACK AGREEMENT — Uses TRANSACTION (atomic deletion)
 // ============================================
 
 const rollbackAgreement = async (agreementId, reason = 'Verification failed', triggeredByUserId = null) => {
@@ -169,27 +160,26 @@ const createAgreement = async (data, userId, officerId, officeId) => {
     paymentFrequencyName, notes
   } = data;
 
-  // ============================================
-  // VALIDATE NATIONAL IDs
-  // ============================================
-
-  if (landlordNationalId && !validateNationalId(landlordNationalId)) {
-    throw new Error(`Landlord National ID must be exactly 16 digits.`);
+  // Validate National IDs
+  if (!landlordNationalId) {
+    throw new Error('Landlord National ID is required.');
   }
 
-  if (tenantNationalId && !validateNationalId(tenantNationalId)) {
-    throw new Error(`Tenant National ID must be exactly 16 digits.`);
+  if (!tenantNationalId) {
+    throw new Error('Tenant National ID is required.');
   }
 
-  // ============================================
-  // CHECK VERIFICATION STATUS
-  // ============================================
+  if (!validateNationalId(landlordNationalId)) {
+    throw new Error('Landlord National ID must be exactly 16 digits.');
+  }
 
+  if (!validateNationalId(tenantNationalId)) {
+    throw new Error('Tenant National ID must be exactly 16 digits.');
+  }
+
+  // Check verification status
   const landlordStatus = await checkVerificationStatus(landlordPhone, landlordNationalId, 'LANDLORD');
   const tenantStatus = await checkVerificationStatus(tenantPhone, tenantNationalId, 'TENANT');
-
-  console.log('Landlord status:', landlordStatus);
-  console.log('Tenant status:', tenantStatus);
 
   let needsVerification = [];
 
@@ -205,7 +195,7 @@ const createAgreement = async (data, userId, officerId, officeId) => {
   if (needsVerification.length > 0) {
     console.log('National IDs need verification:', needsVerification.map(v => v.party));
 
-    let createdUsers = [];
+    let resolvedUsers = [];
 
     for (const item of needsVerification) {
       const { party } = item;
@@ -220,47 +210,26 @@ const createAgreement = async (data, userId, officerId, officeId) => {
       resolvedUsers.push({ party, user: result.user });
     }
 
-    const landlordUserId = createdUsers.find(u => u.party === 'Landlord')?.user?.userId || landlordStatus.user?.userId || null;
-    const tenantUserId = createdUsers.find(u => u.party === 'Tenant')?.user?.userId || tenantStatus.user?.userId || null;
+    const landlordUserId = resolvedUsers.find(u => u.party === 'Landlord')?.user?.userId || landlordStatus.user?.userId || null;
+    const tenantUserId = resolvedUsers.find(u => u.party === 'Tenant')?.user?.userId || tenantStatus.user?.userId || null;
 
-    // ✅ RETURN SUCCESS with verification info (NOT error)
     return {
       requiresVerification: true,
-      message: 'National ID verification required. Verification codes have been sent.',
+      message: `National ID verification is required before this agreement can be created for: ${needsVerification.map(v => v.party).join(' and ')}. Please verify their National IDs to continue.`,
       parties: needsVerification.map(v => v.party),
       userIds: {
         landlordUserId,
         tenantUserId
       },
-      verificationSent: true
+      verificationSent: false
     };
   }
 
   // ============================================
-  // ALL VERIFIED - Create agreement (WITH transaction)
+  // BOTH VERIFIED — Create agreement
   // ============================================
 
-  console.log('All National IDs are verified! Creating agreement...');
-
-  const txResult = await prisma.$transaction(async (tx) => {
-    // Get or create Landlord user
-    let landlordUser = landlordStatus.user;
-    if (!landlordUser) {
-      const username = await generateUsername(landlordFirstName, landlordLastName);
-      landlordUser = await tx.user.create({
-        data: {
-          firstName: landlordFirstName,
-          lastName: landlordLastName,
-          phone: landlordPhone,
-          nationalId: landlordNationalId || null,
-          username,
-          passwordHash: null,
-          role: 'LANDLORD',
-          isActive: true,
-          isNationalIdVerified: true
-        }
-      });
-    }
+  console.log('Both National IDs are verified! Creating agreement...');
 
   let paymentFrequency = await prisma.paymentFrequency.findUnique({
     where: { name: paymentFrequencyName || 'MONTHLY' }
@@ -283,64 +252,37 @@ const createAgreement = async (data, userId, officerId, officeId) => {
   const tenantCodeHash = await hashCode(tenantCode);
   const landlordCodeHash = await hashCode(landlordCode);
 
+  // checkVerificationStatus only ever returns a user here when they are
+  // already National-ID-verified, so there is nothing left to create —
+  // both landlordUser and tenantUser are guaranteed to exist at this point.
   const landlordUser = landlordStatus.user;
   const tenantUser = tenantStatus.user;
 
-    // Generate reference number
-    const referenceNumber = await generateReferenceNumber();
-
-    // Create Agreement
-    const agreement = await tx.rentalAgreement.create({
+  let landlord = await prisma.landlord.findUnique({
+    where: { userId: landlordUser.userId }
+  });
+  if (!landlord) {
+    landlord = await prisma.landlord.create({
       data: {
-        referenceNumber,
-        officeId: officeId || 1,
-        createdByOfficerId: officerId,
-        landlordId: landlord.landlordId,
-        tenantId: tenant.tenantId,
-        unitId: unit.unitId,
-        houseType: houseType || 'Apartment',
-        houseNumber: houseNumber || 'N/A',
-        numberOfRooms: numberOfRooms || 0,
-        numberOfBathrooms: numberOfBathrooms || 0,
-        numberOfDoors: numberOfDoors || 0,
-        numberOfWindows: numberOfWindows || 0,
-        houseItems: houseItems || null,
-        durationValue: durationValue || 12,
-        durationUnit: durationUnit || 'MONTH',
-        effectiveDate: new Date(effectiveDate || Date.now()),
-        terminationDate: terminationDate ? new Date(terminationDate) : null,
-        rentalAmount: rentalAmount || 0,
-        paymentTerms: paymentTerms || null,
-        advancePayment: advancePayment || 0,
-        paymentFrequencyId: paymentFrequency.frequencyId,
-        status: 'PENDING_VERIFICATION',
-        notes: notes || null
-      },
-      include: {
-        landlord: { include: { user: true } },
-        tenant: { include: { user: true } },
-        unit: { include: { property: true } },
-        paymentFrequency: true
+        userId: landlordUser.userId,
+        address: landlordAddress || null,
+        subCity: landlordSubCity || null,
+        woreda: landlordWoreda || null,
+        houseNumber: landlordHouseNumber || null,
+        businessLicense: landlordBusinessLicense || null,
+        bankAccountNumber: landlordBankAccount || null
       }
     });
-
-    // Create verification records for USSD consent
-    const tenantCode = generateVerificationCode();
-    const landlordCode = generateVerificationCode();
-    const tenantExpiry = new Date(Date.now() + 10 * 60 * 1000);
-    const landlordExpiry = new Date(Date.now() + 10 * 60 * 1000);
-
-    const tenantCodeHash = await hashCode(tenantCode);
-    const landlordCodeHash = await hashCode(landlordCode);
-
-    await tx.agreementVerification.create({
+  } else {
+    landlord = await prisma.landlord.update({
+      where: { userId: landlordUser.userId },
       data: {
-        agreementId: agreement.agreementId,
-        party: 'TENANT',
-        phoneNumber: tenantUser.phone,
-        codeHash: tenantCodeHash,
-        expiresAt: tenantExpiry,
-        status: 'PENDING'
+        address: landlordAddress || landlord.address,
+        subCity: landlordSubCity || landlord.subCity,
+        woreda: landlordWoreda || landlord.woreda,
+        houseNumber: landlordHouseNumber || landlord.houseNumber,
+        businessLicense: landlordBusinessLicense || landlord.businessLicense,
+        bankAccountNumber: landlordBankAccount || landlord.bankAccountNumber
       }
     });
   }
@@ -351,23 +293,27 @@ const createAgreement = async (data, userId, officerId, officeId) => {
   if (!tenant) {
     tenant = await prisma.tenant.create({
       data: {
-        agreementId: agreement.agreementId,
-        party: 'LANDLORD',
-        phoneNumber: landlordUser.phone,
-        codeHash: landlordCodeHash,
-        expiresAt: landlordExpiry,
-        status: 'PENDING'
+        userId: tenantUser.userId,
+        address: tenantAddress || null,
+        subCity: tenantSubCity || null,
+        woreda: tenantWoreda || null,
+        houseNumber: tenantHouseNumber || null,
+        emergencyContactName: tenantEmergencyContactName || null,
+        emergencyContactPhone: tenantEmergencyContactPhone || null,
+        employer: tenantEmployer || null
       }
     });
-
-    // Audit log
-    await tx.auditLog.create({
+  } else {
+    tenant = await prisma.tenant.update({
+      where: { userId: tenantUser.userId },
       data: {
-        userId: userId,
-        action: 'CREATE',
-        entityType: 'RENTAL_AGREEMENT',
-        entityId: agreement.agreementId,
-        description: `Created rental agreement ${referenceNumber} (PENDING VERIFICATION)`
+        address: tenantAddress || tenant.address,
+        subCity: tenantSubCity || tenant.subCity,
+        woreda: tenantWoreda || tenant.woreda,
+        houseNumber: tenantHouseNumber || tenant.houseNumber,
+        emergencyContactName: tenantEmergencyContactName || tenant.emergencyContactName,
+        emergencyContactPhone: tenantEmergencyContactPhone || tenant.emergencyContactPhone,
+        employer: tenantEmployer || tenant.employer
       }
     });
   }
@@ -466,18 +412,18 @@ const createAgreement = async (data, userId, officerId, officeId) => {
   });
 
   await afroSMSService.sendUSSDConsentWithCode(
-    txResult.tenantPhone,
-    txResult.landlordPhone,
-    txResult.agreement.agreementId,
-    txResult.tenantCode,
-    txResult.landlordCode,
-    txResult.tenantExpiry,
-    txResult.landlordExpiry
+    tenantUser.phone,
+    landlordUser.phone,
+    agreement.agreementId,
+    tenantCode,
+    landlordCode,
+    tenantExpiry,
+    landlordExpiry
   );
 
   return {
     requiresVerification: false,
-    agreement: agreementDTO(txResult.agreement),
+    agreement: agreementDTO({ ...agreement, verifications: [] }),
     message: 'Agreement created. USSD verification codes sent to landlord and tenant.'
   };
 };
@@ -530,7 +476,6 @@ const verifyAgreementCode = async (agreementId, phone, code) => {
     }
   });
 
-  // Check if both parties verified
   const verifications = await prisma.agreementVerification.findMany({
     where: {
       agreementId: agreementId,
@@ -598,7 +543,6 @@ const processServiceFeePayment = async (agreementId, phone, pin) => {
     throw new Error('Service fee already paid');
   }
 
-  // Mock PIN verification
   if (pin !== '1234') {
     const attempts = await prisma.auditLog.count({
       where: {
@@ -682,170 +626,28 @@ const getAgreementById = async (agreementId) => {
 };
 
 // ============================================
-// APPROVE AGREEMENT
+// APPROVE / REJECT / HISTORY
 // ============================================
 
 const approveAgreement = async (agreementId, officerUserId, comments = null) => {
-  console.log('=== APPROVE AGREEMENT ===');
-
-  const txResult = await prisma.$transaction(async (tx) => {
-    const agreement = await tx.rentalAgreement.findUnique({
-      where: { agreementId: agreementId }
-    });
-
-    if (!agreement) throw new Error('Agreement not found');
-
-    if (agreement.status !== 'APPROVED') {
-      throw new Error('Agreement must be in APPROVED status.');
-    }
-
-    const officer = await tx.officer.findUnique({
-      where: { userId: officerUserId }
-    });
-
-    if (!officer) {
-      throw new Error('Officer not found');
-    }
-
-    const verifications = await tx.agreementVerification.findMany({
-      where: {
-        agreementId: agreementId,
-        status: 'VERIFIED'
-      }
-    });
-
-    if (verifications.length < 2) {
-      throw new Error('Both parties must verify before final approval');
-    }
-
-    const serviceFee = await tx.serviceFeePayment.findUnique({
-      where: { agreementId: agreementId }
-    });
-
-    if (!serviceFee || serviceFee.status !== 'PAID') {
-      throw new Error('Service fee must be paid before final approval');
-    }
-
-    const ref = await generateReferenceNumber();
-
-    await tx.unit.update({
-      where: { unitId: agreement.unitId },
-      data: { status: 'OCCUPIED' }
-    });
-
-    const updated = await tx.rentalAgreement.update({
-      where: { agreementId: agreementId },
-      data: {
-        status: 'ACTIVE',
-        referenceNumber: ref
-      }
-    });
-
-    await tx.agreementApproval.create({
-      data: {
-        agreementId: agreementId,
-        officerId: officer.officerId,
-        approvalType: 'FINAL_APPROVAL',
-        decision: 'APPROVED',
-        comments: comments || 'Approved after verification and payment'
-      }
-    });
-
-    await tx.auditLog.create({
-      data: {
-        userId: officerUserId,
-        action: 'APPROVE',
-        entityType: 'RENTAL_AGREEMENT',
-        entityId: agreementId,
-        description: `Approved agreement ${ref}`
-      }
-    });
-
-    const landlord = await tx.landlord.findUnique({
-      where: { landlordId: agreement.landlordId },
-      include: { user: true }
-    });
-
-    const tenant = await tx.tenant.findUnique({
-      where: { tenantId: agreement.tenantId },
-      include: { user: true }
-    });
-
-    return {
-      agreement: updated,
-      referenceNumberGenerated: ref,
-      landlordPhone: landlord.user.phone,
-      tenantPhone: tenant.user.phone
-    };
-  });
-
-  await afroSMSService.sendReferenceNumberSMS(
-    txResult.tenantPhone,
-    txResult.landlordPhone,
-    txResult.referenceNumberGenerated
-  );
-
+  const result = await approvalService.approveAgreement(agreementId, officerUserId, comments);
   return {
-    agreement: agreementDTO(txResult.agreement),
-    referenceNumberGenerated: txResult.referenceNumberGenerated
+    agreement: agreementDTO(result.agreement),
+    referenceNumberGenerated: result.referenceNumberGenerated
   };
 };
 
-// ============================================
-// REJECT AGREEMENT
-// ============================================
-
 const rejectAgreement = async (agreementId, officerUserId, comments) => {
-  console.log('=== REJECT AGREEMENT ===');
+  const result = await approvalService.rejectAgreement(agreementId, officerUserId, comments);
+  return { agreement: agreementDTO(result.agreement) };
+};
 
-  const updated = await prisma.$transaction(async (tx) => {
-    const agreement = await tx.rentalAgreement.findUnique({
-      where: { agreementId: agreementId }
-    });
-
-    if (!agreement) throw new Error('Agreement not found');
-
-    if (!['DRAFT', 'PENDING_VERIFICATION', 'PENDING_SERVICE_FEE', 'APPROVED'].includes(agreement.status)) {
-      throw new Error('Agreement cannot be rejected. Current status: ' + agreement.status);
-    }
-
-    const officer = await tx.officer.findUnique({
-      where: { userId: officerUserId }
-    });
-
-    if (!officer) {
-      throw new Error('Officer not found');
-    }
-
-    await tx.agreementApproval.create({
-      data: {
-        agreementId: agreementId,
-        officerId: officer.officerId,
-        approvalType: 'FINAL_APPROVAL',
-        decision: 'REJECTED',
-        comments: comments || 'Rejected by officer'
-      }
-    });
-
-    const updatedAgreement = await tx.rentalAgreement.update({
-      where: { agreementId: agreementId },
-      data: { status: 'REJECTED' }
-    });
-
-    await tx.auditLog.create({
-      data: {
-        userId: officerUserId,
-        action: 'REJECT',
-        entityType: 'RENTAL_AGREEMENT',
-        entityId: agreementId,
-        description: `Rejected agreement ${agreement.referenceNumber}`
-      }
-    });
-
-    return updatedAgreement;
-  });
-
-  return { agreement: agreementDTO(updated) };
+const autoApproveAgreement = async (agreementId, officerUserId, comments = null) => {
+  const result = await approvalService.autoApproveAgreement(agreementId, officerUserId, comments);
+  return {
+    agreement: agreementDTO(result.agreement),
+    referenceNumberGenerated: result.referenceNumberGenerated
+  };
 };
 
 // ============================================
@@ -862,5 +664,6 @@ module.exports = {
   rollbackAgreement,
   generateReferenceNumber,
   validateNationalId,
-  generateVerificationCode
+  generateVerificationCode,
+  autoApproveAgreement
 };

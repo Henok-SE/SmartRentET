@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { authenticateToken } = require('../middleware/authMiddleware');
-const { authorizeRoles } = require('../middleware/roleMiddleware');
-const { validate } = require('../middleware/validationMiddleware');
+const { authenticateToken } = require('../middleware/auth');
+const { authorizeRoles } = require('../middleware/role');
+const { validate } = require('../middleware/validate');
 const {
   loginSchema,
   verifyOTPSchema,
