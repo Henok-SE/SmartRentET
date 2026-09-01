@@ -1,27 +1,18 @@
-/**
- * Payment Data Transfer Objects (DTOs)
- * Sanitizes and filters sensitive internal data (national IDs, password hashes, internal DB metadata)
- */
+// Payment DTOs and sanitization helpers
 
-/**
- * Mask phone number for privacy (e.g. 091***3444)
- */
+// Mask phone number for privacy
 function maskPhone(phone) {
     if (!phone || phone.length < 6) return phone;
     return `${phone.slice(0, 3)}***${phone.slice(-4)}`;
 }
 
-/**
- * Mask National ID for privacy (e.g. ••••••••••••5559)
- */
+// Mask national ID for privacy
 function maskNationalId(nationalId) {
     if (!nationalId || nationalId.length < 4) return '••••';
     return `••••••••••••${nationalId.slice(-4)}`;
 }
 
-/**
- * Transform agreement + tenant into a safe Inquiry DTO
- */
+// Transform agreement and latest payment into inquiry DTO
 function toPaymentInquiryDTO(agreement, latestPayment = null) {
     if (!agreement) return null;
 
@@ -50,9 +41,7 @@ function toPaymentInquiryDTO(agreement, latestPayment = null) {
     };
 }
 
-/**
- * Transform Payment database record into a safe Receipt / Status DTO
- */
+// Transform payment database record into receipt DTO
 function toPaymentReceiptDTO(payment) {
     if (!payment) return null;
 
@@ -81,9 +70,7 @@ function toPaymentReceiptDTO(payment) {
     };
 }
 
-/**
- * Transform list of payments into History DTOs
- */
+// Transform payment records array into history DTO array
 function toPaymentHistoryDTO(paymentList) {
     if (!Array.isArray(paymentList)) return [];
     return paymentList.map(toPaymentReceiptDTO);

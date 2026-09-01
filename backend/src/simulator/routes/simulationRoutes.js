@@ -9,7 +9,7 @@ const {
   updateSimulatorConfig
 } = require('../controllers/simulationController');
 
-// Provider-specific initiation endpoints
+// Provider initiation endpoints
 router.post('/telebirr/initiate', initiateTelebirr);
 router.post('/cbe/initiate', initiateCBE);
 router.post('/payments/initiate', initiatePayment);

@@ -3,9 +3,7 @@ const ApiResponse = require('../utils/apiResponse');
 const { verifyWebhookSignature } = require('../utils/signatureValidator');
 const { UnauthorizedError, ForbiddenError } = require('../utils/errors');
 
-/**
- * 1. Get Payment Inquiry (Public for reference code lookup)
- */
+// Retrieve payment inquiry for an agreement reference number
 const getPaymentInquiry = async (req, res, next) => {
     try {
         const { referenceNumber } = req.params;
@@ -20,9 +18,7 @@ const getPaymentInquiry = async (req, res, next) => {
     }
 };
 
-/**
- * 2. Initiate Payment (Public with validation)
- */
+// Initiate a payment transaction
 const createPayment = async (req, res, next) => {
     try {
         const payment = await paymentService.createPayment(req.body);
@@ -37,9 +33,7 @@ const createPayment = async (req, res, next) => {
     }
 };
 
-/**
- * 3. Get Payment History by Agreement ID (Authenticated)
- */
+// Retrieve payment ledger history for an agreement
 const getPaymentHistory = async (req, res, next) => {
     try {
         const { agreementId } = req.params;
@@ -55,9 +49,7 @@ const getPaymentHistory = async (req, res, next) => {
     }
 };
 
-/**
- * 4. Get Single Payment Status (Used by Mini-App polling)
- */
+// Get single payment status by ID
 const getPaymentById = async (req, res, next) => {
     try {
         const { paymentId } = req.params;
@@ -72,9 +64,7 @@ const getPaymentById = async (req, res, next) => {
     }
 };
 
-/**
- * 5. Update Payment Status (Admin / Municipal Officer Only)
- */
+// Manually update payment status
 const updatePaymentStatus = async (req, res, next) => {
     try {
         const { paymentId } = req.params;
@@ -95,17 +85,12 @@ const updatePaymentStatus = async (req, res, next) => {
     }
 };
 
-/**
- * 6. Provider Webhook Endpoint (Telebirr / CBE / Simulator)
- * Authoritative payment status transition mechanism
- * Enforces mandatory HMAC-SHA256 signature verification
- */
+// Handle provider webhook callback with signature verification
 const handleProviderWebhook = async (req, res, next) => {
     try {
         const signatureHeader = req.headers['x-provider-signature'];
         const secret = process.env.PROVIDER_WEBHOOK_SECRET;
         
-        // Strict Webhook Signature Verification
         if (secret) {
             if (!signatureHeader) {
                 throw new UnauthorizedError('Missing required X-Provider-Signature header');
@@ -129,9 +114,7 @@ const handleProviderWebhook = async (req, res, next) => {
     }
 };
 
-/**
- * 7. Legacy Mock Callback (Disabled in production)
- */
+// Process mock payment callback (development and test environments only)
 const handleMockPaymentCallback = async (req, res, next) => {
     try {
         if (process.env.NODE_ENV === 'production') {

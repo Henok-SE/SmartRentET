@@ -20,57 +20,17 @@ const {
     updatePaymentStatusSchema
 } = require('../validations/paymentValidation');
 
-// =========================================================================
-// 1. PUBLIC PAYMENT SETTLEMENT ROUTES (Accessible by Tenants / Mini-App)
-// =========================================================================
+// Public payment settlement endpoints
+router.get('/inquiry/:referenceNumber', getPaymentInquiry);
+router.post('/', validate(createPaymentSchema), createPayment);
+router.get('/:paymentId', getPaymentById);
 
-// Inquire rental agreement payment due (by reference code)
-router.get(
-    '/inquiry/:referenceNumber',
-    getPaymentInquiry
-);
+// Webhook and simulation endpoints
+router.post('/provider-webhook', handleProviderWebhook);
+router.post('/mock-callback', handleMockPaymentCallback);
 
-// Initiate payment via provider abstraction (Telebirr / CBE)
-router.post(
-    '/',
-    validate(createPaymentSchema),
-    createPayment
-);
-
-// Get single payment status (Used by Mini-App for real-time polling)
-router.get(
-    '/:paymentId',
-    getPaymentById
-);
-
-// =========================================================================
-// 2. AUTHORITATIVE WEBHOOK & SIMULATION ROUTES
-// =========================================================================
-
-// Authoritative Webhook Endpoint (Enforces HMAC-SHA256 signature verification)
-router.post(
-    '/provider-webhook',
-    handleProviderWebhook
-);
-
-// Legacy Mock Callback Endpoint (Restricted to Development / Testing only)
-router.post(
-    '/mock-callback',
-    handleMockPaymentCallback
-);
-
-// =========================================================================
-// 3. AUTHENTICATED & RESTRICTED ROUTES (Officers, Admins, Tenancy Audits)
-// =========================================================================
-
-// Payment ledger history for a lease agreement (Authenticated users)
-router.get(
-    '/agreement/:agreementId',
-    authenticateToken,
-    getPaymentHistory
-);
-
-// Administrative manual status adjustment (Super Admin, Office Admin, Officer)
+// Authenticated ledger and management endpoints
+router.get('/agreement/:agreementId', authenticateToken, getPaymentHistory);
 router.patch(
     '/:paymentId/status',
     authenticateToken,

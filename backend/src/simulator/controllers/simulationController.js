@@ -1,6 +1,7 @@
 const config = require('../config');
 const { scheduleCallback, sendWebhook, getRecentSimulations } = require('../services/callbackScheduler');
 
+// Handle simulated payment initiation
 const initiatePayment = async (req, res) => {
   try {
     const {
@@ -53,16 +54,19 @@ const initiatePayment = async (req, res) => {
   }
 };
 
+// Initiate simulated Telebirr payment
 const initiateTelebirr = async (req, res) => {
   req.body.provider = 'TELEBIRR';
   return initiatePayment(req, res);
 };
 
+// Initiate simulated CBE payment
 const initiateCBE = async (req, res) => {
   req.body.provider = 'CBE';
   return initiatePayment(req, res);
 };
 
+// Manually trigger a simulated webhook callback
 const manualTriggerCallback = async (req, res) => {
   try {
     const {
@@ -107,6 +111,7 @@ const manualTriggerCallback = async (req, res) => {
   }
 };
 
+// Get current simulator status and runtime configuration
 const getSimulatorStatus = async (req, res) => {
   return res.status(200).json({
     status: 'ONLINE',
@@ -123,6 +128,7 @@ const getSimulatorStatus = async (req, res) => {
   });
 };
 
+// Update simulator runtime configuration
 const updateSimulatorConfig = async (req, res) => {
   const { delayMs, defaultStatus } = req.body;
 

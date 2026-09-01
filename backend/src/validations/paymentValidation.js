@@ -1,9 +1,6 @@
 const Joi = require('joi');
 
-// ============================================
-// CREATE PAYMENT SCHEMA
-// ============================================
-
+// Payment creation validation schema
 const createPaymentSchema = Joi.object({
     referenceNumber: Joi.string()
         .trim()
@@ -31,10 +28,7 @@ const createPaymentSchema = Joi.object({
         .optional()
 });
 
-// ============================================
-// UPDATE PAYMENT STATUS SCHEMA
-// ============================================
-
+// Payment status update validation schema
 const updatePaymentStatusSchema = Joi.object({
     status: Joi.string()
         .valid('PENDING', 'PAID', 'FAILED', 'CANCELLED')
@@ -48,10 +42,6 @@ const updatePaymentStatusSchema = Joi.object({
             otherwise: Joi.optional()
         })
 });
-
-// ============================================
-// EXPORT
-// ============================================
 
 module.exports = {
     createPaymentSchema,
