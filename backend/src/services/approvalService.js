@@ -1,5 +1,5 @@
 const prisma = require('../config/db');
-const { generateReferenceNumber } = require('./agreementService');
+const { generateReferenceNumber } = require('../utils/agreementReferenceNumber');
 const afroSMSService = require('./afroSMSService');
 
 const approveAgreement = async (agreementId, officerUserId, comments = null) => {
