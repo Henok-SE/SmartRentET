@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
+const { authorizeRoles } = require('../middleware/role');
+const { validate } = require('../middleware/validate');
+
 const {
     createPayment,
     getPaymentInquiry,
@@ -11,7 +14,7 @@ const {
     handleMockPaymentCallback
 } = require('../controllers/paymentController');
 
-const validate = require('../middleware/validate');
+
 const {
     createPaymentSchema,
     updatePaymentStatusSchema
