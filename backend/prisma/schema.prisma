@@ -121,6 +121,28 @@ enum AuditAction {
 }
 
 // =====================================================
+// SESSION
+// =====================================================
+
+model Session {
+  sessionId String   @id @default(uuid())
+  userId    String
+
+  token     String   @db.Text
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revoked])
+}
+
+// =====================================================
 // USER
 // =====================================================
 
@@ -128,9 +150,9 @@ model User {
   userId String      @id @default(uuid())
   firstName           String
   lastName            String
-  email               String? 
-  phone               String
-  nationalId          String?
+  email               String?  // no @unique — intentional
+  phone               String   // no @unique — intentional
+  nationalId          String?  // no @unique — intentional
   isNationalIdVerified Boolean  @default(false)
   username            String?  @unique
   passwordHash        String?
@@ -145,32 +167,14 @@ model User {
   officer             Officer?
   landlord            Landlord?
   tenant              Tenant?
+  sessions            Session[]
   otps                OTP[]
   nationalIdVerifications NationalIdVerification[]  
   auditLogs           AuditLog[] @relation("AuditActor")
-  sessions            Session[]
-}
 
-// =====================================================
-// SESSION
-// =====================================================
-
-model Session {
-  sessionId String   @id @default(uuid())
-  userId    String
-
-  token     String
-  revoked   Boolean  @default(false)
-  expiresAt DateTime
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [userId])
-
-  @@index([userId])
-  @@index([expiresAt])
-  @@index([revoked])
+  @@index([phone])
+  @@index([role])
+  @@index([isActive])
 }
 
 // =====================================================

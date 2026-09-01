@@ -1,5 +1,9 @@
 const Joi = require('joi');
 
+// ============================================
+// CREATE PAYMENT SCHEMA
+// ============================================
+
 const createPaymentSchema = Joi.object({
     referenceNumber: Joi.string()
         .trim()
@@ -10,21 +14,26 @@ const createPaymentSchema = Joi.object({
         .required(),
 
     paymentMethod: Joi.string()
-        .valid('TELEBIRR', 'CBE')
+        .valid('TELEBIRR', 'CBE', 'STARPAY')
         .required(),
 
     customerName: Joi.string()
         .trim()
-        .required(),
+        .optional(),
 
     customerPhoneNumber: Joi.string()
         .trim()
-        .required(),
+        .pattern(/^(09|07)\d{8}$/)
+        .optional(),
 
     dueDate: Joi.date()
         .iso()
         .optional()
 });
+
+// ============================================
+// UPDATE PAYMENT STATUS SCHEMA
+// ============================================
 
 const updatePaymentStatusSchema = Joi.object({
     status: Joi.string()
@@ -39,6 +48,10 @@ const updatePaymentStatusSchema = Joi.object({
             otherwise: Joi.optional()
         })
 });
+
+// ============================================
+// EXPORT
+// ============================================
 
 module.exports = {
     createPaymentSchema,

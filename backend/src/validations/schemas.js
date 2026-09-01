@@ -47,7 +47,7 @@ const createOfficeAdminSchema = Joi.object({
   nationalId: Joi.string().optional().pattern(/^\d{16}$/),
   email: Joi.string().email().optional(),
   employeeId: Joi.string().required(),
-  officeId: Joi.string().required() // UUID
+  officeId: Joi.string().required()
 });
 
 const createOfficerSchema = Joi.object({
@@ -58,7 +58,7 @@ const createOfficerSchema = Joi.object({
   nationalId: Joi.string().optional().pattern(/^\d{16}$/),
   email: Joi.string().email().optional(),
   employeeId: Joi.string().required(),
-  officeId: Joi.string().required(), // UUID
+  officeId: Joi.string().required(),
   position: Joi.string().optional(),
   assignedArea: Joi.string().optional()
 });

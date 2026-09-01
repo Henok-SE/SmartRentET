@@ -99,11 +99,9 @@ const getContracts = async ({
   subCity,
   landlord,
   tenant,
-  officeId,
 } = {}) => {
   return prisma.rentalAgreement.findMany({
     where: {
-      ...(officeId ? { officeId } : {}),
       ...(referenceNumber
         ? {
             referenceNumber: {
