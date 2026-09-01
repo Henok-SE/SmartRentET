@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/authMiddleware');
-const { authorizeRoles } = require('../middleware/role');
+const { authenticateToken } = require('../middleware/auth');
 const {
     createPayment,
     getPaymentInquiry,
