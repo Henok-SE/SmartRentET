@@ -87,6 +87,7 @@ const cleanupExpiredSessions = async () => {
 module.exports = {
   createSession,
   revokeSession, 
+  revokeSession, 
   revokeAllSessions,
   getActiveSessions,
   cleanupExpiredSessions
