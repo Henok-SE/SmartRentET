@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import LogoutButton from "../../components/LogoutButton";
 import { apiRequest } from "../../services/api";
 import "../../styles/super-admin-dashboard.css";
-import { useNavigate } from "react-router-dom";
 
 type GovernmentOffice = {
   officeId: string;
@@ -15,7 +15,13 @@ type GovernmentOffice = {
   address?: string | null;
   status?: "ACTIVE" | "INACTIVE";
   createdAt?: string;
+  stats?: {
+    officers: number;
+    admins: number;
+    agreements: number;
+  };
 };
+
 type OfficeAdmin = {
   officeAdminId: string;
   employeeId: string;
@@ -29,6 +35,7 @@ type OfficeAdmin = {
     username?: string | null;
     role: string;
     isActive: boolean;
+    isNationalIdVerified?: boolean;
   };
   office: {
     officeId: string;
@@ -39,6 +46,74 @@ type OfficeAdmin = {
     subCity?: string | null;
     woreda?: string | null;
     status?: "ACTIVE" | "INACTIVE";
+  };
+};
+
+type DashboardSummary = {
+  totalAgreements: number;
+  activeAgreements: number;
+  pendingAgreements: number;
+
+  totalLandlords: number;
+  totalTenants: number;
+
+  totalOfficers: number;
+  totalOffices: number;
+
+  totalPayments: number;
+  collectedPayments: number;
+  overduePayments: number;
+
+  pendingVerifications: number;
+
+  totalSuperAdmins: number;
+  activeSuperAdmins: number;
+
+  totalOfficeAdmins: number;
+  activeOfficeAdmins: number;
+};
+
+type SummaryResponse = {
+  success: boolean;
+  message?: string;
+  data: DashboardSummary;
+};
+
+type OfficeListResponse = {
+  success: boolean;
+  message?: string;
+  data: GovernmentOffice[];
+};
+
+type OfficeAdminListResponse = {
+  success: boolean;
+  message?: string;
+  data: OfficeAdmin[];
+};
+
+type OfficeCreateResponse = {
+  success: boolean;
+  message: string;
+  data: GovernmentOffice;
+};
+
+type CreateAdminResponse = {
+  success: boolean;
+  message: string;
+  data?: {
+    user?: {
+      userId: string;
+      firstName: string;
+      lastName: string;
+      username?: string | null;
+      phone: string;
+      email?: string | null;
+      role: string;
+      isActive: boolean;
+      isNationalIdVerified: boolean;
+    };
+    generatedUsername?: string;
+    passwordSent?: boolean;
   };
 };
 
@@ -58,51 +133,16 @@ type AdminForm = {
   username: string;
   phone: string;
   nationalId: string;
-  password: string;
   employeeId: string;
   officeId: string;
 };
 
 type StoredUser = {
-  userId?: number | string;
+  userId?: string;
   username?: string;
   role?: string;
   firstName?: string;
   lastName?: string;
-};
-
-type OfficeListResponse = {
-  success: boolean;
-  message?: string;
-  filters?: {
-    status?: string;
-    subCity?: string;
-    city?: string;
-  };
-  data: GovernmentOffice[];
-};
-
-type OfficeAdminListResponse = {
-  success: boolean;
-  message?: string;
-  filters?: {
-    officeId?: string;
-    subCity?: string;
-    isActive?: string;
-    officeCode?: string;
-  };
-  data: OfficeAdmin[];
-};
-type OfficeCreateResponse = {
-  success: boolean;
-  message: string;
-  data: GovernmentOffice;
-};
-
-type CreateAdminResponse = {
-  success: boolean;
-  message: string;
-  data?: unknown;
 };
 
 const createEmptyOfficeForm = (): OfficeForm => ({
@@ -121,47 +161,67 @@ const createEmptyAdminForm = (): AdminForm => ({
   username: "",
   phone: "",
   nationalId: "",
-  password: "",
   employeeId: "",
   officeId: "",
 });
 
 function SuperAdminDashboard() {
   const navigate = useNavigate();
-  const [showCreateAdmin, setShowCreateAdmin] = useState(false);
-  const [showCreateOffice, setShowCreateOffice] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [officeLoading, setOfficeLoading] = useState(false);
+  const [summary, setSummary] =
+    useState<DashboardSummary | null>(null);
+
+  const [offices, setOffices] =
+    useState<GovernmentOffice[]>([]);
+
+  const [admins, setAdmins] =
+    useState<OfficeAdmin[]>([]);
+
+  const [summaryLoading, setSummaryLoading] =
+    useState(true);
+
+  const [officeLoading, setOfficeLoading] =
+    useState(false);
+
+  const [adminLoading, setAdminLoading] =
+    useState(false);
 
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [officeError, setOfficeError] =
+    useState("");
 
-  const [officeError, setOfficeError] = useState("");
-  const [officeSuccess, setOfficeSuccess] = useState("");
+  const [success, setSuccess] =
+    useState("");
+
+  const [officeSuccess, setOfficeSuccess] =
+    useState("");
 
   const [search, setSearch] = useState("");
 
-  const [offices, setOffices] = useState<GovernmentOffice[]>([]);
-  const [admins, setAdmins] = useState<OfficeAdmin[]>([]);
-  const [adminLoading, setAdminLoading] = useState(false);
-  const [adminError, setAdminError] = useState("");
-  
-  const [adminForm, setAdminForm] = useState<AdminForm>(
-    createEmptyAdminForm
-  );
+  const [showCreateOffice, setShowCreateOffice] =
+    useState(false);
 
-  const [officeForm, setOfficeForm] = useState<OfficeForm>(
-    createEmptyOfficeForm
-  );
+  const [showCreateAdmin, setShowCreateAdmin] =
+    useState(false);
+
+  const [officeForm, setOfficeForm] =
+    useState<OfficeForm>(
+      createEmptyOfficeForm()
+    );
+
+  const [adminForm, setAdminForm] =
+    useState<AdminForm>(
+      createEmptyAdminForm()
+    );
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * CURRENT USER
-   * ---------------------------------------------------------
+   * =========================================================
    */
 
-  const storedUser = localStorage.getItem("user");
+  const storedUser =
+    localStorage.getItem("user");
 
   const user: StoredUser = useMemo(() => {
     if (!storedUser) {
@@ -169,7 +229,9 @@ function SuperAdminDashboard() {
     }
 
     try {
-      return JSON.parse(storedUser) as StoredUser;
+      return JSON.parse(
+        storedUser
+      ) as StoredUser;
     } catch {
       return {};
     }
@@ -181,88 +243,75 @@ function SuperAdminDashboard() {
       : user.username || "Super Admin";
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * DATE
-   * ---------------------------------------------------------
+   * =========================================================
    */
 
-  const currentDate = new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date());
+  const currentDate =
+    new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date());
 
   /*
-   * ---------------------------------------------------------
-   * HELPERS
-   * ---------------------------------------------------------
+   * =========================================================
+   * AUTH HEADER
+   * =========================================================
    */
 
-  const resetAdminForm = () => {
-    setAdminForm(createEmptyAdminForm());
+  const getAuthHeaders = () => {
+    const token =
+      localStorage.getItem("token");
+
+    return token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined;
   };
 
-  const resetOfficeForm = () => {
-    setOfficeForm(createEmptyOfficeForm());
-  };
+  /*
+   * =========================================================
+   * LOAD SUMMARY
+   * =========================================================
+   */
 
-  const clearAdminMessages = () => {
+  const loadSummary = async () => {
+    setSummaryLoading(true);
     setError("");
-    setSuccess("");
-  };
 
-  const clearOfficeMessages = () => {
-    setOfficeError("");
-    setOfficeSuccess("");
-  };
+    try {
+      const response =
+        await apiRequest<SummaryResponse>(
+          "/dashboard/summary",
+          {
+            method: "GET",
+            cache: "no-store",
+            headers: getAuthHeaders(),
+          }
+        );
 
-  /*
-   * ---------------------------------------------------------
-   * ADMIN FORM
-   * ---------------------------------------------------------
-   */
-
-  const handleAdminChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const { name, value } = event.target;
-
-    setAdminForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
-  };
-
-  const handleOfficeSelect = (
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    setAdminForm((previous) => ({
-      ...previous,
-      officeId: event.target.value,
-    }));
+      setSummary(response.data);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(
+          "Failed to load dashboard summary."
+        );
+      }
+    } finally {
+      setSummaryLoading(false);
+    }
   };
 
   /*
-   * ---------------------------------------------------------
-   * OFFICE FORM
-   * ---------------------------------------------------------
-   */
-
-  const handleOfficeChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const { name, value } = event.target;
-
-    setOfficeForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
-  };
-
-  /*
-   * ---------------------------------------------------------
-   * LOAD GOVERNMENT OFFICES
-   * ---------------------------------------------------------
+   * =========================================================
+   * LOAD OFFICES
+   * =========================================================
    */
 
   const loadOffices = async () => {
@@ -270,19 +319,13 @@ function SuperAdminDashboard() {
     setOfficeError("");
 
     try {
-      const token = localStorage.getItem("token");
-
       const response =
         await apiRequest<OfficeListResponse>(
           "/dashboard/offices",
           {
             method: "GET",
             cache: "no-store",
-            headers: token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : undefined,
+            headers: getAuthHeaders(),
           }
         );
 
@@ -300,53 +343,183 @@ function SuperAdminDashboard() {
     }
   };
 
-  const loadAdmins = async () => {
-  setAdminLoading(true);
-  setAdminError("");
-
-  try {
-    const token = localStorage.getItem("token");
-
-    const response =
-      await apiRequest<OfficeAdminListResponse>(
-        "/dashboard/office-admins",
-        {
-          method: "GET",
-          cache: "no-store",
-          headers: token
-            ? {
-                Authorization: `Bearer ${token}`,
-              }
-            : undefined,
-        }
-      );
-
-    setAdmins(response.data);
-  } catch (err) {
-    if (err instanceof Error) {
-      setAdminError(err.message);
-    } else {
-      setAdminError(
-        "Failed to load administrators."
-      );
-    }
-  } finally {
-    setAdminLoading(false);
-  }
-};
-useEffect(() => {
-  void loadOffices();
-  void loadAdmins();
-}, []);
   /*
-   * ---------------------------------------------------------
-   * OPEN / CLOSE OFFICE MODAL
-   * ---------------------------------------------------------
+   * =========================================================
+   * LOAD ADMINISTRATORS
+   * =========================================================
+   */
+
+  const loadAdmins = async () => {
+    setAdminLoading(true);
+    setError("");
+
+    try {
+      const response =
+        await apiRequest<OfficeAdminListResponse>(
+          "/dashboard/office-admins",
+          {
+            method: "GET",
+            cache: "no-store",
+            headers: getAuthHeaders(),
+          }
+        );
+
+      setAdmins(response.data);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(
+          "Failed to load administrators."
+        );
+      }
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  /*
+   * =========================================================
+   * LOAD ALL DASHBOARD DATA
+   * =========================================================
+   */
+
+  const loadDashboard = async () => {
+    setError("");
+
+    await Promise.all([
+      loadSummary(),
+      loadOffices(),
+      loadAdmins(),
+    ]);
+  };
+
+  useEffect(() => {
+    void loadDashboard();
+  }, []);
+
+  /*
+   * =========================================================
+   * SEARCHED ADMINS
+   * =========================================================
+   */
+
+  const filteredAdmins = useMemo(() => {
+    const query =
+      search.trim().toLowerCase();
+
+    if (!query) {
+      return admins;
+    }
+
+    return admins.filter((admin) =>
+      [
+        admin.user.firstName,
+        admin.user.lastName,
+        admin.user.username,
+        admin.user.email,
+        admin.user.phone,
+        admin.employeeId,
+        admin.office.officeCode,
+        admin.office.officeName,
+        admin.office.region,
+        admin.office.city,
+        admin.office.subCity,
+        admin.office.woreda,
+      ]
+        .filter(Boolean)
+        .some((value) =>
+          String(value)
+            .toLowerCase()
+            .includes(query)
+        )
+    );
+  }, [admins, search]);
+
+  /*
+   * =========================================================
+   * SEARCHED OFFICES
+   * =========================================================
+   */
+
+  const filteredOffices = useMemo(() => {
+    const query =
+      search.trim().toLowerCase();
+
+    if (!query) {
+      return offices;
+    }
+
+    return offices.filter((office) =>
+      [
+        office.officeCode,
+        office.officeName,
+        office.region,
+        office.city,
+        office.subCity,
+        office.woreda,
+        office.address,
+      ]
+        .filter(Boolean)
+        .some((value) =>
+          String(value)
+            .toLowerCase()
+            .includes(query)
+        )
+    );
+  }, [offices, search]);
+
+  /*
+   * =========================================================
+   * FORM HANDLERS
+   * =========================================================
+   */
+
+  const handleOfficeChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } =
+      event.target;
+
+    setOfficeForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleAdminChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } =
+      event.target;
+
+    setAdminForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleAdminOfficeChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    setAdminForm((previous) => ({
+      ...previous,
+      officeId: event.target.value,
+    }));
+  };
+
+  /*
+   * =========================================================
+   * OPEN/CLOSE CREATE OFFICE
+   * =========================================================
    */
 
   const openCreateOffice = () => {
-    clearOfficeMessages();
-    resetOfficeForm();
+    setOfficeError("");
+    setOfficeSuccess("");
+    setOfficeForm(
+      createEmptyOfficeForm()
+    );
     setShowCreateOffice(true);
   };
 
@@ -356,118 +529,131 @@ useEffect(() => {
     }
 
     setShowCreateOffice(false);
-    clearOfficeMessages();
+    setOfficeError("");
+    setOfficeSuccess("");
+    setOfficeForm(
+      createEmptyOfficeForm()
+    );
   };
 
   /*
-   * ---------------------------------------------------------
-   * OPEN / CLOSE ADMIN MODAL
-   * ---------------------------------------------------------
+   * =========================================================
+   * OPEN/CLOSE CREATE ADMIN
+   * =========================================================
    */
 
   const openCreateAdmin = async () => {
-    clearAdminMessages();
-    resetAdminForm();
+    setError("");
+    setSuccess("");
+    setAdminForm(
+      createEmptyAdminForm()
+    );
     setShowCreateAdmin(true);
 
-    await loadOffices();
+    if (offices.length === 0) {
+      await loadOffices();
+    }
   };
 
   const closeCreateAdmin = () => {
-    if (loading) {
+    if (adminLoading) {
       return;
     }
 
     setShowCreateAdmin(false);
-    clearAdminMessages();
+    setError("");
+    setSuccess("");
+    setAdminForm(
+      createEmptyAdminForm()
+    );
   };
 
   /*
-   * ---------------------------------------------------------
-   * CREATE GOVERNMENT OFFICE
-   * ---------------------------------------------------------
+   * =========================================================
+   * CREATE OFFICE
+   * =========================================================
    */
-
-  const validateOfficeForm = (): string | null => {
-    if (!officeForm.officeName.trim()) {
-      return "Office name is required.";
-    }
-
-    if (!officeForm.officeCode.trim()) {
-      return "Office code is required.";
-    }
-
-    return null;
-  };
 
   const handleCreateOffice = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
-    clearOfficeMessages();
+    setOfficeError("");
+    setOfficeSuccess("");
 
-    const validationError = validateOfficeForm();
+    if (!officeForm.officeName.trim()) {
+      setOfficeError(
+        "Office name is required."
+      );
+      return;
+    }
 
-    if (validationError) {
-      setOfficeError(validationError);
+    if (!officeForm.officeCode.trim()) {
+      setOfficeError(
+        "Office code is required."
+      );
       return;
     }
 
     setOfficeLoading(true);
 
     try {
-      const token = localStorage.getItem("token");
-
       const response =
         await apiRequest<OfficeCreateResponse>(
           "/dashboard/offices",
           {
             method: "POST",
-            headers: token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : undefined,
+            headers: {
+              "Content-Type":
+                "application/json",
+              ...(getAuthHeaders() || {}),
+            },
             body: JSON.stringify({
-              officeName: officeForm.officeName.trim(),
-              officeCode: officeForm.officeCode.trim(),
-              region: officeForm.region.trim(),
-              city: officeForm.city.trim(),
-              subCity: officeForm.subCity.trim(),
-              woreda: officeForm.woreda.trim(),
-              address: officeForm.address.trim(),
+              officeName:
+                officeForm.officeName.trim(),
+              officeCode:
+                officeForm.officeCode.trim(),
+              region:
+                officeForm.region.trim() || null,
+              city:
+                officeForm.city.trim() || null,
+              subCity:
+                officeForm.subCity.trim() ||
+                null,
+              woreda:
+                officeForm.woreda.trim() ||
+                null,
+              address:
+                officeForm.address.trim() ||
+                null,
             }),
           }
         );
 
-      setOffices((previous) => {
-        const withoutDuplicate = previous.filter(
+      setOffices((previous) => [
+        response.data,
+        ...previous.filter(
           (office) =>
-            office.officeId !== response.data.officeId
-        );
+            office.officeId !==
+            response.data.officeId
+        ),
+      ]);
 
-        return [...withoutDuplicate, response.data].sort(
-          (a, b) =>
-            a.officeName.localeCompare(b.officeName)
-        );
-      });
-
-      setAdminForm((previous) => ({
-        ...previous,
-        officeId: response.data.officeId,
-      }));
+      await loadSummary();
 
       setOfficeSuccess(
         "Government Office created successfully."
       );
 
-      resetOfficeForm();
+      setOfficeForm(
+        createEmptyOfficeForm()
+      );
 
       window.setTimeout(() => {
         setShowCreateOffice(false);
         setOfficeSuccess("");
-      }, 1000);
+      }, 1200);
     } catch (err) {
       if (err instanceof Error) {
         setOfficeError(err.message);
@@ -482,98 +668,123 @@ useEffect(() => {
   };
 
   /*
-   * ---------------------------------------------------------
-   * CREATE ADMINISTRATOR
-   * ---------------------------------------------------------
+   * =========================================================
+   * CREATE OFFICE ADMIN
+   * =========================================================
    */
-
-  const validateAdminForm = (): string | null => {
-    if (!adminForm.firstName.trim()) {
-      return "First name is required.";
-    }
-
-    if (!adminForm.lastName.trim()) {
-      return "Last name is required.";
-    }
-
-    if (!adminForm.username.trim()) {
-      return "Username is required.";
-    }
-
-    if (!adminForm.phone.trim()) {
-      return "Phone number is required.";
-    }
-
-    if (!adminForm.nationalId.trim()) {
-      return "National ID is required.";
-    }
-
-    if (!adminForm.employeeId.trim()) {
-      return "Employee ID is required.";
-    }
-
-    if (!adminForm.officeId) {
-      return "Please select a Government Office.";
-    }
-
-    if (adminForm.password.length < 6) {
-      return "Password must be at least 6 characters.";
-    }
-
-    return null;
-  };
 
   const handleCreateAdmin = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
-    clearAdminMessages();
+    setError("");
+    setSuccess("");
 
-    const validationError = validateAdminForm();
-
-    if (validationError) {
-      setError(validationError);
+    if (!adminForm.firstName.trim()) {
+      setError(
+        "First name is required."
+      );
       return;
     }
 
-    setLoading(true);
+    if (!adminForm.lastName.trim()) {
+      setError(
+        "Last name is required."
+      );
+      return;
+    }
+
+    if (!adminForm.username.trim()) {
+      setError(
+        "Username is required."
+      );
+      return;
+    }
+
+    if (!adminForm.phone.trim()) {
+      setError(
+        "Phone number is required."
+      );
+      return;
+    }
+
+    if (!adminForm.nationalId.trim()) {
+      setError(
+        "National ID is required."
+      );
+      return;
+    }
+
+    if (!adminForm.employeeId.trim()) {
+      setError(
+        "Employee ID is required."
+      );
+      return;
+    }
+
+    if (!adminForm.officeId) {
+      setError(
+        "Please select a Government Office."
+      );
+      return;
+    }
+
+    setAdminLoading(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const response =
+        await apiRequest<CreateAdminResponse>(
+          "/auth/office-admin",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              ...(getAuthHeaders() || {}),
+            },
+            body: JSON.stringify({
+              firstName:
+                adminForm.firstName.trim(),
+              lastName:
+                adminForm.lastName.trim(),
+              username:
+                adminForm.username.trim(),
+              phone:
+                adminForm.phone.trim(),
+              nationalId:
+                adminForm.nationalId.trim(),
+              employeeId:
+                adminForm.employeeId.trim(),
+              officeId:
+                adminForm.officeId,
+            }),
+          }
+        );
 
-      await apiRequest<CreateAdminResponse>(
-        "/dashboard/office-admins",
-        {
-          method: "POST",
-          headers: token
-            ? {
-                Authorization: `Bearer ${token}`,
-              }
-            : undefined,
-          body: JSON.stringify({
-            firstName: adminForm.firstName.trim(),
-            lastName: adminForm.lastName.trim(),
-            username: adminForm.username.trim(),
-            phone: adminForm.phone.trim(),
-            nationalId: adminForm.nationalId.trim(),
-            employeeId: adminForm.employeeId.trim(),
-            officeId: adminForm.officeId,
-            password: adminForm.password,
-          }),
-        }
-      );
+      const username =
+        response.data?.generatedUsername ||
+        adminForm.username.trim();
 
       setSuccess(
-        "Administrator created successfully."
+        response.data?.passwordSent
+          ? `Administrator created successfully. Username: ${username}. The generated password has been sent via SMS.`
+          : `Administrator created successfully. Username: ${username}.`
       );
 
-      resetAdminForm();
+      await Promise.all([
+        loadAdmins(),
+        loadSummary(),
+      ]);
+
+      setAdminForm(
+        createEmptyAdminForm()
+      );
 
       window.setTimeout(() => {
         setShowCreateAdmin(false);
         setSuccess("");
-      }, 1200);
+      }, 1800);
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -583,18 +794,16 @@ useEffect(() => {
         );
       }
     } finally {
-      setLoading(false);
+      setAdminLoading(false);
     }
   };
 
-  /*
-   * ---------------------------------------------------------
-   * RENDER
-   * ---------------------------------------------------------
-   */
-
   return (
     <div className="super-admin-page">
+      {/* =====================================================
+          SIDEBAR
+          ===================================================== */}
+
       <aside className="super-admin-sidebar">
         <div className="super-admin-sidebar-brand">
           <img
@@ -616,70 +825,96 @@ useEffect(() => {
           aria-label="Super Admin navigation"
         >
           <button
-  type="button"
-  className="super-admin-nav-item active"
-  onClick={() => navigate("/super-admin")}
->
-  <span className="super-admin-nav-icon">
-    ▦
-  </span>
-  <span>Dashboard</span>
-</button>
+            type="button"
+            className="super-admin-nav-item active"
+            onClick={() =>
+              navigate("/super-admin")
+            }
+          >
+            <span className="super-admin-nav-icon">
+              ▦
+            </span>
 
+            <span>Dashboard</span>
+          </button>
+
+          <button
+            type="button"
+            className="super-admin-nav-item"
+            onClick={() =>
+              navigate(
+                "/super-admin/administrators"
+              )
+            }
+          >
+            <span className="super-admin-nav-icon">
+              ♟
+            </span>
+
+            <span>Administrators</span>
+          </button>
+
+          <button
+            type="button"
+            className="super-admin-nav-item"
+            onClick={() =>
+              navigate(
+                "/super-admin/officers"
+              )
+            }
+          >
+            <span className="super-admin-nav-icon">
+              ♟
+            </span>
+
+            <span>Officers</span>
+          </button>
+
+          <button
+            type="button"
+            className="super-admin-nav-item"
+            onClick={() =>
+              navigate(
+                "/super-admin/offices"
+              )
+            }
+          >
+            <span className="super-admin-nav-icon">
+              ◎
+            </span>
+
+            <span>Government Offices</span>
+          </button>
           <button
   type="button"
   className="super-admin-nav-item"
-  onClick={() => navigate("/super-admin/administrators")}
+  onClick={() =>
+    navigate("/super-admin/agreements")
+  }
 >
   <span className="super-admin-nav-icon">
-    ♟
+    □
   </span>
-  <span>Administrators</span>
-</button>
-
-         <button
-  type="button"
-  className="super-admin-nav-item"
-  onClick={() => navigate("/super-admin/officers")}
->
-  <span className="super-admin-nav-icon">
-    ♟
-  </span>
-  <span>Officers</span>
-</button>
-
-          <button
-  type="button"
-  className="super-admin-nav-item"
-  onClick={() => navigate("/super-admin/offices")}
->
-  <span className="super-admin-nav-icon">
-    ◎
-  </span>
-  <span>Government Offices</span>
-</button>
-
-          <button
-  type="button"
-  className="super-admin-nav-item"
-  onClick={() => navigate("/super-admin/settings")}
->
-  <span className="super-admin-nav-icon">
-    ⚙
-  </span>
-  <span>System Settings</span>
+  <span>Agreements</span>
 </button>
         </nav>
 
         <div className="super-admin-sidebar-bottom">
           <div className="super-admin-profile">
             <div className="super-admin-avatar">
-              {displayName.charAt(0).toUpperCase()}
+              {displayName
+                .charAt(0)
+                .toUpperCase()}
             </div>
 
             <div className="super-admin-profile-info">
-              <strong>{displayName}</strong>
-              <span>Super Administrator</span>
+              <strong>
+                {displayName}
+              </strong>
+
+              <span>
+                Super Administrator
+              </span>
             </div>
           </div>
 
@@ -689,7 +924,13 @@ useEffect(() => {
         </div>
       </aside>
 
+      {/* =====================================================
+          MAIN
+          ===================================================== */}
+
       <div className="super-admin-main">
+        {/* TOP BAR */}
+
         <header className="super-admin-topbar">
           <div className="super-admin-search">
             <span className="super-admin-search-icon">
@@ -700,34 +941,47 @@ useEffect(() => {
               type="text"
               value={search}
               onChange={(event) =>
-                setSearch(event.target.value)
+                setSearch(
+                  event.target.value
+                )
               }
-              placeholder="Search administrators..."
-              aria-label="Search administrators"
+              placeholder="Search administrators or offices..."
+              aria-label="Search administrators or offices"
             />
           </div>
 
           <div className="super-admin-topbar-user">
             <span className="super-admin-user-status" />
 
+            <span className="super-admin-role-badge">
+              SUPER ADMIN
+            </span>
+
             <span className="super-admin-topbar-name">
-              {displayName} 
+              {displayName}
             </span>
           </div>
         </header>
 
+        {/* CONTENT */}
+
         <main className="super-admin-content">
+          {/* PAGE HEADER */}
+
           <section className="super-admin-page-heading">
             <div>
               <span className="super-admin-eyebrow">
                 SYSTEM ADMINISTRATION
               </span>
 
-              <h1>Super Admin Dashboard</h1>
+              <h1>
+                Super Admin Dashboard
+              </h1>
 
               <p>
                 Manage SmartRent ET administrators,
-                government offices, and system access.
+                government offices, officers, and
+                system activity.
               </p>
             </div>
 
@@ -757,6 +1011,32 @@ useEffect(() => {
             </div>
           </section>
 
+          {/* ERROR */}
+
+          {error && (
+            <div
+              className="super-admin-form-error"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
+          {/* SUCCESS */}
+
+          {success && !showCreateAdmin && (
+            <div
+              className="super-admin-form-success"
+              role="status"
+            >
+              {success}
+            </div>
+          )}
+
+          {/* =================================================
+              SYSTEM STATISTICS
+              ================================================= */}
+
           <section className="super-admin-stat-grid">
             <article className="super-admin-stat-card">
               <div className="super-admin-stat-icon">
@@ -764,23 +1044,43 @@ useEffect(() => {
               </div>
 
               <div className="super-admin-stat-content">
-                <span>Total Administrators</span>
-                <strong>{admins.length}</strong>
-                <small>Registered accounts</small>
+                <span>
+                  Total Administrators
+                </span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary
+                      ? summary.totalOfficeAdmins
+                      : admins.length}
+                </strong>
+
+                <small>
+                  {summary
+                    ? `${summary.activeOfficeAdmins} active`
+                    : "Office Administrator accounts"}
+                </small>
               </div>
             </article>
 
             <article className="super-admin-stat-card">
               <div className="super-admin-stat-icon">
-                ✓
+                ♟
               </div>
 
               <div className="super-admin-stat-content">
-                <span>Active Administrators</span>
+                <span>Total Officers</span>
+
                 <strong>
-  {admins.filter((admin) => admin.user.isActive).length}
-</strong>
-                <small>Currently active</small>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.totalOfficers ?? 0}
+                </strong>
+
+                <small>
+                  Registered officer accounts
+                </small>
               </div>
             </article>
 
@@ -790,12 +1090,224 @@ useEffect(() => {
               </div>
 
               <div className="super-admin-stat-content">
-                <span>Government Offices</span>
-                <strong>{offices.length}</strong>
-                <small>Available offices</small>
+                <span>
+                  Government Offices
+                </span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.totalOffices ?? offices.length}
+                </strong>
+
+                <small>
+                  Registered offices
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                □
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>
+                  Total Agreements
+                </span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.totalAgreements ?? 0}
+                </strong>
+
+                <small>
+                  Rental agreements
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                ✓
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>
+                  Active Agreements
+                </span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.activeAgreements ?? 0}
+                </strong>
+
+                <small>
+                  Currently active
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                !
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>
+                  Pending Agreements
+                </span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.pendingAgreements ?? 0}
+                </strong>
+
+                <small>
+                  Awaiting verification
+                </small>
               </div>
             </article>
           </section>
+
+          {/* =================================================
+              ADDITIONAL SYSTEM OVERVIEW
+              ================================================= */}
+
+          <section className="super-admin-stat-grid">
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                $
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>Total Payments</span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.totalPayments ?? 0}
+                </strong>
+
+                <small>
+                  Recorded payments
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                ✓
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>
+                  Collected Payments
+                </span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.collectedPayments ?? 0}
+                </strong>
+
+                <small>
+                  Paid payments
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                !
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>
+                  Overdue Payments
+                </span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.overduePayments ?? 0}
+                </strong>
+
+                <small>
+                  Currently overdue
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                ?
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>
+                  Pending Verifications
+                </span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.pendingVerifications ?? 0}
+                </strong>
+
+                <small>
+                  Awaiting verification
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                L
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>Landlords</span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.totalLandlords ?? 0}
+                </strong>
+
+                <small>
+                  Registered landlords
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                T
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>Tenants</span>
+
+                <strong>
+                  {summaryLoading
+                    ? "—"
+                    : summary?.totalTenants ?? 0}
+                </strong>
+
+                <small>
+                  Registered tenants
+                </small>
+              </div>
+            </article>
+          </section>
+
+          {/* =================================================
+              ADMINISTRATORS
+              ================================================= */}
 
           <section className="super-admin-management-card">
             <div className="super-admin-management-header">
@@ -807,153 +1319,293 @@ useEffect(() => {
                 <h2>Administrators</h2>
 
                 <p>
-                  Administrators created and managed by
-                  the Super Admin.
+                  Office Administrators registered
+                  in SmartRent ET.
                 </p>
               </div>
 
               <button
                 type="button"
                 className="super-admin-outline-button"
-                onClick={openCreateAdmin}
+                onClick={() =>
+                  navigate(
+                    "/super-admin/administrators"
+                  )
+                }
               >
-                + Create Admin
+                View All
               </button>
             </div>
 
-           {adminError && (
-  <div
-    className="super-admin-form-error"
-    role="alert"
-  >
-    {adminError}
-  </div>
-)}
+            {adminLoading ? (
+              <div className="super-admin-empty-state">
+                <div className="super-admin-empty-icon">
+                  ⏳
+                </div>
 
-{adminLoading ? (
-  <div className="super-admin-empty-state">
-    <div className="super-admin-empty-icon">
-      ⏳
-    </div>
+                <h3>
+                  Loading administrators...
+                </h3>
 
-    <h3>Loading administrators...</h3>
+                <p>
+                  Retrieving Office Administrator
+                  accounts.
+                </p>
+              </div>
+            ) : filteredAdmins.length === 0 ? (
+              <div className="super-admin-empty-state">
+                <div className="super-admin-empty-icon">
+                  ♟
+                </div>
 
-    <p>
-      Retrieving Office Administrator accounts.
-    </p>
-  </div>
-) : admins.length === 0 ? (
-  <div className="super-admin-empty-state">
-    <div className="super-admin-empty-icon">
-      ♟
-    </div>
+                <h3>
+                  {search
+                    ? "No administrators found"
+                    : "No administrators yet"}
+                </h3>
 
-    <h3>No administrators yet</h3>
+                <p>
+                  {search
+                    ? `No administrators match "${search}".`
+                    : "Create an administrator account to begin managing SmartRent operations."}
+                </p>
 
-    <p>
-      {search
-        ? `No administrators found for "${search}".`
-        : "Create an administrator account to begin managing SmartRent officers and operations."}
-    </p>
+                {!search && (
+                  <button
+                    type="button"
+                    className="super-admin-primary-button super-admin-empty-button"
+                    onClick={openCreateAdmin}
+                  >
+                    Create First Admin
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  overflowX: "auto",
+                  padding:
+                    "20px 28px 28px",
+                }}
+              >
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse:
+                      "collapse",
+                    minWidth:
+                      "900px",
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      <th
+                        style={{
+                          padding:
+                            "14px 12px",
+                          textAlign: "left",
+                          borderBottom:
+                            "1px solid #e8edeb",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
+                        }}
+                      >
+                        Administrator
+                      </th>
 
-    {!search && (
-      <button
-        type="button"
-        className="super-admin-primary-button super-admin-empty-button"
-        onClick={openCreateAdmin}
-      >
-        Create First Admin
-      </button>
-    )}
-  </div>
-) : (
-  <div
-    style={{
-      display: "grid",
-      gap: "12px",
-      padding: "20px 0",
-    }}
-  >
-    {admins
-      .filter((admin) => {
-        const query = search.trim().toLowerCase();
+                      <th
+                        style={{
+                          padding:
+                            "14px 12px",
+                          textAlign: "left",
+                          borderBottom:
+                            "1px solid #e8edeb",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
+                        }}
+                      >
+                        Employee ID
+                      </th>
 
-        if (!query) {
-          return true;
-        }
+                      <th
+                        style={{
+                          padding:
+                            "14px 12px",
+                          textAlign: "left",
+                          borderBottom:
+                            "1px solid #e8edeb",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
+                        }}
+                      >
+                        Government Office
+                      </th>
 
-        return [
-          admin.user.firstName,
-          admin.user.lastName,
-          admin.user.username,
-          admin.user.email,
-          admin.user.phone,
-          admin.employeeId,
-          admin.office.officeCode,
-          admin.office.officeName,
-          admin.office.city,
-          admin.office.subCity,
-        ]
-          .filter(Boolean)
-          .some((value) =>
-            String(value)
-              .toLowerCase()
-              .includes(query)
-          );
-      })
-      .map((admin) => (
-        <article
-          key={admin.officeAdminId}
-          style={{
-            padding: "16px",
-            border: "1px solid #e5e7eb",
-            borderRadius: "10px",
-            background: "#ffffff",
-          }}
-        >
-          <strong>
-            {admin.user.firstName}{" "}
-            {admin.user.lastName}
-          </strong>
+                      <th
+                        style={{
+                          padding:
+                            "14px 12px",
+                          textAlign: "left",
+                          borderBottom:
+                            "1px solid #e8edeb",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
+                        }}
+                      >
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
 
-          <p
-            style={{
-              margin: "6px 0 0",
-              color: "#6b7280",
-            }}
-          >
-            @{admin.user.username || "No username"} ·{" "}
-            {admin.employeeId}
-          </p>
+                  <tbody>
+                    {filteredAdmins
+                      .slice(0, 5)
+                      .map((admin) => (
+                        <tr
+                          key={
+                            admin.officeAdminId
+                          }
+                        >
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                            }}
+                          >
+                            <strong>
+                              {
+                                admin.user
+                                  .firstName
+                              }{" "}
+                              {
+                                admin.user
+                                  .lastName
+                              }
+                            </strong>
 
-          <p
-            style={{
-              margin: "6px 0 0",
-              color: "#6b7280",
-            }}
-          >
-            {admin.office.officeCode} —{" "}
-            {admin.office.officeName}
-          </p>
+                            <div
+                              style={{
+                                marginTop:
+                                  "4px",
+                                color:
+                                  "#788991",
+                                fontSize:
+                                  "12px",
+                              }}
+                            >
+                              @
+                              {admin.user
+                                .username ||
+                                "No username"}
+                            </div>
+                          </td>
 
-          <p
-            style={{
-              margin: "6px 0 0",
-              color: admin.user.isActive
-                ? "#047857"
-                : "#b91c1c",
-              fontWeight: 600,
-            }}
-          >
-            {admin.user.isActive
-              ? "Active"
-              : "Inactive"}
-          </p>
-        </article>
-      ))}
-  </div>
-)}
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                              color:
+                                "#53636c",
+                            }}
+                          >
+                            {
+                              admin.employeeId
+                            }
+                          </td>
+
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                            }}
+                          >
+                            <strong>
+                              {
+                                admin.office
+                                  .officeCode
+                              }
+                            </strong>
+
+                            <div
+                              style={{
+                                marginTop:
+                                  "4px",
+                                color:
+                                  "#788991",
+                                fontSize:
+                                  "12px",
+                              }}
+                            >
+                              {
+                                admin.office
+                                  .officeName
+                              }
+                            </div>
+                          </td>
+
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display:
+                                  "inline-block",
+                                padding:
+                                  "6px 10px",
+                                borderRadius:
+                                  "999px",
+                                background:
+                                  admin.user
+                                    .isActive
+                                    ? "#e6f7f3"
+                                    : "#f3f4f6",
+                                color:
+                                  admin.user
+                                    .isActive
+                                    ? "#008f78"
+                                    : "#6b7280",
+                                fontSize:
+                                  "12px",
+                                fontWeight:
+                                  700,
+                              }}
+                            >
+                              {admin.user
+                                .isActive
+                                ? "Active"
+                                : "Inactive"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
+
+          {/* =================================================
+              GOVERNMENT OFFICES
+              ================================================= */}
 
           <section className="super-admin-management-card">
             <div className="super-admin-management-header">
@@ -962,21 +1614,42 @@ useEffect(() => {
                   OFFICE MANAGEMENT
                 </span>
 
-                <h2>Government Offices</h2>
+                <h2>
+                  Government Offices
+                </h2>
 
                 <p>
-                  Government offices available for Office
-                  Administrators.
+                  Offices available for
+                  administrators and officers.
                 </p>
               </div>
 
-              <button
-                type="button"
-                className="super-admin-outline-button"
-                onClick={openCreateOffice}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                }}
               >
-                + Create Office
-              </button>
+                <button
+                  type="button"
+                  className="super-admin-outline-button"
+                  onClick={() =>
+                    navigate(
+                      "/super-admin/offices"
+                    )
+                  }
+                >
+                  View All
+                </button>
+
+                <button
+                  type="button"
+                  className="super-admin-primary-button"
+                  onClick={openCreateOffice}
+                >
+                  + Create Office
+                </button>
+              </div>
             </div>
 
             {officeError && (
@@ -988,103 +1661,217 @@ useEffect(() => {
               </div>
             )}
 
-            {officeLoading && offices.length === 0 ? (
+            {officeLoading &&
+            offices.length === 0 ? (
               <div className="super-admin-empty-state">
                 <div className="super-admin-empty-icon">
                   ⏳
                 </div>
 
-                <h3>Loading government offices...</h3>
+                <h3>
+                  Loading government offices...
+                </h3>
 
                 <p>
-                  Retrieving available offices.
+                  Retrieving available
+                  offices.
                 </p>
               </div>
-            ) : offices.length === 0 ? (
+            ) : filteredOffices.length === 0 ? (
               <div className="super-admin-empty-state">
                 <div className="super-admin-empty-icon">
                   ◎
                 </div>
 
-                <h3>No government offices yet</h3>
+                <h3>
+                  {search
+                    ? "No offices found"
+                    : "No government offices yet"}
+                </h3>
 
                 <p>
-                  Create a Government Office before
-                  assigning administrators to it.
+                  {search
+                    ? `No offices match "${search}".`
+                    : "Create a Government Office before assigning administrators or officers."}
                 </p>
 
-                <button
-                  type="button"
-                  className="super-admin-primary-button super-admin-empty-button"
-                  onClick={openCreateOffice}
-                >
-                  Create First Office
-                </button>
+                {!search && (
+                  <button
+                    type="button"
+                    className="super-admin-primary-button super-admin-empty-button"
+                    onClick={
+                      openCreateOffice
+                    }
+                  >
+                    Create First Office
+                  </button>
+                )}
               </div>
             ) : (
               <div
                 style={{
                   display: "grid",
                   gap: "12px",
-                  padding: "20px 0",
+                  padding:
+                    "20px 28px 28px",
                 }}
               >
-                {offices
-                  .filter((office) => {
-                    const query =
-                      search.trim().toLowerCase();
-
-                    if (!query) {
-                      return true;
-                    }
-
-                    return [
-                      office.officeCode,
-                      office.officeName,
-                      office.city,
-                      office.subCity,
-                      office.region,
-                    ]
-                      .filter(Boolean)
-                      .some((value) =>
-                        String(value)
-                          .toLowerCase()
-                          .includes(query)
-                      );
-                  })
+                {filteredOffices
+                  .slice(0, 6)
                   .map((office) => (
                     <article
                       key={office.officeId}
                       style={{
-                        padding: "16px",
+                        padding:
+                          "18px",
                         border:
-                          "1px solid #e5e7eb",
+                          "1px solid #e5ebe8",
                         borderRadius:
-                          "10px",
+                          "8px",
                         background:
                           "#ffffff",
                       }}
                     >
-                      <strong>
-                        {office.officeCode} —{" "}
-                        {office.officeName}
-                      </strong>
-
-                      <p
+                      <div
                         style={{
-                          margin: "6px 0 0",
-                          color: "#6b7280",
+                          display:
+                            "flex",
+                          justifyContent:
+                            "space-between",
+                          alignItems:
+                            "flex-start",
+                          gap: "16px",
                         }}
                       >
-                        {[
-                          office.city,
-                          office.subCity,
-                          office.region,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") ||
-                          "Location not provided"}
-                      </p>
+                        <div>
+                          <strong
+                            style={{
+                              color:
+                                "#111820",
+                              fontSize:
+                                "15px",
+                            }}
+                          >
+                            {
+                              office.officeCode
+                            }{" "}
+                            —{" "}
+                            {
+                              office.officeName
+                            }
+                          </strong>
+
+                          <p
+                            style={{
+                              margin:
+                                "6px 0 0",
+                              color:
+                                "#778790",
+                              fontSize:
+                                "13px",
+                            }}
+                          >
+                            {[
+                              office.city,
+                              office.subCity,
+                              office.region,
+                            ]
+                              .filter(
+                                Boolean
+                              )
+                              .join(
+                                " · "
+                              ) ||
+                              "Location not provided"}
+                          </p>
+                        </div>
+
+                        <span
+                          style={{
+                            padding:
+                              "6px 10px",
+                            borderRadius:
+                              "999px",
+                            background:
+                              office.status ===
+                              "ACTIVE"
+                                ? "#e6f7f3"
+                                : "#f3f4f6",
+                            color:
+                              office.status ===
+                              "ACTIVE"
+                                ? "#008f78"
+                                : "#6b7280",
+                            fontSize:
+                              "11px",
+                            fontWeight:
+                              700,
+                            whiteSpace:
+                              "nowrap",
+                          }}
+                        >
+                          {office.status ||
+                            "UNKNOWN"}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display:
+                            "flex",
+                          gap: "22px",
+                          marginTop:
+                            "14px",
+                          color:
+                            "#84929a",
+                          fontSize:
+                            "12px",
+                          flexWrap:
+                            "wrap",
+                        }}
+                      >
+                        <span>
+                          Officers:{" "}
+                          <strong
+                            style={{
+                              color:
+                                "#53636c",
+                            }}
+                          >
+                            {office.stats
+                              ?.officers ??
+                              0}
+                          </strong>
+                        </span>
+
+                        <span>
+                          Admins:{" "}
+                          <strong
+                            style={{
+                              color:
+                                "#53636c",
+                            }}
+                          >
+                            {office.stats
+                              ?.admins ??
+                              0}
+                          </strong>
+                        </span>
+
+                        <span>
+                          Agreements:{" "}
+                          <strong
+                            style={{
+                              color:
+                                "#53636c",
+                            }}
+                          >
+                            {office.stats
+                              ?.agreements ??
+                              0}
+                          </strong>
+                        </span>
+                      </div>
                     </article>
                   ))}
               </div>
@@ -1092,13 +1879,14 @@ useEffect(() => {
           </section>
 
           <div className="super-admin-footer-date">
-            SmartRent ET Administration · {currentDate}
+            SmartRent ET Administration ·{" "}
+            {currentDate}
           </div>
         </main>
       </div>
 
       {/* =====================================================
-          CREATE OFFICE MODAL
+          CREATE GOVERNMENT OFFICE MODAL
           ===================================================== */}
 
       {showCreateOffice && (
@@ -1106,7 +1894,8 @@ useEffect(() => {
           className="super-admin-modal-overlay"
           onMouseDown={(event) => {
             if (
-              event.target === event.currentTarget &&
+              event.target ===
+                event.currentTarget &&
               !officeLoading
             ) {
               closeCreateOffice();
@@ -1130,16 +1919,20 @@ useEffect(() => {
                 </h2>
 
                 <p>
-                  Create a government office before
-                  assigning administrators to it.
+                  Create a new Government
+                  Office for SmartRent ET.
                 </p>
               </div>
 
               <button
                 type="button"
                 className="super-admin-modal-close"
-                onClick={closeCreateOffice}
-                disabled={officeLoading}
+                onClick={
+                  closeCreateOffice
+                }
+                disabled={
+                  officeLoading
+                }
                 aria-label="Close"
               >
                 ×
@@ -1166,7 +1959,9 @@ useEffect(() => {
 
             <form
               className="super-admin-form"
-              onSubmit={handleCreateOffice}
+              onSubmit={
+                handleCreateOffice
+              }
             >
               <div className="super-admin-form-group">
                 <label htmlFor="office-officeName">
@@ -1177,10 +1972,16 @@ useEffect(() => {
                   id="office-officeName"
                   name="officeName"
                   type="text"
-                  value={officeForm.officeName}
-                  onChange={handleOfficeChange}
+                  value={
+                    officeForm.officeName
+                  }
+                  onChange={
+                    handleOfficeChange
+                  }
                   placeholder="e.g. Addis Ababa Rental Office"
-                  disabled={officeLoading}
+                  disabled={
+                    officeLoading
+                  }
                   required
                 />
               </div>
@@ -1194,10 +1995,16 @@ useEffect(() => {
                   id="office-officeCode"
                   name="officeCode"
                   type="text"
-                  value={officeForm.officeCode}
-                  onChange={handleOfficeChange}
+                  value={
+                    officeForm.officeCode
+                  }
+                  onChange={
+                    handleOfficeChange
+                  }
                   placeholder="e.g. ADDIS-001"
-                  disabled={officeLoading}
+                  disabled={
+                    officeLoading
+                  }
                   required
                 />
               </div>
@@ -1212,11 +2019,16 @@ useEffect(() => {
                     id="office-region"
                     name="region"
                     type="text"
-                    value={officeForm.region}
-                    onChange={handleOfficeChange}
+                    value={
+                      officeForm.region
+                    }
+                    onChange={
+                      handleOfficeChange
+                    }
                     placeholder="e.g. Addis Ababa"
-                    disabled={officeLoading}
-                    required
+                    disabled={
+                      officeLoading
+                    }
                   />
                 </div>
 
@@ -1229,11 +2041,16 @@ useEffect(() => {
                     id="office-city"
                     name="city"
                     type="text"
-                    value={officeForm.city}
-                    onChange={handleOfficeChange}
+                    value={
+                      officeForm.city
+                    }
+                    onChange={
+                      handleOfficeChange
+                    }
                     placeholder="e.g. Addis Ababa"
-                    disabled={officeLoading}
-                    required
+                    disabled={
+                      officeLoading
+                    }
                   />
                 </div>
               </div>
@@ -1248,11 +2065,16 @@ useEffect(() => {
                     id="office-subCity"
                     name="subCity"
                     type="text"
-                    value={officeForm.subCity}
-                    onChange={handleOfficeChange}
+                    value={
+                      officeForm.subCity
+                    }
+                    onChange={
+                      handleOfficeChange
+                    }
                     placeholder="e.g. Bole"
-                    disabled={officeLoading}
-                    required
+                    disabled={
+                      officeLoading
+                    }
                   />
                 </div>
 
@@ -1265,11 +2087,16 @@ useEffect(() => {
                     id="office-woreda"
                     name="woreda"
                     type="text"
-                    value={officeForm.woreda}
-                    onChange={handleOfficeChange}
+                    value={
+                      officeForm.woreda
+                    }
+                    onChange={
+                      handleOfficeChange
+                    }
                     placeholder="e.g. 03"
-                    disabled={officeLoading}
-                    required
+                    disabled={
+                      officeLoading
+                    }
                   />
                 </div>
               </div>
@@ -1283,11 +2110,16 @@ useEffect(() => {
                   id="office-address"
                   name="address"
                   type="text"
-                  value={officeForm.address}
-                  onChange={handleOfficeChange}
+                  value={
+                    officeForm.address
+                  }
+                  onChange={
+                    handleOfficeChange
+                  }
                   placeholder="Enter office address"
-                  disabled={officeLoading}
-                  required
+                  disabled={
+                    officeLoading
+                  }
                 />
               </div>
 
@@ -1295,8 +2127,12 @@ useEffect(() => {
                 <button
                   type="button"
                   className="super-admin-cancel-button"
-                  onClick={closeCreateOffice}
-                  disabled={officeLoading}
+                  onClick={
+                    closeCreateOffice
+                  }
+                  disabled={
+                    officeLoading
+                  }
                 >
                   Cancel
                 </button>
@@ -1304,7 +2140,9 @@ useEffect(() => {
                 <button
                   type="submit"
                   className="super-admin-primary-button"
-                  disabled={officeLoading}
+                  disabled={
+                    officeLoading
+                  }
                 >
                   {officeLoading
                     ? "Creating..."
@@ -1317,7 +2155,7 @@ useEffect(() => {
       )}
 
       {/* =====================================================
-          CREATE ADMIN MODAL
+          CREATE OFFICE ADMIN MODAL
           ===================================================== */}
 
       {showCreateAdmin && (
@@ -1325,8 +2163,9 @@ useEffect(() => {
           className="super-admin-modal-overlay"
           onMouseDown={(event) => {
             if (
-              event.target === event.currentTarget &&
-              !loading
+              event.target ===
+                event.currentTarget &&
+              !adminLoading
             ) {
               closeCreateAdmin();
             }
@@ -1349,16 +2188,22 @@ useEffect(() => {
                 </h2>
 
                 <p>
-                  Create an Office Administrator and assign
-                  an existing Government Office.
+                  Create an Office
+                  Administrator and assign
+                  an existing Government
+                  Office.
                 </p>
               </div>
 
               <button
                 type="button"
                 className="super-admin-modal-close"
-                onClick={closeCreateAdmin}
-                disabled={loading}
+                onClick={
+                  closeCreateAdmin
+                }
+                disabled={
+                  adminLoading
+                }
                 aria-label="Close"
               >
                 ×
@@ -1385,228 +2230,302 @@ useEffect(() => {
 
             <form
               className="super-admin-form"
-              onSubmit={handleCreateAdmin}
+              onSubmit={
+                handleCreateAdmin
+              }
             >
-              <div className="super-admin-form-section">
-                <div className="super-admin-form-section-header">
-                  <span className="super-admin-section-eyebrow">
-                    USER MANAGEMENT
-                  </span>
-
-                  <h3>Administrator Information</h3>
-
-                  <p>
-                    Enter the account information for the new
-                    Office Administrator.
-                  </p>
-                </div>
-
-                <div className="super-admin-form-row">
-                  <div className="super-admin-form-group">
-                    <label htmlFor="admin-firstName">
-                      First Name
-                    </label>
-
-                    <input
-                      id="admin-firstName"
-                      name="firstName"
-                      type="text"
-                      value={adminForm.firstName}
-                      onChange={handleAdminChange}
-                      placeholder="Enter first name"
-                      autoComplete="given-name"
-                      disabled={loading}
-                      required
-                    />
-                  </div>
-
-                  <div className="super-admin-form-group">
-                    <label htmlFor="admin-lastName">
-                      Last Name
-                    </label>
-
-                    <input
-                      id="admin-lastName"
-                      name="lastName"
-                      type="text"
-                      value={adminForm.lastName}
-                      onChange={handleAdminChange}
-                      placeholder="Enter last name"
-                      autoComplete="family-name"
-                      disabled={loading}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="super-admin-form-row">
-                  <div className="super-admin-form-group">
-                    <label htmlFor="admin-username">
-                      Username
-                    </label>
-
-                    <input
-                      id="admin-username"
-                      name="username"
-                      type="text"
-                      value={adminForm.username}
-                      onChange={handleAdminChange}
-                      placeholder="Choose username"
-                      autoComplete="username"
-                      disabled={loading}
-                      required
-                    />
-                  </div>
-
-                  <div className="super-admin-form-group">
-                    <label htmlFor="admin-employeeId">
-                      Employee ID
-                    </label>
-
-                    <input
-                      id="admin-employeeId"
-                      name="employeeId"
-                      type="text"
-                      value={adminForm.employeeId}
-                      onChange={handleAdminChange}
-                      placeholder="Enter employee ID"
-                      disabled={loading}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="super-admin-form-row">
-                  <div className="super-admin-form-group">
-                    <label htmlFor="admin-phone">
-                      Phone Number
-                    </label>
-
-                    <input
-                      id="admin-phone"
-                      name="phone"
-                      type="tel"
-                      value={adminForm.phone}
-                      onChange={handleAdminChange}
-                      placeholder="Enter phone number"
-                      autoComplete="tel"
-                      disabled={loading}
-                      required
-                    />
-                  </div>
-
-                  <div className="super-admin-form-group">
-                    <label htmlFor="admin-nationalId">
-                      National ID
-                    </label>
-
-                    <input
-                      id="admin-nationalId"
-                      name="nationalId"
-                      type="text"
-                      value={adminForm.nationalId}
-                      onChange={handleAdminChange}
-                      placeholder="Enter national ID"
-                      disabled={loading}
-                      required
-                    />
-                  </div>
-                </div>
-
+              <div className="super-admin-form-row">
                 <div className="super-admin-form-group">
-                  <label htmlFor="admin-password">
-                    Temporary Password
+                  <label htmlFor="admin-firstName">
+                    First Name
                   </label>
 
                   <input
-                    id="admin-password"
-                    name="password"
-                    type="password"
-                    value={adminForm.password}
-                    onChange={handleAdminChange}
-                    placeholder="Create temporary password"
-                    autoComplete="new-password"
-                    minLength={6}
-                    disabled={loading}
+                    id="admin-firstName"
+                    name="firstName"
+                    type="text"
+                    value={
+                      adminForm.firstName
+                    }
+                    onChange={
+                      handleAdminChange
+                    }
+                    placeholder="Enter first name"
+                    autoComplete="given-name"
+                    disabled={
+                      adminLoading
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="super-admin-form-group">
+                  <label htmlFor="admin-lastName">
+                    Last Name
+                  </label>
+
+                  <input
+                    id="admin-lastName"
+                    name="lastName"
+                    type="text"
+                    value={
+                      adminForm.lastName
+                    }
+                    onChange={
+                      handleAdminChange
+                    }
+                    placeholder="Enter last name"
+                    autoComplete="family-name"
+                    disabled={
+                      adminLoading
+                    }
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="super-admin-form-row">
+                <div className="super-admin-form-group">
+                  <label htmlFor="admin-username">
+                    Username
+                  </label>
+
+                  <input
+                    id="admin-username"
+                    name="username"
+                    type="text"
+                    value={
+                      adminForm.username
+                    }
+                    onChange={
+                      handleAdminChange
+                    }
+                    placeholder="Choose username"
+                    autoComplete="username"
+                    disabled={
+                      adminLoading
+                    }
                     required
                   />
 
                   <small>
-                    Minimum 6 characters.
+                    Username is provided by the
+                    Super Admin.
                   </small>
-                </div>
-              </div>
-
-              <div className="super-admin-form-section">
-                <div className="super-admin-form-section-header">
-                  <span className="super-admin-section-eyebrow">
-                    GOVERNMENT OFFICE
-                  </span>
-
-                  <h3>Assign Government Office</h3>
-
-                  <p>
-                    Select an existing Government Office for
-                    this administrator.
-                  </p>
                 </div>
 
                 <div className="super-admin-form-group">
-                  <label htmlFor="admin-officeId">
-                    Government Office
+                  <label htmlFor="admin-employeeId">
+                    Employee ID
                   </label>
 
-                  <select
-                    id="admin-officeId"
-                    name="officeId"
-                    value={adminForm.officeId}
-                    onChange={handleOfficeSelect}
+                  <input
+                    id="admin-employeeId"
+                    name="employeeId"
+                    type="text"
+                    value={
+                      adminForm.employeeId
+                    }
+                    onChange={
+                      handleAdminChange
+                    }
+                    placeholder="e.g. EMP-001"
                     disabled={
-                      loading ||
-                      officeLoading ||
-                      offices.length === 0
+                      adminLoading
                     }
                     required
-                  >
-                    <option value="">
-                      {officeLoading
-                        ? "Loading offices..."
-                        : offices.length === 0
-                        ? "No government offices available"
-                        : "Select a Government Office"}
-                    </option>
+                  />
+                </div>
+              </div>
 
-                    {offices.map((office) => (
-                      <option
-                        key={office.officeId}
-                        value={office.officeId}
-                      >
-                        {office.officeCode} —{" "}
-                        {office.officeName}
-                      </option>
-                    ))}
-                  </select>
+              <div className="super-admin-form-row">
+                <div className="super-admin-form-group">
+                  <label htmlFor="admin-phone">
+                    Phone Number
+                  </label>
+
+                  <input
+                    id="admin-phone"
+                    name="phone"
+                    type="tel"
+                    value={
+                      adminForm.phone
+                    }
+                    onChange={
+                      handleAdminChange
+                    }
+                    placeholder="Enter phone number"
+                    autoComplete="tel"
+                    disabled={
+                      adminLoading
+                    }
+                    required
+                  />
+
+                  <small>
+                    The generated password will
+                    be sent to this number.
+                  </small>
                 </div>
 
-                {offices.length === 0 &&
-                  !officeLoading && (
-                    <div
-                      className="super-admin-form-success"
-                      role="status"
-                    >
-                      No Government Offices exist yet.
-                      Close this dialog and create an office
-                      first.
-                    </div>
-                  )}
+                <div className="super-admin-form-group">
+                  <label htmlFor="admin-nationalId">
+                    National ID
+                  </label>
+
+                  <input
+                    id="admin-nationalId"
+                    name="nationalId"
+                    type="text"
+                    value={
+                      adminForm.nationalId
+                    }
+                    onChange={
+                      handleAdminChange
+                    }
+                    placeholder="Enter national ID"
+                    disabled={
+                      adminLoading
+                    }
+                    required
+                  />
+                </div>
               </div>
+
+              <div
+                style={{
+                  padding:
+                    "14px 16px",
+                  border:
+                    "1px solid #dbeee7",
+                  borderRadius:
+                    "6px",
+                  background:
+                    "#f8fffc",
+                  color:
+                    "#53636c",
+                  fontSize:
+                    "13px",
+                  lineHeight:
+                    "1.6",
+                }}
+              >
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    marginBottom:
+                      "3px",
+                    color:
+                      "#047857",
+                  }}
+                >
+                  Automatic password
+                </strong>
+
+                SmartRent ET will generate a
+                secure password automatically
+                and send it to the administrator
+                by SMS. No password is entered
+                here.
+              </div>
+
+              <div className="super-admin-form-group">
+                <label htmlFor="admin-officeId">
+                  Government Office
+                </label>
+
+                <select
+                  id="admin-officeId"
+                  name="officeId"
+                  value={
+                    adminForm.officeId
+                  }
+                  onChange={
+                    handleAdminOfficeChange
+                  }
+                  disabled={
+                    adminLoading ||
+                    officeLoading ||
+                    offices.length ===
+                      0
+                  }
+                  required
+                  style={{
+                    width: "100%",
+                    height: "45px",
+                    padding:
+                      "0 13px",
+                    border:
+                      "1px solid #d4ddda",
+                    borderRadius:
+                      "5px",
+                    background:
+                      "#ffffff",
+                    color:
+                      "#111820",
+                    fontFamily:
+                      "inherit",
+                    fontSize:
+                      "14px",
+                  }}
+                >
+                  <option value="">
+                    {officeLoading
+                      ? "Loading offices..."
+                      : offices.length ===
+                          0
+                        ? "No government offices available"
+                        : "Select a Government Office"}
+                  </option>
+
+                  {offices.map(
+                    (office) => (
+                      <option
+                        key={
+                          office.officeId
+                        }
+                        value={
+                          office.officeId
+                        }
+                      >
+                        {
+                          office.officeCode
+                        }{" "}
+                        —{" "}
+                        {
+                          office.officeName
+                        }
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              {offices.length ===
+                0 &&
+                !officeLoading && (
+                  <div
+                    className="super-admin-form-error"
+                    role="alert"
+                  >
+                    No Government
+                    Offices are
+                    available. Create
+                    an office first.
+                  </div>
+                )}
 
               <div className="super-admin-form-actions">
                 <button
                   type="button"
                   className="super-admin-cancel-button"
-                  onClick={closeCreateAdmin}
-                  disabled={loading}
+                  onClick={
+                    closeCreateAdmin
+                  }
+                  disabled={
+                    adminLoading
+                  }
                 >
                   Cancel
                 </button>
@@ -1615,12 +2534,13 @@ useEffect(() => {
                   type="submit"
                   className="super-admin-primary-button"
                   disabled={
-                    loading ||
+                    adminLoading ||
                     officeLoading ||
-                    offices.length === 0
+                    offices.length ===
+                      0
                   }
                 >
-                  {loading
+                  {adminLoading
                     ? "Creating..."
                     : "Create Administrator"}
                 </button>

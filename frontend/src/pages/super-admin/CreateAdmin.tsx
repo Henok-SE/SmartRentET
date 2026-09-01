@@ -19,8 +19,6 @@ type AdminForm = {
   phone: string;
   nationalId: string;
   username: string;
-  password: string;
-  confirmPassword: string;
   employeeId: string;
   officeId: string;
 };
@@ -39,7 +37,21 @@ type OfficeListResponse = {
 type CreateAdminResponse = {
   success: boolean;
   message: string;
-  data?: unknown;
+  data?: {
+    user?: {
+      userId: string;
+      firstName: string;
+      lastName: string;
+      username?: string | null;
+      phone: string;
+      email?: string | null;
+      role: string;
+      isActive: boolean;
+      isNationalIdVerified: boolean;
+    };
+    generatedUsername?: string;
+    passwordSent?: boolean;
+  };
 };
 
 const createEmptyForm = (): AdminForm => ({
@@ -48,8 +60,6 @@ const createEmptyForm = (): AdminForm => ({
   phone: "",
   nationalId: "",
   username: "",
-  password: "",
-  confirmPassword: "",
   employeeId: "",
   officeId: "",
 });
@@ -58,12 +68,12 @@ function CreateAdmin() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState<AdminForm>(
-    createEmptyForm
+    createEmptyForm()
   );
 
-  const [offices, setOffices] = useState<
-    GovernmentOffice[]
-  >([]);
+  const [offices, setOffices] = useState<GovernmentOffice[]>(
+    []
+  );
 
   const [loading, setLoading] = useState(false);
   const [officeLoading, setOfficeLoading] = useState(true);
@@ -104,7 +114,7 @@ function CreateAdmin() {
         if (response.data.length === 1) {
           setForm((previous) => ({
             ...previous,
-            officeId: String(response.data[0].officeId),
+            officeId: response.data[0].officeId,
           }));
         }
       } catch (err) {
@@ -151,6 +161,44 @@ function CreateAdmin() {
 
   /*
    * ---------------------------------------------------------
+   * VALIDATION
+   * ---------------------------------------------------------
+   */
+
+  const validateForm = (): string | null => {
+    if (!form.firstName.trim()) {
+      return "First name is required.";
+    }
+
+    if (!form.lastName.trim()) {
+      return "Last name is required.";
+    }
+
+    if (!form.username.trim()) {
+      return "Username is required.";
+    }
+
+    if (!form.phone.trim()) {
+      return "Phone number is required.";
+    }
+
+    if (!form.nationalId.trim()) {
+      return "National ID is required.";
+    }
+
+    if (!form.employeeId.trim()) {
+      return "Employee ID is required.";
+    }
+
+    if (!form.officeId) {
+      return "Please select a Government Office.";
+    }
+
+    return null;
+  };
+
+  /*
+   * ---------------------------------------------------------
    * SUBMIT
    * ---------------------------------------------------------
    */
@@ -163,52 +211,10 @@ function CreateAdmin() {
     setError("");
     setSuccess("");
 
-    if (!form.firstName.trim()) {
-      setError("First name is required.");
-      return;
-    }
+    const validationError = validateForm();
 
-    if (!form.lastName.trim()) {
-      setError("Last name is required.");
-      return;
-    }
-
-    if (!form.username.trim()) {
-      setError("Username is required.");
-      return;
-    }
-
-    if (!form.phone.trim()) {
-      setError("Phone number is required.");
-      return;
-    }
-
-    if (!form.nationalId.trim()) {
-      setError("National ID is required.");
-      return;
-    }
-
-    if (!form.employeeId.trim()) {
-      setError("Employee ID is required.");
-      return;
-    }
-
-    if (form.password.length < 6) {
-      setError(
-        "Password must be at least 6 characters."
-      );
-      return;
-    }
-
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    if (!form.officeId) {
-      setError(
-        "Please select a Government Office."
-      );
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -217,37 +223,49 @@ function CreateAdmin() {
     try {
       const token = localStorage.getItem("token");
 
-      await apiRequest<CreateAdminResponse>(
-        "/dashboard/office-admins",
-        {
-          method: "POST",
-          headers: token
-            ? {
-                Authorization: `Bearer ${token}`,
-              }
-            : undefined,
-          body: JSON.stringify({
-            firstName: form.firstName.trim(),
-            lastName: form.lastName.trim(),
-            username: form.username.trim(),
-            phone: form.phone.trim(),
-            nationalId: form.nationalId.trim(),
-            employeeId: form.employeeId.trim(),
-            officeId: form.officeId,
-            password: form.password,
-          }),
-        }
-      );
+      const response =
+        await apiRequest<CreateAdminResponse>(
+          "/auth/office-admin",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token
+                ? {
+                    Authorization: `Bearer ${token}`,
+                  }
+                : {}),
+            },
+            body: JSON.stringify({
+              firstName: form.firstName.trim(),
+              lastName: form.lastName.trim(),
+              username: form.username.trim(),
+              phone: form.phone.trim(),
+              nationalId: form.nationalId.trim(),
+              employeeId: form.employeeId.trim(),
+              officeId: form.officeId,
+            }),
+          }
+        );
+
+      const generatedUsername =
+        response.data?.generatedUsername ||
+        form.username.trim();
+
+      const passwordSent =
+        response.data?.passwordSent;
 
       setSuccess(
-        "Administrator created successfully."
+        passwordSent
+          ? `Administrator created successfully. Username: ${generatedUsername}. A generated password has been sent via SMS.`
+          : `Administrator created successfully. Username: ${generatedUsername}.`
       );
 
       setForm(createEmptyForm());
 
       window.setTimeout(() => {
-        navigate("/super-admin");
-      }, 1200);
+        navigate("/super-admin/administrators");
+      }, 1800);
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -292,6 +310,7 @@ function CreateAdmin() {
               padding: "12px 16px",
               borderRadius: "8px",
               marginBottom: "20px",
+              lineHeight: 1.5,
             }}
             role="status"
           >
@@ -359,6 +378,11 @@ function CreateAdmin() {
                 disabled={loading}
                 required
               />
+
+              <small>
+                This username will be used by the
+                administrator to log in.
+              </small>
             </div>
 
             <div className="form-group">
@@ -396,6 +420,11 @@ function CreateAdmin() {
               disabled={loading}
               required
             />
+
+            <small>
+              The generated password will be sent to
+              this number by SMS.
+            </small>
           </div>
 
           <div className="form-group">
@@ -496,50 +525,32 @@ function CreateAdmin() {
               </div>
             )}
 
-          <div className="form-group">
+          <div
+            style={{
+              marginTop: "10px",
+              marginBottom: "20px",
+              padding: "14px 16px",
+              border: "1px solid #dbeee7",
+              borderRadius: "8px",
+              background: "#f8fffc",
+              color: "#52645d",
+              fontSize: "13px",
+              lineHeight: 1.6,
+            }}
+          >
+            <strong
+              style={{
+                display: "block",
+                marginBottom: "4px",
+                color: "#047857",
+              }}
+            >
+              Password handling
+            </strong>
 
-            <label htmlFor="password">
-              Temporary Password
-            </label>
-
-            <input
-              id="password"
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-              placeholder="Create password"
-              autoComplete="new-password"
-              minLength={6}
-              disabled={loading}
-              required
-            />
-
-            <small>
-              Minimum 6 characters.
-            </small>
-
-          </div>
-
-          <div className="form-group">
-
-            <label htmlFor="confirmPassword">
-              Confirm Password
-            </label>
-
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              placeholder="Confirm password"
-              autoComplete="new-password"
-              minLength={6}
-              disabled={loading}
-              required
-            />
-
+            The system automatically generates a secure
+            password and sends it to the administrator by
+            SMS. You do not need to create a password here.
           </div>
 
           <button
@@ -557,7 +568,9 @@ function CreateAdmin() {
 
           <button
             type="button"
-            onClick={() => navigate("/super-admin")}
+            onClick={() =>
+              navigate("/super-admin/administrators")
+            }
             disabled={loading}
             style={{
               marginTop: "10px",
