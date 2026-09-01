@@ -4,15 +4,43 @@ import LogoutButton from "../../components/LogoutButton";
 import { apiRequest } from "../../services/api";
 import "../../App.css";
 
-/* =========================================================
-   TYPES
-========================================================= */
+type DashboardSummary = {
+  totalAgreements: number;
+  activeAgreements: number;
+  pendingAgreements: number;
+
+  totalLandlords: number;
+  totalTenants: number;
+
+  totalOfficers: number;
+  totalOffices: number;
+
+  totalPayments: number;
+  collectedPayments: number;
+  overduePayments: number;
+
+  pendingVerifications: number;
+
+  totalSuperAdmins: number;
+  activeSuperAdmins: number;
+
+  totalOfficeAdmins: number;
+  activeOfficeAdmins: number;
+};
+
+type DashboardSummaryResponse = {
+  success: boolean;
+  message?: string;
+  data: DashboardSummary;
+};
 
 type Officer = {
   officerId: string;
   employeeId: string;
   position?: string | null;
   assignedArea?: string | null;
+  subCity?: string | null;
+  assignedTo?: string | null;
   createdAt: string;
 
   user: {
@@ -22,7 +50,9 @@ type Officer = {
     username?: string | null;
     phone: string;
     email?: string | null;
+    role: string;
     isActive: boolean;
+    isNationalIdVerified?: boolean;
   };
 
   office: {
@@ -31,12 +61,18 @@ type Officer = {
     officeName: string;
     subCity?: string | null;
     woreda?: string | null;
+    city?: string | null;
+    region?: string | null;
   };
 };
 
 type OfficerListResponse = {
   success: boolean;
   message?: string;
+  filters?: {
+    subCity?: string;
+    isActive?: string;
+  };
   data: Officer[];
 };
 
@@ -62,6 +98,8 @@ type OfficeAdmin = {
     officeName: string;
     subCity?: string | null;
     woreda?: string | null;
+    city?: string | null;
+    region?: string | null;
   };
 };
 
@@ -72,16 +110,12 @@ type OfficeAdminListResponse = {
 };
 
 type StoredUser = {
-  userId?: number | string;
+  userId?: string | number;
   username?: string;
   firstName?: string;
   lastName?: string;
   role?: string;
 };
-
-/* =========================================================
-   HELPERS
-========================================================= */
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -97,27 +131,17 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-/* =========================================================
-   COMPONENT
-========================================================= */
-
 function OfficeAdminDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  /* =======================================================
-     STATE
-  ======================================================= */
-
-  const [search, setSearch] = useState("");
+  
 
   const [officers, setOfficers] = useState<Officer[]>(
     []
   );
 
-  const [officeId, setOfficeId] = useState<
-    string | null
-  >(null);
+  
 
   const [officeName, setOfficeName] =
     useState("");
@@ -125,16 +149,22 @@ function OfficeAdminDashboard() {
   const [officeCode, setOfficeCode] =
     useState("");
 
-  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
-  const [error, setError] = useState("");
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
 
   const [currentDateTime, setCurrentDateTime] =
     useState(new Date());
 
-  /* =======================================================
-     CURRENT USER
-  ======================================================= */
+  /*
+   * =========================================================
+   * CURRENT USER
+   * =========================================================
+   */
 
   const storedUser =
     localStorage.getItem("user");
@@ -178,9 +208,28 @@ function OfficeAdminDashboard() {
           .join("")
           .toUpperCase() || "OA";
 
-  /* =======================================================
-     LIVE DATE / TIME
-  ======================================================= */
+  /*
+   * =========================================================
+   * AUTH HEADERS
+   * =========================================================
+   */
+
+  const getAuthHeaders = () => {
+    const token =
+      localStorage.getItem("token");
+
+    return token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined;
+  };
+
+  /*
+   * =========================================================
+   * LIVE DATE / TIME
+   * =========================================================
+   */
 
   useEffect(() => {
     const timer =
@@ -216,29 +265,22 @@ function OfficeAdminDashboard() {
       }
     ).format(currentDateTime);
 
-  /* =======================================================
-     LOAD OFFICE ADMIN DETAILS
-  ======================================================= */
+  /*
+   * =========================================================
+   * LOAD OFFICE ADMIN DETAILS
+   * =========================================================
+   */
 
   const loadOfficeDetails =
     async () => {
-      const token =
-        localStorage.getItem(
-          "token"
-        );
-
       const response =
         await apiRequest<OfficeAdminListResponse>(
           "/dashboard/office-admins",
           {
             method: "GET",
             cache: "no-store",
-
-            headers: token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : undefined,
+            headers:
+              getAuthHeaders(),
           }
         );
 
@@ -277,46 +319,57 @@ function OfficeAdminDashboard() {
         );
       }
 
-      setOfficeId(
-        String(
-          currentAdmin.office.officeId
-        )
-      );
+      
 
       setOfficeName(
-        currentAdmin.office.officeName ||
+        currentAdmin.office
+          .officeName ||
           "Government Office"
       );
 
       setOfficeCode(
-        currentAdmin.office.officeCode ||
-          ""
+        currentAdmin.office
+          .officeCode || ""
       );
     };
 
-  /* =======================================================
-     LOAD OFFICERS
-  ======================================================= */
+  /*
+   * =========================================================
+   * LOAD SUMMARY
+   * =========================================================
+   */
+
+  const loadSummary =
+    async () => {
+      const response =
+        await apiRequest<DashboardSummaryResponse>(
+          "/dashboard/summary",
+          {
+            method: "GET",
+            cache: "no-store",
+            headers:
+              getAuthHeaders(),
+          }
+        );
+
+      if (!response.success) {
+        throw new Error(
+          response.message ||
+            "Failed to load dashboard summary."
+        );
+      }
+    };
 
   const loadOfficers =
     async () => {
-      const token =
-        localStorage.getItem(
-          "token"
-        );
-
       const response =
         await apiRequest<OfficerListResponse>(
           "/dashboard/officers",
           {
             method: "GET",
             cache: "no-store",
-
-            headers: token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : undefined,
+            headers:
+              getAuthHeaders(),
           }
         );
 
@@ -327,14 +380,22 @@ function OfficeAdminDashboard() {
         );
       }
 
+      /*
+       * The backend scopes OFFICER results for
+       * OFFICE_ADMIN to the administrator's office.
+       *
+       * We therefore use the response directly.
+       */
       setOfficers(
         response.data ?? []
       );
     };
 
-  /* =======================================================
-     LOAD DASHBOARD
-  ======================================================= */
+  /*
+   * =========================================================
+   * LOAD DASHBOARD
+   * =========================================================
+   */
 
   const loadDashboard =
     async () => {
@@ -342,8 +403,11 @@ function OfficeAdminDashboard() {
       setError("");
 
       try {
-        await loadOfficeDetails();
-        await loadOfficers();
+        await Promise.all([
+          loadOfficeDetails(),
+          loadSummary(),
+          loadOfficers(),
+        ]);
       } catch (err) {
         console.error(
           "Office Admin dashboard error:",
@@ -369,36 +433,15 @@ function OfficeAdminDashboard() {
   useEffect(() => {
     void loadDashboard();
 
-    // We intentionally load the dashboard once
-    // when the page is mounted.
+    // Dashboard loads once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* =======================================================
-     FILTER TO CURRENT OFFICE
-  ======================================================= */
-
-  const officeOfficers =
-    useMemo(() => {
-      if (!officeId) {
-        return [];
-      }
-
-      return officers.filter(
-        (officer) =>
-          String(
-            officer.office.officeId
-          ) ===
-          String(officeId)
-      );
-    }, [
-      officers,
-      officeId,
-    ]);
-
-  /* =======================================================
-     SEARCH
-  ======================================================= */
+  /*
+   * =========================================================
+   * SEARCH OFFICERS
+   * =========================================================
+   */
 
   const filteredOfficers =
     useMemo(() => {
@@ -408,10 +451,10 @@ function OfficeAdminDashboard() {
           .toLowerCase();
 
       if (!query) {
-        return officeOfficers;
+        return officers;
       }
 
-      return officeOfficers.filter(
+      return officers.filter(
         (officer) => {
           const fullName =
             `${officer.user.firstName} ${officer.user.lastName}`
@@ -425,10 +468,14 @@ function OfficeAdminDashboard() {
             officer.employeeId,
             officer.position,
             officer.assignedArea,
+            officer.subCity,
+            officer.assignedTo,
             officer.office.officeCode,
             officer.office.officeName,
             officer.office.subCity,
             officer.office.woreda,
+            officer.office.city,
+            officer.office.region,
           ]
             .filter(Boolean)
             .some((value) =>
@@ -438,20 +485,23 @@ function OfficeAdminDashboard() {
             );
         }
       );
-    }, [
-      officeOfficers,
-      search,
-    ]);
+    }, [officers, search]);
 
-  /* =======================================================
-     COUNTS
-  ======================================================= */
+  /*
+   * =========================================================
+   * OFFICE COUNTS
+   * =========================================================
+   *
+   * The officer list is already office-scoped by the backend
+   * for Office Admin users, so these counts are specific to
+   * the Office Admin's office.
+   */
 
   const totalOfficers =
-    officeOfficers.length;
+    officers.length;
 
   const activeOfficers =
-    officeOfficers.filter(
+    officers.filter(
       (officer) =>
         officer.user.isActive
     ).length;
@@ -460,21 +510,24 @@ function OfficeAdminDashboard() {
     totalOfficers -
     activeOfficers;
 
-  /* =======================================================
-     RENDER
-  ======================================================= */
+ 
+
+  
+
+  /*
+   * =========================================================
+   * RENDER
+   * =========================================================
+   */
 
   return (
     <div className="office-admin-page">
-
       {/* ===================================================
           SIDEBAR
-      =================================================== */}
+          =================================================== */}
 
       <aside className="office-admin-sidebar">
-
         <div className="office-admin-brand">
-
           <img
             src="/smartrent-logo.png"
             alt="SmartRent ET"
@@ -490,20 +543,14 @@ function OfficeAdminDashboard() {
               OFFICE ADMIN PORTAL
             </span>
           </div>
-
         </div>
 
         <div className="office-admin-divider" />
-
-        {/* =================================================
-            NAVIGATION
-        ================================================= */}
 
         <nav
           className="office-admin-navigation"
           aria-label="Office Admin navigation"
         >
-
           <button
             type="button"
             className={`office-admin-nav-item ${
@@ -550,6 +597,27 @@ function OfficeAdminDashboard() {
             type="button"
             className={`office-admin-nav-item ${
               location.pathname ===
+              "/office-admin/agreements"
+                ? "active"
+                : ""
+            }`}
+            onClick={() =>
+              navigate(
+                "/office-admin/agreements"
+              )
+            }
+          >
+            <span className="nav-icon">
+              □
+            </span>
+
+            Agreements
+          </button>
+
+          <button
+            type="button"
+            className={`office-admin-nav-item ${
+              location.pathname ===
               "/office-admin/audit-logs"
                 ? "active"
                 : ""
@@ -566,17 +634,10 @@ function OfficeAdminDashboard() {
 
             Audit Logs
           </button>
-
         </nav>
 
-        {/* =================================================
-            SIDEBAR PROFILE
-        ================================================= */}
-
         <div className="office-admin-sidebar-bottom">
-
           <div className="office-admin-profile">
-
             <div className="office-admin-avatar">
               {userInitials}
             </div>
@@ -590,7 +651,6 @@ function OfficeAdminDashboard() {
                 Office Administrator
               </span>
             </div>
-
           </div>
 
           <div
@@ -600,25 +660,20 @@ function OfficeAdminDashboard() {
           >
             <LogoutButton />
           </div>
-
         </div>
-
       </aside>
 
       {/* ===================================================
           MAIN
-      =================================================== */}
+          =================================================== */}
 
       <main className="office-admin-main">
-
         {/* =================================================
             TOP BAR
-        ================================================= */}
+            ================================================= */}
 
         <header className="office-admin-topbar">
-
           <div className="office-admin-search">
-
             <span>⌕</span>
 
             <input
@@ -632,7 +687,6 @@ function OfficeAdminDashboard() {
               }
               aria-label="Search officers"
             />
-
           </div>
 
           <div
@@ -641,20 +695,23 @@ function OfficeAdminDashboard() {
               gap: "16px",
             }}
           >
-
             <div
               style={{
                 display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-end",
+                flexDirection:
+                  "column",
+                alignItems:
+                  "flex-end",
               }}
             >
-
               <span
                 style={{
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  color: "#27343a",
+                  fontSize:
+                    "13px",
+                  fontWeight:
+                    700,
+                  color:
+                    "#27343a",
                 }}
               >
                 {formattedDate}
@@ -662,14 +719,16 @@ function OfficeAdminDashboard() {
 
               <span
                 style={{
-                  marginTop: "3px",
-                  fontSize: "12px",
-                  color: "#778790",
+                  marginTop:
+                    "3px",
+                  fontSize:
+                    "12px",
+                  color:
+                    "#778790",
                 }}
               >
                 {formattedTime}
               </span>
-
             </div>
 
             <div className="office-admin-user-avatar">
@@ -685,458 +744,688 @@ function OfficeAdminDashboard() {
                 Office Administrator
               </span>
             </div>
-
           </div>
-
         </header>
 
         {/* =================================================
             CONTENT
-        ================================================= */}
-
-        <section className="office-admin-content">
-
-          {/* =================================================
-              PAGE HEADER
-          ================================================= */}
-
-          <div className="office-admin-heading">
-
-            <div>
-
-              <span className="office-admin-eyebrow">
-                OFFICERS MANAGEMENT
-              </span>
-
-              <h1>
-                Dashboard
-              </h1>
-
-              <p>
-                Monitor officers and
-                their current status.
-              </p>
-
-              {officeName && (
-                <div className="office-admin-office-context">
-
-                  <span>
-                    GOVERNMENT OFFICE
-                  </span>
-
-                  <strong>
-                    {officeName}
-                  </strong>
-
-                  {officeCode && (
-                    <span>
-                      {officeCode}
-                    </span>
-                  )}
-
-                </div>
-              )}
-
-            </div>
-
-            <button
-              type="button"
-              className="office-admin-refresh-button"
-              onClick={() =>
-                void loadDashboard()
-              }
-              disabled={loading}
-            >
-              {loading
-                ? "Refreshing..."
-                : "Refresh"}
-            </button>
-
-          </div>
-
-          {/* =================================================
-              ERROR
-          ================================================= */}
-
-          {error && (
-            <div
-              className="auth-error"
-              role="alert"
-              style={{
-                marginBottom: "20px",
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          {/* =================================================
-              STATISTICS
-          ================================================= */}
-
-          <section className="office-admin-stats">
-
-            {/* TOTAL */}
-
-            <article className="office-admin-stat-card">
-
-              <div className="office-admin-stat-icon">
-                👥
-              </div>
-
-              <div>
-
-                <span>
-                  Total Officers
-                </span>
-
-                <strong>
-                  {loading
-                    ? "—"
-                    : totalOfficers}
-                </strong>
-
-                <small>
-                  Officers in your office
-                </small>
-
-              </div>
-
-            </article>
-
-            {/* ACTIVE */}
-
-            <article className="office-admin-stat-card">
-
-              <div className="office-admin-stat-icon">
-                ✓
-              </div>
-
-              <div>
-
-                <span>
-                  Active Officers
-                </span>
-
-                <strong>
-                  {loading
-                    ? "—"
-                    : activeOfficers}
-                </strong>
-
-                <small>
-                  Currently active
-                </small>
-
-              </div>
-
-            </article>
-
-            {/* INACTIVE */}
-
-            <article className="office-admin-stat-card">
-
-              <div className="office-admin-stat-icon inactive-icon">
-                !
-              </div>
-
-              <div>
-
-                <span>
-                  Inactive Officers
-                </span>
-
-                <strong>
-                  {loading
-                    ? "—"
-                    : inactiveOfficers}
-                </strong>
-
-                <small>
-                  Currently inactive
-                </small>
-
-              </div>
-
-            </article>
-
-          </section>
-
-          {/* =================================================
-              OFFICERS TABLE
-          ================================================= */}
-
-          <section className="office-admin-table-card">
-
-            <div className="office-admin-table-header">
-
-              <div>
-
-                <span className="office-admin-eyebrow">
-                  OFFICER OVERVIEW
-                </span>
-
-                <h2>
-                  Officers
-                </h2>
-
-                <p>
-                  View officers assigned to{" "}
-                  {officeName ||
-                    "your Government Office"}
-                  .
-                </p>
-
-              </div>
-
-            </div>
-
-            {/* =================================================
-                LOADING
             ================================================= */}
 
-            {loading ? (
+        <section className="office-admin-content">
+          <div className="officers-management-page">
+            {/* =================================================
+                PAGE HEADER
+                ================================================= */}
+
+            <div
+              className="officers-management-header"
+              style={{
+                marginBottom:
+                  "24px",
+              }}
+            >
+              <div>
+                <span className="officers-management-eyebrow">
+                  OFFICE ADMINISTRATION
+                </span>
+
+                <h1>
+                  Dashboard
+                </h1>
+
+                <p>
+                  Manage officers,
+                  agreements, and
+                  activity for your
+                  Government Office.
+                </p>
+
+                {officeName && (
+                  <div
+                    style={{
+                      marginTop:
+                        "12px",
+                      display:
+                        "inline-flex",
+                      alignItems:
+                        "center",
+                      gap:
+                        "10px",
+                      padding:
+                        "8px 12px",
+                      border:
+                        "1px solid #dceae6",
+                      borderRadius:
+                        "8px",
+                      background:
+                        "#f7fcfa",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color:
+                          "#06b485",
+                        fontSize:
+                          "11px",
+                        fontWeight:
+                          700,
+                        letterSpacing:
+                          "0.08em",
+                      }}
+                    >
+                      OFFICE
+                    </span>
+
+                    <strong
+                      style={{
+                        color:
+                          "#25343a",
+                        fontSize:
+                          "13px",
+                      }}
+                    >
+                      {officeCode
+                        ? `${officeCode} — `
+                        : ""}
+                      {officeName}
+                    </strong>
+                  </div>
+                )}
+              </div>
 
               <div
                 style={{
-                  padding: "60px 20px",
-                  textAlign: "center",
-                  color: "#6b7280",
+                  display:
+                    "flex",
+                  gap:
+                    "10px",
+                  flexWrap:
+                    "wrap",
                 }}
               >
+                <button
+                  type="button"
+                  className="office-admin-outline-button"
+                  onClick={() =>
+                    navigate(
+                      "/office-admin/officers"
+                    )
+                  }
+                >
+                  Manage Officers
+                </button>
 
-                <h3>
-                  Loading officers...
-                </h3>
-
-                <p>
-                  Retrieving officer
-                  information.
-                </p>
-
+               
               </div>
+            </div>
 
-            ) : (
+            {/* =================================================
+                ERROR
+                ================================================= */}
 
-              <div className="office-admin-table-wrapper">
-
-                <table className="office-admin-table">
-
-                  <thead>
-
-                    <tr>
-
-                      <th>
-                        Officer Name
-                      </th>
-
-                      <th>
-                        Employee ID
-                      </th>
-
-                      <th>
-                        Position
-                      </th>
-
-                      <th>
-                        Government Office
-                      </th>
-
-                      <th>
-                        Assigned Area
-                      </th>
-
-                      <th>
-                        Date Created
-                      </th>
-
-                      <th>
-                        Status
-                      </th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {filteredOfficers.length >
-                    0 ? (
-
-                      filteredOfficers.map(
-                        (officer) => (
-                          <tr
-                            key={
-                              officer.officerId
-                            }
-                          >
-
-                            {/* NAME */}
-
-                            <td>
-
-                              <div className="officer-name">
-
-                                <div className="officer-table-avatar">
-
-                                  {officer.user.firstName.charAt(
-                                    0
-                                  )}
-
-                                  {officer.user.lastName.charAt(
-                                    0
-                                  )}
-
-                                </div>
-
-                                <div>
-
-                                  <strong>
-                                    {
-                                      officer
-                                        .user
-                                        .firstName
-                                    }{" "}
-                                    {
-                                      officer
-                                        .user
-                                        .lastName
-                                    }
-                                  </strong>
-
-                                  <div
-                                    style={{
-                                      marginTop:
-                                        "3px",
-                                      color:
-                                        "#788991",
-                                      fontSize:
-                                        "12px",
-                                    }}
-                                  >
-                                    @
-                                    {officer
-                                      .user
-                                      .username ||
-                                      "No username"}
-                                  </div>
-
-                                </div>
-
-                              </div>
-
-                            </td>
-
-                            {/* EMPLOYEE ID */}
-
-                            <td>
-                              {
-                                officer.employeeId
-                              }
-                            </td>
-
-                            {/* POSITION */}
-
-                            <td>
-                              {
-                                officer.position ||
-                                "—"
-                              }
-                            </td>
-
-                            {/* OFFICE */}
-
-                            <td>
-                              {
-                                officer.office
-                                  .officeName
-                              }
-                            </td>
-
-                            {/* AREA */}
-
-                            <td>
-                              {
-                                officer
-                                  .assignedArea ||
-                                officer.office
-                                  .subCity ||
-                                "—"
-                              }
-                            </td>
-
-                            {/* DATE */}
-
-                            <td>
-                              {formatDate(
-                                officer.createdAt
-                              )}
-                            </td>
-
-                            {/* STATUS */}
-
-                            <td>
-
-                              <span
-                                className={`officer-status ${
-                                  officer
-                                    .user
-                                    .isActive
-                                    ? "status-active"
-                                    : "status-inactive"
-                                }`}
-                              >
-
-                                {officer
-                                  .user
-                                  .isActive
-                                  ? "Active"
-                                  : "Inactive"}
-
-                              </span>
-
-                            </td>
-
-                          </tr>
-                        )
-                      )
-
-                    ) : (
-
-                      <tr>
-
-                        <td
-                          colSpan={7}
-                          className="no-results"
-                        >
-
-                          {search
-                            ? `No officers found for "${search}" in ${
-                                officeName ||
-                                "your office"
-                              }.`
-                            : "No officers found in your office."}
-
-                        </td>
-
-                      </tr>
-
-                    )}
-
-                  </tbody>
-
-                </table>
-
+            {error && (
+              <div
+                className="auth-error"
+                role="alert"
+                style={{
+                  marginBottom:
+                    "20px",
+                }}
+              >
+                {error}
               </div>
-
             )}
 
-          </section>
+            {/* =================================================
+                OFFICE OFFICER STATS
+                ================================================= */}
 
+            <section className="office-admin-stats">
+              <article className="office-admin-stat-card">
+                <div className="office-admin-stat-icon">
+                  👥
+                </div>
+
+                <div>
+                  <span>
+                    Total Officers
+                  </span>
+
+                  <strong>
+                    {loading
+                      ? "—"
+                      : totalOfficers}
+                  </strong>
+
+                  <small>
+                    Officers in your
+                    office
+                  </small>
+                </div>
+              </article>
+
+              <article className="office-admin-stat-card">
+                <div className="office-admin-stat-icon">
+                  ✓
+                </div>
+
+                <div>
+                  <span>
+                    Active Officers
+                  </span>
+
+                  <strong>
+                    {loading
+                      ? "—"
+                      : activeOfficers}
+                  </strong>
+
+                  <small>
+                    Currently active
+                  </small>
+                </div>
+              </article>
+
+              <article className="office-admin-stat-card">
+                <div className="office-admin-stat-icon inactive-icon">
+                  !
+                </div>
+
+                <div>
+                  <span>
+                    Inactive Officers
+                  </span>
+
+                  <strong>
+                    {loading
+                      ? "—"
+                      : inactiveOfficers}
+                  </strong>
+
+                  <small>
+                    Currently inactive
+                  </small>
+                </div>
+              </article>
+            </section>
+
+
+            {/* =================================================
+                QUICK ACTIONS
+                ================================================= */}
+
+            <section
+              className="office-admin-table-card"
+              style={{
+                marginBottom:
+                  "24px",
+              }}
+            >
+              <div className="office-admin-table-header">
+                <div>
+                  <span className="office-admin-eyebrow">
+                    QUICK ACCESS
+                  </span>
+
+                  <h2>
+                    Office Operations
+                  </h2>
+
+                  <p>
+                    Access the main
+                    administrative areas
+                    for your office.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display:
+                    "grid",
+                  gridTemplateColumns:
+                    "repeat(3, minmax(0, 1fr))",
+                  gap:
+                    "14px",
+                  padding:
+                    "20px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      "/office-admin/officers"
+                    )
+                  }
+                  style={{
+                    border:
+                      "1px solid #dceae6",
+                    background:
+                      "#f8fcfb",
+                    borderRadius:
+                      "10px",
+                    padding:
+                      "18px",
+                    textAlign:
+                      "left",
+                    cursor:
+                      "pointer",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        "22px",
+                      marginBottom:
+                        "8px",
+                    }}
+                  >
+                    👥
+                  </div>
+
+                  <strong
+                    style={{
+                      display:
+                        "block",
+                      color:
+                        "#25343a",
+                      fontSize:
+                        "14px",
+                    }}
+                  >
+                    Officers
+                  </strong>
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "5px",
+                      color:
+                        "#778790",
+                      fontSize:
+                        "12px",
+                    }}
+                  >
+                    Create, manage,
+                    activate, and
+                    deactivate officers.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      "/office-admin/agreements"
+                    )
+                  }
+                  style={{
+                    border:
+                      "1px solid #dceae6",
+                    background:
+                      "#f8fcfb",
+                    borderRadius:
+                      "10px",
+                    padding:
+                      "18px",
+                    textAlign:
+                      "left",
+                    cursor:
+                      "pointer",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        "22px",
+                      marginBottom:
+                        "8px",
+                    }}
+                  >
+                    □
+                  </div>
+
+                  <strong
+                    style={{
+                      display:
+                        "block",
+                      color:
+                        "#25343a",
+                      fontSize:
+                        "14px",
+                    }}
+                  >
+                    Agreements
+                  </strong>
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "5px",
+                      color:
+                        "#778790",
+                      fontSize:
+                        "12px",
+                    }}
+                  >
+                    Review rental
+                    agreements handled
+                    by your office.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      "/office-admin/audit-logs"
+                    )
+                  }
+                  style={{
+                    border:
+                      "1px solid #dceae6",
+                    background:
+                      "#f8fcfb",
+                    borderRadius:
+                      "10px",
+                    padding:
+                      "18px",
+                    textAlign:
+                      "left",
+                    cursor:
+                      "pointer",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        "22px",
+                      marginBottom:
+                        "8px",
+                    }}
+                  >
+                    ◷
+                  </div>
+
+                  <strong
+                    style={{
+                      display:
+                        "block",
+                      color:
+                        "#25343a",
+                      fontSize:
+                        "14px",
+                    }}
+                  >
+                    Audit Logs
+                  </strong>
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "5px",
+                      color:
+                        "#778790",
+                      fontSize:
+                        "12px",
+                    }}
+                  >
+                    Review recorded
+                    administrative activity.
+                  </span>
+                </button>
+              </div>
+            </section>
+
+            {/* =================================================
+                OFFICERS
+                ================================================= */}
+
+            <section className="office-admin-table-card">
+              <div className="office-admin-table-header">
+                <div>
+                  <span className="office-admin-eyebrow">
+                    OFFICER OVERVIEW
+                  </span>
+
+                  <h2>
+                    Officers
+                  </h2>
+
+                  <p>
+                    Officers assigned to{" "}
+                    {officeName ||
+                      "your Government Office"}.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="office-admin-outline-button"
+                  onClick={() =>
+                    navigate(
+                      "/office-admin/officers"
+                    )
+                  }
+                >
+                  View All
+                </button>
+              </div>
+
+              {loading ? (
+                <div
+                  style={{
+                    padding:
+                      "60px 20px",
+                    textAlign:
+                      "center",
+                    color:
+                      "#6b7280",
+                  }}
+                >
+                  <h3>
+                    Loading officers...
+                  </h3>
+
+                  <p>
+                    Retrieving officer
+                    information.
+                  </p>
+                </div>
+              ) : filteredOfficers.length >
+                0 ? (
+                <div className="office-admin-table-wrapper">
+                  <table className="office-admin-table">
+                    <thead>
+                      <tr>
+                        <th>
+                          Officer Name
+                        </th>
+
+                        <th>
+                          Employee ID
+                        </th>
+
+                        <th>
+                          Position
+                        </th>
+
+                        <th>
+                          Assigned Area
+                        </th>
+
+                        <th>
+                          Date Created
+                        </th>
+
+                        <th>
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filteredOfficers
+                        .slice(0, 8)
+                        .map(
+                          (
+                            officer
+                          ) => (
+                            <tr
+                              key={
+                                officer.officerId
+                              }
+                            >
+                              <td>
+                                <div className="officer-name">
+                                  <div className="officer-table-avatar">
+                                    {officer.user.firstName.charAt(
+                                      0
+                                    )}
+                                    {officer.user.lastName.charAt(
+                                      0
+                                    )}
+                                  </div>
+
+                                  <div>
+                                    <strong>
+                                      {
+                                        officer
+                                          .user
+                                          .firstName
+                                      }{" "}
+                                      {
+                                        officer
+                                          .user
+                                          .lastName
+                                      }
+                                    </strong>
+
+                                    <div
+                                      style={{
+                                        marginTop:
+                                          "3px",
+                                        color:
+                                          "#788991",
+                                        fontSize:
+                                          "12px",
+                                      }}
+                                    >
+                                      @
+                                      {officer
+                                        .user
+                                        .username ||
+                                        "No username"}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td>
+                                {
+                                  officer.employeeId
+                                }
+                              </td>
+
+                              <td>
+                                {
+                                  officer.position ||
+                                  "—"
+                                }
+                              </td>
+
+                              <td>
+                                {officer
+                                  .assignedArea ||
+                                  officer
+                                    .subCity ||
+                                  officer
+                                    .office
+                                    .subCity ||
+                                  "—"}
+                              </td>
+
+                              <td>
+                                {formatDate(
+                                  officer.createdAt
+                                )}
+                              </td>
+
+                              <td>
+                                <span
+                                  className={`officer-status ${
+                                    officer.user
+                                      .isActive
+                                      ? "status-active"
+                                      : "status-inactive"
+                                  }`}
+                                >
+                                  {officer.user
+                                    .isActive
+                                    ? "Active"
+                                    : "Inactive"}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding:
+                      "55px 20px",
+                    textAlign:
+                      "center",
+                    color:
+                      "#6b7280",
+                  }}
+                >
+                  <h3>
+                    {search
+                      ? "No officers found"
+                      : "No officers yet"}
+                  </h3>
+
+                  <p
+                    style={{
+                      maxWidth:
+                        "500px",
+                      margin:
+                        "8px auto 20px",
+                    }}
+                  >
+                    {search
+                      ? `No officers match "${search}" in your office.`
+                      : "Create an officer account to begin managing officers in your office."}
+                  </p>
+
+                  {!search && (
+                    <button
+                      type="button"
+                      className="create-officer-button"
+                      onClick={() =>
+                       navigate("/office-admin/officers/create")
+                      }
+                    >
+                      + Create Officer
+                    </button>
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
         </section>
-
       </main>
-
     </div>
   );
 }

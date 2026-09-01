@@ -1,15 +1,24 @@
 import {
+  type ChangeEvent,
   type FormEvent,
   useState,
 } from "react";
 
+import { useNavigate } from "react-router-dom";
+
 import "../../App.css";
+
+/* =========================================================
+   TYPES
+========================================================= */
 
 type CreateAgreementProps = {
   onClose: () => void;
 };
 
-type PartyType = "LANDLORD" | "TENANT";
+type PartyType =
+  | "LANDLORD"
+  | "TENANT";
 
 type VerificationState = {
   userId: string | null;
@@ -20,9 +29,7 @@ type VerificationState = {
 };
 
 type AgreementFormData = {
-  /* =====================================================
-     LANDLORD
-  ===================================================== */
+  /* LANDLORD */
   landlordFirstName: string;
   landlordLastName: string;
   landlordPhone: string;
@@ -34,9 +41,7 @@ type AgreementFormData = {
   landlordBusinessLicense: string;
   landlordBankAccount: string;
 
-  /* =====================================================
-     TENANT
-  ===================================================== */
+  /* TENANT */
   tenantFirstName: string;
   tenantLastName: string;
   tenantPhone: string;
@@ -49,9 +54,7 @@ type AgreementFormData = {
   tenantEmergencyContactPhone: string;
   tenantEmployer: string;
 
-  /* =====================================================
-     PROPERTY
-  ===================================================== */
+  /* PROPERTY */
   propertyLocation: string;
   propertySubCity: string;
   propertyWoreda: string;
@@ -59,9 +62,7 @@ type AgreementFormData = {
   propertyType: string;
   numberOfUnits: number;
 
-  /* =====================================================
-     UNIT
-  ===================================================== */
+  /* UNIT */
   unitNumber: string;
   unitFloor: string;
   unitSizeSqMeters: string;
@@ -69,9 +70,7 @@ type AgreementFormData = {
   unitBathrooms: number;
   unitRentAmountFloor: string;
 
-  /* =====================================================
-     HOUSE
-  ===================================================== */
+  /* HOUSE */
   houseType: string;
   houseNumber: string;
   numberOfRooms: number;
@@ -79,9 +78,7 @@ type AgreementFormData = {
   numberOfDoors: number;
   numberOfWindows: number;
 
-  /* =====================================================
-     RENTAL CONDITIONS
-  ===================================================== */
+  /* RENTAL */
   durationValue: number;
   durationUnit: "MONTH" | "YEAR";
   effectiveDate: string;
@@ -93,15 +90,35 @@ type AgreementFormData = {
   notes: string;
 };
 
+type AgreementData = {
+  agreementId?: string;
+  referenceNumber?: string;
+};
+
+type AgreementCreationData = {
+  agreementId?: string;
+  referenceNumber?: string;
+  requiresVerification?: boolean;
+  parties?: string[];
+  userIds?: {
+    landlordUserId?: string | null;
+    tenantUserId?: string | null;
+  };
+  verificationSent?: boolean;
+  agreement?: AgreementData;
+  [key: string]: unknown;
+};
+
 type ApiResponse = {
   success?: boolean;
   message?: string;
   error?: string;
-  data?: {
-    referenceNumber?: string;
-    [key: string]: unknown;
-  };
+  data?: AgreementCreationData;
 };
+
+/* =========================================================
+   INITIAL FORM
+========================================================= */
 
 const initialFormData: AgreementFormData = {
   /* Landlord */
@@ -165,6 +182,10 @@ const initialFormData: AgreementFormData = {
   notes: "",
 };
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
 const getApiUrl = () =>
   import.meta.env.VITE_API_URL ||
   "http://localhost:5000/api";
@@ -176,28 +197,6 @@ const getToken = () =>
   sessionStorage.getItem("accessToken") ||
   "";
 
-/*
- * Backend currently reports verification User IDs inside
- * the error message returned by POST /agreements.
- */
-const extractVerificationUserId = (
-  message: string,
-  party: PartyType
-): string | null => {
-  const label =
-    party === "LANDLORD"
-      ? "Landlord User ID:"
-      : "Tenant User ID:";
-
-  const regex = new RegExp(
-    `${label}\\s*([^\\s|.]+)`
-  );
-
-  const match = message.match(regex);
-
-  return match?.[1] ?? null;
-};
-
 const getErrorMessage = (
   response: ApiResponse,
   fallback: string
@@ -206,57 +205,86 @@ const getErrorMessage = (
   response.message ||
   fallback;
 
+/* =========================================================
+   COMPONENT
+========================================================= */
+
 function CreateAgreement({
   onClose,
 }: CreateAgreementProps) {
-  /* =====================================================
-     FORM
-  ===================================================== */
+  const navigate = useNavigate();
 
   const [formData, setFormData] =
     useState<AgreementFormData>(
       initialFormData
     );
 
-  /* =====================================================
-     WIZARD
-  ===================================================== */
-
+  /*
+   * 1 = Landlord
+   * 2 = Tenant
+   * 3 = Agreement
+   * 4 = National ID Verification
+   * 5 = Complete
+   */
   const [currentStep, setCurrentStep] =
     useState(1);
 
-  /* =====================================================
-     LANDLORD VERIFICATION
-  ===================================================== */
+  /* =======================================================
+     VERIFICATION STATE
+  ======================================================= */
 
-  const [landlordVerification, setLandlordVerification] =
-    useState<VerificationState>({
-      userId: null,
-      otp: "",
-      sent: false,
-      verified: false,
-      loading: false,
-    });
+  const [
+    landlordVerification,
+    setLandlordVerification,
+  ] = useState<VerificationState>({
+    userId: null,
+    otp: "",
+    sent: false,
+    verified: false,
+    loading: false,
+  });
 
-  /* =====================================================
-     TENANT VERIFICATION
-  ===================================================== */
+  const [
+    tenantVerification,
+    setTenantVerification,
+  ] = useState<VerificationState>({
+    userId: null,
+    otp: "",
+    sent: false,
+    verified: false,
+    loading: false,
+  });
 
-  const [tenantVerification, setTenantVerification] =
-    useState<VerificationState>({
-      userId: null,
-      otp: "",
-      sent: false,
-      verified: false,
-      loading: false,
-    });
+  /*
+   * First POST /agreements has been completed and
+   * verification is now in progress.
+   */
+  const [
+    verificationInitialized,
+    setVerificationInitialized,
+  ] = useState(false);
 
-  /* =====================================================
-     GENERAL STATE
-  ===================================================== */
+  /*
+   * Prevent duplicate final POST /agreements.
+   */
+  const [
+    agreementFinalized,
+    setAgreementFinalized,
+  ] = useState(false);
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
 
   const [submitting, setSubmitting] =
     useState(false);
+
+  const [finalizing, setFinalizing] =
+    useState(false);
+
+  /* =======================================================
+     MESSAGES
+  ======================================================= */
 
   const [error, setError] =
     useState("");
@@ -264,22 +292,55 @@ function CreateAgreement({
   const [success, setSuccess] =
     useState("");
 
-  const [referenceNumber, setReferenceNumber] =
-    useState("");
+  const [
+    referenceNumber,
+    setReferenceNumber,
+  ] = useState("");
 
-  /* =====================================================
+  /* =======================================================
+     AUTH
+  ======================================================= */
+
+  const requireToken = () => {
+    const token = getToken();
+
+    if (!token) {
+      throw new Error(
+        "Your session has expired. Please login again."
+      );
+    }
+
+    return token;
+  };
+
+  const handleUnauthorized = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
+
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("accessToken");
+
+    navigate("/login", {
+      replace: true,
+    });
+  };
+
+  /* =======================================================
      INPUT HANDLING
-  ===================================================== */
+  ======================================================= */
 
   const handleChange = (
-    event: React.ChangeEvent<
+    event: ChangeEvent<
       HTMLInputElement |
         HTMLSelectElement |
         HTMLTextAreaElement
     >
   ) => {
-    const { name, value } =
-      event.target;
+    const {
+      name,
+      value,
+    } = event.target;
 
     setFormData((previous) => ({
       ...previous,
@@ -288,10 +349,12 @@ function CreateAgreement({
   };
 
   const handleNumberChange = (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: ChangeEvent<HTMLInputElement>
   ) => {
-    const { name, value } =
-      event.target;
+    const {
+      name,
+      value,
+    } = event.target;
 
     setFormData((previous) => ({
       ...previous,
@@ -306,473 +369,611 @@ function CreateAgreement({
     party: PartyType,
     value: string
   ) => {
-    const cleaned = value
-      .replace(/\D/g, "")
-      .slice(0, 16);
+    const cleaned =
+      value
+        .replace(/\D/g, "")
+        .slice(0, 16);
 
-    if (party === "LANDLORD") {
+    if (
+      party === "LANDLORD"
+    ) {
       setFormData((previous) => ({
         ...previous,
         landlordNationalId:
           cleaned,
       }));
-
-      setLandlordVerification(
-        (previous) => ({
-          ...previous,
-          userId: null,
-          sent: false,
-          verified: false,
-          otp: "",
-        })
-      );
     } else {
       setFormData((previous) => ({
         ...previous,
         tenantNationalId:
           cleaned,
       }));
-
-      setTenantVerification(
-        (previous) => ({
-          ...previous,
-          userId: null,
-          sent: false,
-          verified: false,
-          otp: "",
-        })
-      );
     }
   };
 
-  /* =====================================================
+  /* =======================================================
      VALIDATION
-  ===================================================== */
+  ======================================================= */
 
-  const validateLandlord = (): string | null => {
-    if (
-      !formData.landlordFirstName.trim()
-    ) {
-      return "Landlord first name is required.";
-    }
+  const validateLandlord =
+    (): string | null => {
+      if (
+        !formData.landlordFirstName.trim()
+      ) {
+        return "Landlord first name is required.";
+      }
 
-    if (
-      !formData.landlordLastName.trim()
-    ) {
-      return "Landlord last name is required.";
-    }
+      if (
+        !formData.landlordLastName.trim()
+      ) {
+        return "Landlord last name is required.";
+      }
 
-    if (
-      !formData.landlordPhone.trim()
-    ) {
-      return "Landlord phone number is required.";
-    }
+      if (
+        !formData.landlordPhone.trim()
+      ) {
+        return "Landlord phone number is required.";
+      }
 
-    if (
-      !/^\d{16}$/.test(
-        formData.landlordNationalId
-      )
-    ) {
-      return "Landlord National ID must be exactly 16 digits.";
-    }
-
-    return null;
-  };
-
-  const validateTenant = (): string | null => {
-    if (
-      !formData.tenantFirstName.trim()
-    ) {
-      return "Tenant first name is required.";
-    }
-
-    if (
-      !formData.tenantLastName.trim()
-    ) {
-      return "Tenant last name is required.";
-    }
-
-    if (
-      !formData.tenantPhone.trim()
-    ) {
-      return "Tenant phone number is required.";
-    }
-
-    if (
-      !/^\d{16}$/.test(
-        formData.tenantNationalId
-      )
-    ) {
-      return "Tenant National ID must be exactly 16 digits.";
-    }
-
-    return null;
-  };
-
-  const validateAgreement = (): string | null => {
-    if (
-      !formData.houseType.trim()
-    ) {
-      return "House type is required.";
-    }
-
-    if (
-      !formData.houseNumber.trim()
-    ) {
-      return "House number is required.";
-    }
-
-    if (
-      formData.numberOfRooms < 0 ||
-      formData.numberOfBathrooms < 0 ||
-      formData.numberOfDoors < 0 ||
-      formData.numberOfWindows < 0
-    ) {
-      return "House measurements cannot be negative.";
-    }
-
-    if (
-      !formData.durationValue ||
-      formData.durationValue <= 0
-    ) {
-      return "Rental duration must be greater than zero.";
-    }
-
-    if (
-      !formData.effectiveDate
-    ) {
-      return "Start date is required.";
-    }
-
-    if (
-      !formData.rentalAmount ||
-      Number(formData.rentalAmount) <= 0
-    ) {
-      return "Rental amount must be greater than zero.";
-    }
-
-    if (
-      formData.terminationDate &&
-      new Date(
-        formData.terminationDate
-      ) <=
-        new Date(
-          formData.effectiveDate
+      if (
+        !/^\d{16}$/.test(
+          formData.landlordNationalId
         )
-    ) {
-      return "End date must be after the start date.";
-    }
+      ) {
+        return "Landlord National ID must be exactly 16 digits.";
+      }
 
-    return null;
-  };
+      if (
+        !formData.landlordAddress.trim()
+      ) {
+        return "Landlord address is required.";
+      }
 
-  /* =====================================================
-     BUILD AGREEMENT PAYLOAD
-  ===================================================== */
+      if (
+        !formData.landlordSubCity.trim()
+      ) {
+        return "Landlord sub-city is required.";
+      }
 
-  const buildPayload = () => {
-    return {
-      /* Landlord */
-      landlordFirstName:
-        formData.landlordFirstName.trim(),
+      if (
+        !formData.landlordWoreda.trim()
+      ) {
+        return "Landlord woreda is required.";
+      }
 
-      landlordLastName:
-        formData.landlordLastName.trim(),
+      if (
+        !formData.landlordHouseNumber.trim()
+      ) {
+        return "Landlord house number is required.";
+      }
 
-      landlordPhone:
-        formData.landlordPhone.trim(),
+      if (
+        !formData.landlordBusinessLicense.trim()
+      ) {
+        return "Landlord business license is required.";
+      }
 
-      landlordNationalId:
-        formData.landlordNationalId.trim(),
+      if (
+        !formData.landlordBankAccount.trim()
+      ) {
+        return "Landlord bank account is required.";
+      }
 
-      landlordAddress:
-        formData.landlordAddress.trim(),
-
-      landlordSubCity:
-        formData.landlordSubCity.trim(),
-
-      landlordWoreda:
-        formData.landlordWoreda.trim(),
-
-      landlordHouseNumber:
-        formData.landlordHouseNumber.trim(),
-
-      landlordBusinessLicense:
-        formData.landlordBusinessLicense.trim(),
-
-      landlordBankAccount:
-        formData.landlordBankAccount.trim(),
-
-      /* Tenant */
-      tenantFirstName:
-        formData.tenantFirstName.trim(),
-
-      tenantLastName:
-        formData.tenantLastName.trim(),
-
-      tenantPhone:
-        formData.tenantPhone.trim(),
-
-      tenantNationalId:
-        formData.tenantNationalId.trim(),
-
-      tenantAddress:
-        formData.tenantAddress.trim(),
-
-      tenantSubCity:
-        formData.tenantSubCity.trim(),
-
-      tenantWoreda:
-        formData.tenantWoreda.trim(),
-
-      tenantHouseNumber:
-        formData.tenantHouseNumber.trim(),
-
-      tenantEmergencyContactName:
-        formData.tenantEmergencyContactName.trim(),
-
-      tenantEmergencyContactPhone:
-        formData.tenantEmergencyContactPhone.trim(),
-
-      tenantEmployer:
-        formData.tenantEmployer.trim(),
-
-      /* Property */
-      propertyLocation:
-        formData.propertyLocation.trim(),
-
-      propertySubCity:
-        formData.propertySubCity.trim(),
-
-      propertyWoreda:
-        formData.propertyWoreda.trim(),
-
-      propertyHouseNumber:
-        formData.propertyHouseNumber.trim(),
-
-      propertyType:
-        formData.propertyType,
-
-      numberOfUnits:
-        Number(formData.numberOfUnits),
-
-      /* Unit */
-      unitNumber:
-        formData.unitNumber.trim(),
-
-      unitFloor:
-        formData.unitFloor === ""
-          ? null
-          : Number(
-              formData.unitFloor
-            ),
-
-      unitSizeSqMeters:
-        formData.unitSizeSqMeters === ""
-          ? 0
-          : Number(
-              formData.unitSizeSqMeters
-            ),
-
-      unitBedrooms:
-        Number(formData.unitBedrooms),
-
-      unitBathrooms:
-        Number(formData.unitBathrooms),
-
-      unitRentAmountFloor:
-        formData.unitRentAmountFloor === ""
-          ? Number(
-              formData.rentalAmount
-            )
-          : Number(
-              formData.unitRentAmountFloor
-            ),
-
-      /* House */
-      houseType:
-        formData.houseType.trim(),
-
-      houseNumber:
-        formData.houseNumber.trim(),
-
-      numberOfRooms:
-        Number(formData.numberOfRooms),
-
-      numberOfBathrooms:
-        Number(
-          formData.numberOfBathrooms
-        ),
-
-      numberOfDoors:
-        Number(formData.numberOfDoors),
-
-      numberOfWindows:
-        Number(
-          formData.numberOfWindows
-        ),
-
-      /* Rental */
-      durationValue:
-        Number(
-          formData.durationValue
-        ),
-
-      durationUnit:
-        formData.durationUnit,
-
-      effectiveDate:
-        formData.effectiveDate,
-
-      terminationDate:
-        formData.terminationDate ||
-        undefined,
-
-      rentalAmount:
-        Number(formData.rentalAmount),
-
-      paymentTerms:
-        formData.paymentTerms.trim(),
-
-      advancePayment:
-        formData.advancePayment === ""
-          ? 0
-          : Number(
-              formData.advancePayment
-            ),
-
-      paymentFrequencyName:
-        formData.paymentFrequencyName,
-
-      notes:
-        formData.notes.trim(),
+      return null;
     };
-  };
 
-  /* =====================================================
+  const validateTenant =
+    (): string | null => {
+      if (
+        !formData.tenantFirstName.trim()
+      ) {
+        return "Tenant first name is required.";
+      }
+
+      if (
+        !formData.tenantLastName.trim()
+      ) {
+        return "Tenant last name is required.";
+      }
+
+      if (
+        !formData.tenantPhone.trim()
+      ) {
+        return "Tenant phone number is required.";
+      }
+
+      if (
+        !/^\d{16}$/.test(
+          formData.tenantNationalId
+        )
+      ) {
+        return "Tenant National ID must be exactly 16 digits.";
+      }
+
+      if (
+        !formData.tenantAddress.trim()
+      ) {
+        return "Tenant address is required.";
+      }
+
+      if (
+        !formData.tenantSubCity.trim()
+      ) {
+        return "Tenant sub-city is required.";
+      }
+
+      if (
+        !formData.tenantWoreda.trim()
+      ) {
+        return "Tenant woreda is required.";
+      }
+
+      if (
+        !formData.tenantHouseNumber.trim()
+      ) {
+        return "Tenant house number is required.";
+      }
+
+      if (
+        !formData.tenantEmergencyContactName.trim()
+      ) {
+        return "Tenant emergency contact name is required.";
+      }
+
+      if (
+        !formData.tenantEmergencyContactPhone.trim()
+      ) {
+        return "Tenant emergency contact phone is required.";
+      }
+
+      if (
+        !formData.tenantEmployer.trim()
+      ) {
+        return "Tenant employer is required.";
+      }
+
+      return null;
+    };
+
+  const validateAgreement =
+    (): string | null => {
+      if (
+        !formData.propertyLocation.trim()
+      ) {
+        return "Property location is required.";
+      }
+
+      if (
+        !formData.propertySubCity.trim()
+      ) {
+        return "Property sub-city is required.";
+      }
+
+      if (
+        !formData.propertyWoreda.trim()
+      ) {
+        return "Property woreda is required.";
+      }
+
+      if (
+        !formData.propertyHouseNumber.trim()
+      ) {
+        return "Property house number is required.";
+      }
+
+      if (
+        !formData.unitNumber.trim()
+      ) {
+        return "Unit number is required.";
+      }
+
+      if (
+        formData.unitFloor === "" ||
+        !Number.isFinite(
+          Number(formData.unitFloor)
+        )
+      ) {
+        return "Unit floor must be a valid number.";
+      }
+
+      if (
+        Number(formData.unitFloor) <= 0
+      ) {
+        return "Unit floor must be greater than zero.";
+      }
+
+      if (
+        formData.unitSizeSqMeters === "" ||
+        !Number.isFinite(
+          Number(
+            formData.unitSizeSqMeters
+          )
+        )
+      ) {
+        return "Unit size must be a valid number.";
+      }
+
+      if (
+        Number(
+          formData.unitSizeSqMeters
+        ) <= 0
+      ) {
+        return "Unit size must be greater than zero.";
+      }
+
+      if (
+        formData.unitRentAmountFloor !==
+          "" &&
+        Number(
+          formData.unitRentAmountFloor
+        ) <= 0
+      ) {
+        return "Minimum rent amount must be greater than zero.";
+      }
+
+      if (
+        !formData.houseType.trim()
+      ) {
+        return "House type is required.";
+      }
+
+      if (
+        !formData.houseNumber.trim()
+      ) {
+        return "House number is required.";
+      }
+
+      if (
+        formData.numberOfRooms < 0 ||
+        formData.numberOfBathrooms < 0 ||
+        formData.numberOfDoors < 0 ||
+        formData.numberOfWindows < 0
+      ) {
+        return "House measurements cannot be negative.";
+      }
+
+      if (
+        !formData.durationValue ||
+        formData.durationValue <= 0
+      ) {
+        return "Rental duration must be greater than zero.";
+      }
+
+      if (
+        !formData.effectiveDate
+      ) {
+        return "Start date is required.";
+      }
+
+      if (
+        !formData.rentalAmount ||
+        Number(formData.rentalAmount) <= 0
+      ) {
+        return "Rental amount must be greater than zero.";
+      }
+
+      if (
+        formData.terminationDate &&
+        new Date(
+          formData.terminationDate
+        ) <=
+          new Date(
+            formData.effectiveDate
+          )
+      ) {
+        return "End date must be after the start date.";
+      }
+
+      if (
+        !formData.paymentTerms.trim()
+      ) {
+        return "Payment terms are required.";
+      }
+
+      if (
+        !formData.notes.trim()
+      ) {
+        return "Additional notes are required.";
+      }
+
+      return null;
+    };
+
+  /* =======================================================
+     PAYLOAD
+  ======================================================= */
+
+  const buildPayload = () => ({
+    landlordFirstName:
+      formData.landlordFirstName.trim(),
+
+    landlordLastName:
+      formData.landlordLastName.trim(),
+
+    landlordPhone:
+      formData.landlordPhone.trim(),
+
+    landlordNationalId:
+      formData.landlordNationalId.trim(),
+
+    landlordAddress:
+      formData.landlordAddress.trim(),
+
+    landlordSubCity:
+      formData.landlordSubCity.trim(),
+
+    landlordWoreda:
+      formData.landlordWoreda.trim(),
+
+    landlordHouseNumber:
+      formData.landlordHouseNumber.trim(),
+
+    landlordBusinessLicense:
+      formData.landlordBusinessLicense.trim(),
+
+    landlordBankAccount:
+      formData.landlordBankAccount.trim(),
+
+    tenantFirstName:
+      formData.tenantFirstName.trim(),
+
+    tenantLastName:
+      formData.tenantLastName.trim(),
+
+    tenantPhone:
+      formData.tenantPhone.trim(),
+
+    tenantNationalId:
+      formData.tenantNationalId.trim(),
+
+    tenantAddress:
+      formData.tenantAddress.trim(),
+
+    tenantSubCity:
+      formData.tenantSubCity.trim(),
+
+    tenantWoreda:
+      formData.tenantWoreda.trim(),
+
+    tenantHouseNumber:
+      formData.tenantHouseNumber.trim(),
+
+    tenantEmergencyContactName:
+      formData.tenantEmergencyContactName.trim(),
+
+    tenantEmergencyContactPhone:
+      formData.tenantEmergencyContactPhone.trim(),
+
+    tenantEmployer:
+      formData.tenantEmployer.trim(),
+
+    propertyLocation:
+      formData.propertyLocation.trim(),
+
+    propertySubCity:
+      formData.propertySubCity.trim(),
+
+    propertyWoreda:
+      formData.propertyWoreda.trim(),
+
+    propertyHouseNumber:
+      formData.propertyHouseNumber.trim(),
+
+    propertyType:
+      formData.propertyType,
+
+    numberOfUnits:
+      Number(formData.numberOfUnits),
+
+    unitNumber:
+      formData.unitNumber.trim(),
+
+    unitFloor:
+      Number(formData.unitFloor),
+
+    unitSizeSqMeters:
+      Number(
+        formData.unitSizeSqMeters
+      ),
+
+    unitBedrooms:
+      Number(formData.unitBedrooms),
+
+    unitBathrooms:
+      Number(formData.unitBathrooms),
+
+    unitRentAmountFloor:
+      formData.unitRentAmountFloor === ""
+        ? Number(formData.rentalAmount)
+        : Number(
+            formData.unitRentAmountFloor
+          ),
+
+    houseType:
+      formData.houseType.trim(),
+
+    houseNumber:
+      formData.houseNumber.trim(),
+
+    numberOfRooms:
+      Number(formData.numberOfRooms),
+
+    numberOfBathrooms:
+      Number(
+        formData.numberOfBathrooms
+      ),
+
+    numberOfDoors:
+      Number(formData.numberOfDoors),
+
+    numberOfWindows:
+      Number(
+        formData.numberOfWindows
+      ),
+
+    durationValue:
+      Number(formData.durationValue),
+
+    durationUnit:
+      formData.durationUnit,
+
+    effectiveDate:
+      formData.effectiveDate,
+
+    terminationDate:
+      formData.terminationDate ||
+      undefined,
+
+    rentalAmount:
+      Number(formData.rentalAmount),
+
+    paymentTerms:
+      formData.paymentTerms.trim(),
+
+    advancePayment:
+      formData.advancePayment === ""
+        ? 0
+        : Number(
+            formData.advancePayment
+          ),
+
+    paymentFrequencyName:
+      formData.paymentFrequencyName,
+
+    notes:
+      formData.notes.trim(),
+  });
+
+  /* =======================================================
      SEND NATIONAL ID CODE
-  ===================================================== */
+  ======================================================= */
 
-  const sendNationalIdCode = async (
-    party: PartyType,
-    userId: string
-  ) => {
-    const token = getToken();
+  const sendNationalIdCode =
+    async (
+      party: PartyType,
+      userId: string
+    ) => {
+      const token =
+        requireToken();
 
-    if (!token) {
-      throw new Error(
-        "You are not logged in. Please login again."
-      );
-    }
-
-    const response =
-      await fetch(
-        `${getApiUrl()}/auth/send-national-id-verification`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            userId,
-          }),
-        }
-      );
-
-    const result =
-      (await response.json()) as ApiResponse;
-
-    if (
-      !response.ok ||
-      !result.success
-    ) {
-      throw new Error(
-        getErrorMessage(
-          result,
-          `Failed to send ${party.toLowerCase()} verification code.`
-        )
-      );
-    }
-
-    return result;
-  };
-
-  /* =====================================================
-     VERIFY NATIONAL ID CODE
-  ===================================================== */
-
-  const verifyNationalIdCode = async (
-    party: PartyType,
-    userId: string,
-    code: string
-  ) => {
-    const token = getToken();
-
-    if (!token) {
-      throw new Error(
-        "You are not logged in. Please login again."
-      );
-    }
-
-    const response =
-      await fetch(
-        `${getApiUrl()}/auth/verify-national-id`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            userId,
-            code,
-          }),
-        }
-      );
-
-    const result =
-      (await response.json()) as ApiResponse;
-
-    if (
-      !response.ok ||
-      !result.success
-    ) {
-      throw new Error(
-        getErrorMessage(
-          result,
-          `Failed to verify ${party.toLowerCase()} National ID.`
-        )
-      );
-    }
-
-    return result;
-  };
-
-  /* =====================================================
-     INITIAL AGREEMENT REQUEST
-
-     This uses the ACTUAL agreement endpoint.
-
-     If verification is required, the backend returns
-     the generated Landlord/Tenant User IDs in the
-     error message. We capture those IDs instead of
-     inventing data.
-  ===================================================== */
-
-  const requestAgreementVerification =
-    async (): Promise<{
-      landlordUserId: string | null;
-      tenantUserId: string | null;
-    }> => {
-      const token = getToken();
-
-      if (!token) {
-        throw new Error(
-          "You are not logged in. Please login again."
+      const response =
+        await fetch(
+          `${getApiUrl()}/auth/send-national-id-verification`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              userId,
+            }),
+          }
         );
+
+      if (
+        response.status === 401
+      ) {
+        handleUnauthorized();
+
+        throw new Error(
+          "Your session has expired. Please login again."
+        );
+      }
+
+      const result =
+        (await response.json()) as ApiResponse;
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        throw new Error(
+          getErrorMessage(
+            result,
+            `Failed to send ${party.toLowerCase()} National ID verification code.`
+          )
+        );
+      }
+
+      return result;
+    };
+
+  /* =======================================================
+     VERIFY NATIONAL ID CODE
+  ======================================================= */
+
+  const verifyNationalIdCode =
+    async (
+      party: PartyType,
+      userId: string,
+      code: string
+    ) => {
+      const token =
+        requireToken();
+
+      const response =
+        await fetch(
+          `${getApiUrl()}/auth/verify-national-id`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              userId,
+              code,
+            }),
+          }
+        );
+
+      if (
+        response.status === 401
+      ) {
+        handleUnauthorized();
+
+        throw new Error(
+          "Your session has expired. Please login again."
+        );
+      }
+
+      const result =
+        (await response.json()) as ApiResponse;
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        throw new Error(
+          getErrorMessage(
+            result,
+            `Failed to verify ${party.toLowerCase()} National ID.`
+          )
+        );
+      }
+
+      return result;
+    };
+
+  /* =======================================================
+     INITIALIZE AGREEMENT
+  ======================================================= */
+
+  const initializeAgreement =
+    async () => {
+      const token =
+        requireToken();
+
+      if (
+        verificationInitialized ||
+        agreementFinalized
+      ) {
+        return;
       }
 
       const response =
@@ -783,7 +984,8 @@ function CreateAgreement({
             headers: {
               "Content-Type":
                 "application/json",
-              Authorization: `Bearer ${token}`,
+              Authorization:
+                `Bearer ${token}`,
             },
             body: JSON.stringify(
               buildPayload()
@@ -791,159 +993,344 @@ function CreateAgreement({
           }
         );
 
+      if (
+        response.status === 401
+      ) {
+        handleUnauthorized();
+
+        throw new Error(
+          "Your session has expired. Please login again."
+        );
+      }
+
       const result =
         (await response.json()) as ApiResponse;
 
-      /*
-       * If backend somehow created the agreement,
-       * return success without needing verification.
-       */
       if (
-        response.ok &&
-        result.success
+        !response.ok ||
+        !result.success
       ) {
-        if (
-          result.data?.referenceNumber
-        ) {
-          setReferenceNumber(
-            result.data.referenceNumber
-          );
-        }
+        throw new Error(
+          getErrorMessage(
+            result,
+            "Failed to create rental agreement."
+          )
+        );
+      }
+
+      const data =
+        result.data;
+
+      /* ===================================================
+         BOTH PARTIES ALREADY VERIFIED
+      =================================================== */
+
+      if (
+        data &&
+        !data.requiresVerification
+      ) {
+        const agreement =
+          data.agreement;
+
+        const reference =
+          data.referenceNumber ||
+          agreement?.referenceNumber ||
+          "";
+
+        setReferenceNumber(
+          reference
+        );
+
+        setAgreementFinalized(
+          true
+        );
 
         setSuccess(
           result.message ||
-            "Rental agreement created successfully."
+            "Rental agreement created successfully. USSD verification codes have been sent to the landlord and tenant."
         );
 
-        return {
-          landlordUserId: null,
-          tenantUserId: null,
-        };
-      }
+        setCurrentStep(5);
 
-      const message =
-        getErrorMessage(
-          result,
-          "The agreement could not be processed."
-        );
-
-      return {
-        landlordUserId:
-          extractVerificationUserId(
-            message,
-            "LANDLORD"
-          ),
-
-        tenantUserId:
-          extractVerificationUserId(
-            message,
-            "TENANT"
-          ),
-      };
-    };
-
-  /* =====================================================
-     STEP 1
-     LANDLORD
-  ===================================================== */
-
-  const handleLandlordContinue =
-    async () => {
-      setError("");
-      setSuccess("");
-
-      const validationError =
-        validateLandlord();
-
-      if (validationError) {
-        setError(validationError);
         return;
       }
 
-      /*
-       * If already verified, continue.
-       */
+      /* ===================================================
+         NATIONAL ID VERIFICATION REQUIRED
+      =================================================== */
+
       if (
-        landlordVerification.verified
+        data?.requiresVerification
       ) {
-        setCurrentStep(2);
-        return;
-      }
+        const parties =
+          data.parties ?? [];
 
-      setSubmitting(true);
+        const landlordNeedsVerification =
+          parties.includes(
+            "Landlord"
+          );
 
-      try {
+        const tenantNeedsVerification =
+          parties.includes(
+            "Tenant"
+          );
+
+        const landlordUserId =
+          data.userIds
+            ?.landlordUserId ??
+          null;
+
+        const tenantUserId =
+          data.userIds
+            ?.tenantUserId ??
+          null;
+
+        if (
+          landlordNeedsVerification &&
+          !landlordUserId
+        ) {
+          throw new Error(
+            "The backend requested landlord verification but did not return a landlord user ID."
+          );
+        }
+
+        if (
+          tenantNeedsVerification &&
+          !tenantUserId
+        ) {
+          throw new Error(
+            "The backend requested tenant verification but did not return a tenant user ID."
+          );
+        }
+
+        setLandlordVerification({
+          userId:
+            landlordUserId,
+          otp: "",
+          sent: false,
+          verified:
+            !landlordNeedsVerification,
+          loading: false,
+        });
+
+        setTenantVerification({
+          userId:
+            tenantUserId,
+          otp: "",
+          sent: false,
+          verified:
+            !tenantNeedsVerification,
+          loading: false,
+        });
+
+        setVerificationInitialized(
+          true
+        );
+
+        setCurrentStep(4);
+
+        setSuccess(
+          result.message ||
+            "National ID verification is required before the agreement can be created."
+        );
+
         /*
-         * Ask current backend flow for the
-         * landlord User ID.
+         * Send landlord code.
          */
-        const ids =
-          await requestAgreementVerification();
+        if (
+          landlordNeedsVerification &&
+          landlordUserId
+        ) {
+          await sendNationalIdCode(
+            "LANDLORD",
+            landlordUserId
+          );
 
-        if (!ids.landlordUserId) {
-          /*
-           * It may be an existing verified landlord
-           * or the backend accepted the request.
-           */
           setLandlordVerification(
             (previous) => ({
               ...previous,
-              verified: true,
+              sent: true,
             })
           );
-
-          setCurrentStep(2);
-          return;
         }
 
-        setLandlordVerification(
-          (previous) => ({
-            ...previous,
-            userId:
-              ids.landlordUserId,
-            loading: true,
-          })
+        /*
+         * Send tenant code.
+         */
+        if (
+          tenantNeedsVerification &&
+          tenantUserId
+        ) {
+          await sendNationalIdCode(
+            "TENANT",
+            tenantUserId
+          );
+
+          setTenantVerification(
+            (previous) => ({
+              ...previous,
+              sent: true,
+            })
+          );
+        }
+
+        return;
+      }
+
+      throw new Error(
+        result.message ||
+          "Unable to process rental agreement."
+      );
+    };
+
+  /* =======================================================
+     FINALIZE AGREEMENT
+     
+     IMPORTANT:
+     The current verification values are passed in
+     explicitly. This avoids React asynchronous state
+     timing problems.
+  ======================================================= */
+
+  const finalizeAgreement =
+    async (
+      landlordIsVerified: boolean,
+      tenantIsVerified: boolean
+    ) => {
+      if (
+        agreementFinalized ||
+        finalizing
+      ) {
+        return;
+      }
+
+      if (
+        !landlordIsVerified ||
+        !tenantIsVerified
+      ) {
+        return;
+      }
+
+      const token =
+        getToken();
+
+      if (!token) {
+        handleUnauthorized();
+        return;
+      }
+
+      setFinalizing(true);
+      setError("");
+      setSuccess("");
+
+      try {
+        const response =
+          await fetch(
+            `${getApiUrl()}/agreements`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+                Authorization:
+                  `Bearer ${token}`,
+              },
+              body: JSON.stringify(
+                buildPayload()
+              ),
+            }
+          );
+
+        if (
+          response.status === 401
+        ) {
+          handleUnauthorized();
+
+          throw new Error(
+            "Your session has expired. Please login again."
+          );
+        }
+
+        const result =
+          (await response.json()) as ApiResponse;
+
+        if (
+          !response.ok ||
+          !result.success
+        ) {
+          throw new Error(
+            getErrorMessage(
+              result,
+              "Failed to create rental agreement."
+            )
+          );
+        }
+
+        /*
+         * If the backend still says verification
+         * is required, do not claim success.
+         */
+        if (
+          result.data?.requiresVerification
+        ) {
+          throw new Error(
+            "National ID verification is still incomplete."
+          );
+        }
+
+        /*
+         * Your backend returns:
+         *
+         * data: {
+         *   agreement: {
+         *     referenceNumber: "..."
+         *   }
+         * }
+         *
+         * Support both nested and direct response forms.
+         */
+        const agreement =
+          result.data?.agreement;
+
+        const reference =
+          result.data
+            ?.referenceNumber ||
+          agreement?.referenceNumber ||
+          "";
+
+        setReferenceNumber(
+          reference
         );
 
-        await sendNationalIdCode(
-          "LANDLORD",
-          ids.landlordUserId
-        );
-
-        setLandlordVerification(
-          (previous) => ({
-            ...previous,
-            userId:
-              ids.landlordUserId,
-            sent: true,
-            loading: false,
-          })
+        setAgreementFinalized(
+          true
         );
 
         setSuccess(
-          "A verification code has been sent to the landlord's phone."
+          result.message ||
+            "Rental agreement created successfully. USSD verification codes have been sent to the landlord and tenant."
         );
+
+        setCurrentStep(5);
       } catch (err) {
+        console.error(
+          "Final agreement creation error:",
+          err
+        );
+
         setError(
           err instanceof Error
             ? err.message
-            : "Failed to start landlord verification."
-        );
-
-        setLandlordVerification(
-          (previous) => ({
-            ...previous,
-            loading: false,
-          })
+            : "Failed to create rental agreement."
         );
       } finally {
-        setSubmitting(false);
+        setFinalizing(false);
       }
     };
 
-  /* =====================================================
+  /* =======================================================
      VERIFY LANDLORD
-  ===================================================== */
+  ======================================================= */
 
   const handleLandlordVerify =
     async (
@@ -959,7 +1346,7 @@ function CreateAgreement({
 
       if (!userId) {
         setError(
-          "Landlord verification session is missing."
+          "Landlord verification user ID is missing."
         );
         return;
       }
@@ -989,6 +1376,16 @@ function CreateAgreement({
           landlordVerification.otp
         );
 
+        /*
+         * The backend has just confirmed landlord.
+         *
+         * We capture tenant state BEFORE calling
+         * setLandlordVerification because React state
+         * updates are asynchronous.
+         */
+        const tenantAlreadyVerified =
+          tenantVerification.verified;
+
         setLandlordVerification(
           (previous) => ({
             ...previous,
@@ -998,11 +1395,22 @@ function CreateAgreement({
           })
         );
 
-        setCurrentStep(2);
-
         setSuccess(
           "Landlord National ID verified successfully."
         );
+
+        /*
+         * If tenant was already verified, both are now
+         * verified, so finalize immediately.
+         */
+        if (
+          tenantAlreadyVerified
+        ) {
+          await finalizeAgreement(
+            true,
+            true
+          );
+        }
       } catch (err) {
         setLandlordVerification(
           (previous) => ({
@@ -1019,120 +1427,9 @@ function CreateAgreement({
       }
     };
 
-  /* =====================================================
-     STEP 2
-     TENANT
-  ===================================================== */
-
-  const handleTenantContinue =
-    async () => {
-      setError("");
-      setSuccess("");
-
-      const validationError =
-        validateTenant();
-
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
-
-      if (
-        !landlordVerification.verified
-      ) {
-        setError(
-          "Please verify the landlord's National ID first."
-        );
-        return;
-      }
-
-      if (
-        tenantVerification.verified
-      ) {
-        setCurrentStep(3);
-        return;
-      }
-
-      setSubmitting(true);
-
-      try {
-        /*
-         * Submit through the same backend flow.
-         *
-         * At this point the landlord is already
-         * verified, so the backend should either:
-         * - ask for tenant verification and return
-         *   Tenant User ID, or
-         * - proceed if tenant is already verified.
-         */
-        const ids =
-          await requestAgreementVerification();
-
-        if (!ids.tenantUserId) {
-          /*
-           * If no tenant verification ID came back,
-           * the backend did not require tenant
-           * verification at this point.
-           */
-          setTenantVerification(
-            (previous) => ({
-              ...previous,
-              verified: true,
-            })
-          );
-
-          setCurrentStep(3);
-          return;
-        }
-
-        setTenantVerification(
-          (previous) => ({
-            ...previous,
-            userId:
-              ids.tenantUserId,
-            loading: true,
-          })
-        );
-
-        await sendNationalIdCode(
-          "TENANT",
-          ids.tenantUserId
-        );
-
-        setTenantVerification(
-          (previous) => ({
-            ...previous,
-            userId:
-              ids.tenantUserId,
-            sent: true,
-            loading: false,
-          })
-        );
-
-        setSuccess(
-          "A verification code has been sent to the tenant's phone."
-        );
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to start tenant verification."
-        );
-
-        setTenantVerification(
-          (previous) => ({
-            ...previous,
-            loading: false,
-          })
-        );
-      } finally {
-        setSubmitting(false);
-      }
-    };
-
-  /* =====================================================
+  /* =======================================================
      VERIFY TENANT
-  ===================================================== */
+  ======================================================= */
 
   const handleTenantVerify =
     async (
@@ -1148,7 +1445,7 @@ function CreateAgreement({
 
       if (!userId) {
         setError(
-          "Tenant verification session is missing."
+          "Tenant verification user ID is missing."
         );
         return;
       }
@@ -1178,6 +1475,15 @@ function CreateAgreement({
           tenantVerification.otp
         );
 
+        /*
+         * The backend has just confirmed tenant.
+         *
+         * Capture landlord state before updating
+         * tenant state.
+         */
+        const landlordAlreadyVerified =
+          landlordVerification.verified;
+
         setTenantVerification(
           (previous) => ({
             ...previous,
@@ -1187,11 +1493,22 @@ function CreateAgreement({
           })
         );
 
-        setCurrentStep(3);
-
         setSuccess(
           "Tenant National ID verified successfully."
         );
+
+        /*
+         * If landlord was already verified, both
+         * parties are now verified.
+         */
+        if (
+          landlordAlreadyVerified
+        ) {
+          await finalizeAgreement(
+            true,
+            true
+          );
+        }
       } catch (err) {
         setTenantVerification(
           (previous) => ({
@@ -1208,118 +1525,127 @@ function CreateAgreement({
       }
     };
 
-  /* =====================================================
-     FINAL SUBMIT
-  ===================================================== */
+  /* =======================================================
+     RESEND LANDLORD CODE
+  ======================================================= */
 
-  const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault();
+  const resendLandlordCode =
+    async () => {
+      const userId =
+        landlordVerification.userId;
 
-    setError("");
-    setSuccess("");
-    setReferenceNumber("");
-
-    const validationError =
-      validateAgreement();
-
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    if (
-      !landlordVerification.verified
-    ) {
-      setError(
-        "Please verify the landlord's National ID."
-      );
-      setCurrentStep(1);
-      return;
-    }
-
-    if (
-      !tenantVerification.verified
-    ) {
-      setError(
-        "Please verify the tenant's National ID."
-      );
-      setCurrentStep(2);
-      return;
-    }
-
-    const token = getToken();
-
-    if (!token) {
-      setError(
-        "You are not logged in. Please login again."
-      );
-      return;
-    }
-
-    setSubmitting(true);
-
-    try {
-      const response =
-        await fetch(
-          `${getApiUrl()}/agreements`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(
-              buildPayload()
-            ),
-          }
+      if (!userId) {
+        setError(
+          "Landlord verification user ID is missing."
         );
-
-      const result =
-        (await response.json()) as ApiResponse;
-
-      if (
-        !response.ok ||
-        !result.success
-      ) {
-        throw new Error(
-          getErrorMessage(
-            result,
-            "Failed to create rental agreement."
-          )
-        );
+        return;
       }
 
-      setSuccess(
-        result.message ||
-          "Rental agreement created successfully."
+      setError("");
+      setSuccess("");
+
+      setLandlordVerification(
+        (previous) => ({
+          ...previous,
+          loading: true,
+        })
       );
 
-      if (
-        result.data?.referenceNumber
-      ) {
-        setReferenceNumber(
-          result.data.referenceNumber
+      try {
+        await sendNationalIdCode(
+          "LANDLORD",
+          userId
+        );
+
+        setLandlordVerification(
+          (previous) => ({
+            ...previous,
+            sent: true,
+            loading: false,
+          })
+        );
+
+        setSuccess(
+          "A new landlord National ID verification code has been sent."
+        );
+      } catch (err) {
+        setLandlordVerification(
+          (previous) => ({
+            ...previous,
+            loading: false,
+          })
+        );
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to resend landlord verification code."
         );
       }
+    };
 
-      setCurrentStep(4);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong while creating the rental agreement."
+  /* =======================================================
+     RESEND TENANT CODE
+  ======================================================= */
+
+  const resendTenantCode =
+    async () => {
+      const userId =
+        tenantVerification.userId;
+
+      if (!userId) {
+        setError(
+          "Tenant verification user ID is missing."
+        );
+        return;
+      }
+
+      setError("");
+      setSuccess("");
+
+      setTenantVerification(
+        (previous) => ({
+          ...previous,
+          loading: true,
+        })
       );
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  /* =====================================================
+      try {
+        await sendNationalIdCode(
+          "TENANT",
+          userId
+        );
+
+        setTenantVerification(
+          (previous) => ({
+            ...previous,
+            sent: true,
+            loading: false,
+          })
+        );
+
+        setSuccess(
+          "A new tenant National ID verification code has been sent."
+        );
+      } catch (err) {
+        setTenantVerification(
+          (previous) => ({
+            ...previous,
+            loading: false,
+          })
+        );
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to resend tenant verification code."
+        );
+      }
+    };
+
+  /* =======================================================
      STEP NAVIGATION
-  ===================================================== */
+  ======================================================= */
 
   const canOpenStep = (
     step: number
@@ -1330,15 +1656,15 @@ function CreateAgreement({
 
     if (
       step === 2 &&
-      landlordVerification.verified
+      validateLandlord() === null
     ) {
       return true;
     }
 
     if (
       step === 3 &&
-      landlordVerification.verified &&
-      tenantVerification.verified
+      validateLandlord() === null &&
+      validateTenant() === null
     ) {
       return true;
     }
@@ -1346,14 +1672,32 @@ function CreateAgreement({
     return false;
   };
 
-  /* =====================================================
+  const handleClose = () => {
+    if (
+      submitting ||
+      finalizing
+    ) {
+      return;
+    }
+
+    onClose();
+  };
+
+  /* =======================================================
      RENDER
-  ===================================================== */
+  ======================================================= */
 
   return (
     <div
       className="modal-overlay"
-      onClick={onClose}
+      onClick={() => {
+        if (
+          !submitting &&
+          !finalizing
+        ) {
+          onClose();
+        }
+      }}
     >
       <div
         className="agreement-modal"
@@ -1361,11 +1705,13 @@ function CreateAgreement({
           event.stopPropagation()
         }
       >
+
         {/* =================================================
             HEADER
         ================================================= */}
 
         <div className="page-header">
+
           <div>
             <span className="agreement-form-eyebrow">
               RENTAL REGISTRATION
@@ -1376,21 +1722,24 @@ function CreateAgreement({
             </h1>
 
             <p>
-              Complete the standard rental
-              registration form and verify both
-              parties before submitting.
+              Complete the agreement information,
+              then verify National IDs when required.
             </p>
           </div>
 
           <button
             type="button"
             className="agreement-close-button"
-            onClick={onClose}
-            disabled={submitting}
+            onClick={handleClose}
+            disabled={
+              submitting ||
+              finalizing
+            }
             aria-label="Close"
           >
             ×
           </button>
+
         </div>
 
         {/* =================================================
@@ -1398,26 +1747,23 @@ function CreateAgreement({
         ================================================= */}
 
         <div className="agreement-stepper">
+
           <button
             type="button"
             className={`agreement-step ${
               currentStep === 1
                 ? "active"
                 : ""
-            } ${
-              landlordVerification.verified
-                ? "completed"
-                : ""
             }`}
             onClick={() =>
               setCurrentStep(1)
             }
+            disabled={
+              verificationInitialized ||
+              agreementFinalized
+            }
           >
-            <span>
-              {landlordVerification.verified
-                ? "✓"
-                : "1"}
-            </span>
+            <span>1</span>
 
             <div>
               <strong>
@@ -1425,7 +1771,7 @@ function CreateAgreement({
               </strong>
 
               <small>
-                Identity verification
+                Information
               </small>
             </div>
           </button>
@@ -1438,10 +1784,6 @@ function CreateAgreement({
               currentStep === 2
                 ? "active"
                 : ""
-            } ${
-              tenantVerification.verified
-                ? "completed"
-                : ""
             }`}
             onClick={() => {
               if (
@@ -1450,13 +1792,13 @@ function CreateAgreement({
                 setCurrentStep(2);
               }
             }}
-            disabled={!canOpenStep(2)}
+            disabled={
+              !canOpenStep(2) ||
+              verificationInitialized ||
+              agreementFinalized
+            }
           >
-            <span>
-              {tenantVerification.verified
-                ? "✓"
-                : "2"}
-            </span>
+            <span>2</span>
 
             <div>
               <strong>
@@ -1464,7 +1806,7 @@ function CreateAgreement({
               </strong>
 
               <small>
-                Identity verification
+                Information
               </small>
             </div>
           </button>
@@ -1485,7 +1827,11 @@ function CreateAgreement({
                 setCurrentStep(3);
               }
             }}
-            disabled={!canOpenStep(3)}
+            disabled={
+              !canOpenStep(3) ||
+              verificationInitialized ||
+              agreementFinalized
+            }
           >
             <span>3</span>
 
@@ -1513,6 +1859,28 @@ function CreateAgreement({
 
             <div>
               <strong>
+                Verify
+              </strong>
+
+              <small>
+                National IDs
+              </small>
+            </div>
+          </div>
+
+          <div className="agreement-step-line" />
+
+          <div
+            className={`agreement-step ${
+              currentStep === 5
+                ? "active"
+                : ""
+            }`}
+          >
+            <span>5</span>
+
+            <div>
+              <strong>
                 Complete
               </strong>
 
@@ -1521,6 +1889,7 @@ function CreateAgreement({
               </small>
             </div>
           </div>
+
         </div>
 
         {/* =================================================
@@ -1549,8 +1918,7 @@ function CreateAgreement({
             {referenceNumber && (
               <div
                 style={{
-                  marginTop:
-                    "8px",
+                  marginTop: "8px",
                 }}
               >
                 <strong>
@@ -1563,12 +1931,14 @@ function CreateAgreement({
         )}
 
         {/* =================================================
-            STEP 1: LANDLORD
+            STEP 1 - LANDLORD
         ================================================= */}
 
         {currentStep === 1 && (
           <section className="form-section">
+
             <div className="section-header">
+
               <div>
                 <span className="section-number">
                   01
@@ -1579,20 +1949,15 @@ function CreateAgreement({
                 </h2>
 
                 <p>
-                  Enter the landlord's
-                  information and verify the
-                  National ID.
+                  Enter the complete landlord
+                  information.
                 </p>
               </div>
 
-              {landlordVerification.verified && (
-                <span className="verification-status verified">
-                  ✓ Verified
-                </span>
-              )}
             </div>
 
             <div className="form-grid">
+
               <div className="form-group">
                 <label htmlFor="landlordFirstName">
                   First Name *
@@ -1601,16 +1966,14 @@ function CreateAgreement({
                 <input
                   id="landlordFirstName"
                   name="landlordFirstName"
-                  type="text"
                   value={
                     formData.landlordFirstName
                   }
                   onChange={handleChange}
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
-                  required
                 />
               </div>
 
@@ -1622,16 +1985,14 @@ function CreateAgreement({
                 <input
                   id="landlordLastName"
                   name="landlordLastName"
-                  type="text"
                   value={
                     formData.landlordLastName
                   }
                   onChange={handleChange}
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
-                  required
                 />
               </div>
 
@@ -1649,10 +2010,9 @@ function CreateAgreement({
                   }
                   onChange={handleChange}
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
-                  required
                 />
               </div>
 
@@ -1664,7 +2024,6 @@ function CreateAgreement({
                 <input
                   id="landlordNationalId"
                   name="landlordNationalId"
-                  type="text"
                   inputMode="numeric"
                   maxLength={16}
                   value={
@@ -1676,254 +2035,180 @@ function CreateAgreement({
                       event.target.value
                     )
                   }
-                  placeholder="Enter 16-digit National ID"
+                  placeholder="16-digit National ID"
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
-                  required
                 />
               </div>
 
               <div className="form-group full-width">
                 <label htmlFor="landlordAddress">
-                  Address
+                  Address *
                 </label>
 
                 <input
                   id="landlordAddress"
                   name="landlordAddress"
-                  type="text"
                   value={
                     formData.landlordAddress
                   }
                   onChange={handleChange}
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="landlordSubCity">
-                  Sub-city
+                  Sub-city *
                 </label>
 
                 <input
                   id="landlordSubCity"
                   name="landlordSubCity"
-                  type="text"
                   value={
                     formData.landlordSubCity
                   }
                   onChange={handleChange}
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="landlordWoreda">
-                  Woreda
+                  Woreda *
                 </label>
 
                 <input
                   id="landlordWoreda"
                   name="landlordWoreda"
-                  type="text"
                   value={
                     formData.landlordWoreda
                   }
                   onChange={handleChange}
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="landlordHouseNumber">
-                  House Number
+                  House Number *
                 </label>
 
                 <input
                   id="landlordHouseNumber"
                   name="landlordHouseNumber"
-                  type="text"
                   value={
                     formData.landlordHouseNumber
                   }
                   onChange={handleChange}
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="landlordBusinessLicense">
-                  Business License
+                  Business License *
                 </label>
 
                 <input
                   id="landlordBusinessLicense"
                   name="landlordBusinessLicense"
-                  type="text"
                   value={
                     formData.landlordBusinessLicense
                   }
                   onChange={handleChange}
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="landlordBankAccount">
-                  Bank Account
+                  Bank Account *
                 </label>
 
                 <input
                   id="landlordBankAccount"
                   name="landlordBankAccount"
-                  type="text"
                   value={
                     formData.landlordBankAccount
                   }
                   onChange={handleChange}
                   disabled={
-                    landlordVerification.verified ||
-                    submitting
+                    submitting ||
+                    verificationInitialized
                   }
                 />
               </div>
+
             </div>
 
-            {/* -------------------------------------------------
-                LANDLORD OTP
-            ------------------------------------------------- */}
+            <div className="form-actions">
 
-            {landlordVerification.sent &&
-              !landlordVerification.verified && (
-                <form
-                  className="national-id-otp-panel"
-                  onSubmit={
-                    handleLandlordVerify
+              <button
+                type="button"
+                className="cancel-button"
+                onClick={handleClose}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  setError("");
+                  setSuccess("");
+
+                  const validationError =
+                    validateLandlord();
+
+                  if (
+                    validationError
+                  ) {
+                    setError(
+                      validationError
+                    );
+                    return;
                   }
-                >
-                  <div>
-                    <span className="verification-eyebrow">
-                      IDENTITY VERIFICATION
-                    </span>
 
-                    <h3>
-                      Verify Landlord National ID
-                    </h3>
+                  setCurrentStep(2);
+                }}
+                disabled={submitting}
+              >
+                Continue to Tenant
+              </button>
 
-                    <p>
-                      A 6-digit verification code
-                      has been sent to the
-                      landlord's phone.
-                    </p>
-                  </div>
-
-                  <div className="otp-inline-form">
-                    <div className="form-group">
-                      <label htmlFor="landlordOtp">
-                        Verification Code
-                      </label>
-
-                      <input
-                        id="landlordOtp"
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={
-                          landlordVerification.otp
-                        }
-                        onChange={(event) =>
-                          setLandlordVerification(
-                            (previous) => ({
-                              ...previous,
-                              otp: event.target.value
-                                .replace(
-                                  /\D/g,
-                                  ""
-                                )
-                                .slice(
-                                  0,
-                                  6
-                                ),
-                            })
-                          )
-                        }
-                        placeholder="Enter 6-digit code"
-                        autoComplete="one-time-code"
-                        autoFocus
-                        disabled={
-                          landlordVerification.loading
-                        }
-                        required
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="primary-button"
-                      disabled={
-                        landlordVerification.loading ||
-                        landlordVerification.otp.length !==
-                          6
-                      }
-                    >
-                      {landlordVerification.loading
-                        ? "Verifying..."
-                        : "Verify Landlord"}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-            {!landlordVerification.sent &&
-              !landlordVerification.verified && (
-                <div className="verification-action">
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={
-                      handleLandlordContinue
-                    }
-                    disabled={submitting}
-                  >
-                    {submitting
-                      ? "Checking..."
-                      : "Verify Landlord National ID"}
-                  </button>
-                </div>
-              )}
-
-            {landlordVerification.verified && (
-              <div className="verification-success-box">
-                ✓ Landlord National ID verified successfully.
-              </div>
-            )}
+            </div>
           </section>
         )}
 
         {/* =================================================
-            STEP 2: TENANT
+            STEP 2 - TENANT
         ================================================= */}
 
         {currentStep === 2 && (
           <section className="form-section">
+
             <div className="section-header">
+
               <div>
                 <span className="section-number">
                   02
@@ -1934,19 +2219,15 @@ function CreateAgreement({
                 </h2>
 
                 <p>
-                  Enter the tenant's information
-                  and verify the National ID.
+                  Enter the complete tenant
+                  information.
                 </p>
               </div>
 
-              {tenantVerification.verified && (
-                <span className="verification-status verified">
-                  ✓ Verified
-                </span>
-              )}
             </div>
 
             <div className="form-grid">
+
               <div className="form-group">
                 <label htmlFor="tenantFirstName">
                   First Name *
@@ -1955,17 +2236,13 @@ function CreateAgreement({
                 <input
                   id="tenantFirstName"
                   name="tenantFirstName"
-                  type="text"
                   value={
                     formData.tenantFirstName
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
-                  required
                 />
               </div>
 
@@ -1977,17 +2254,13 @@ function CreateAgreement({
                 <input
                   id="tenantLastName"
                   name="tenantLastName"
-                  type="text"
                   value={
                     formData.tenantLastName
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
-                  required
                 />
               </div>
 
@@ -2005,11 +2278,8 @@ function CreateAgreement({
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
-                  required
                 />
               </div>
 
@@ -2021,7 +2291,6 @@ function CreateAgreement({
                 <input
                   id="tenantNationalId"
                   name="tenantNationalId"
-                  type="text"
                   inputMode="numeric"
                   maxLength={16}
                   value={
@@ -2033,124 +2302,106 @@ function CreateAgreement({
                       event.target.value
                     )
                   }
-                  placeholder="Enter 16-digit National ID"
+                  placeholder="16-digit National ID"
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
-                  required
                 />
               </div>
 
               <div className="form-group full-width">
                 <label htmlFor="tenantAddress">
-                  Address
+                  Address *
                 </label>
 
                 <input
                   id="tenantAddress"
                   name="tenantAddress"
-                  type="text"
                   value={
                     formData.tenantAddress
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="tenantSubCity">
-                  Sub-city
+                  Sub-city *
                 </label>
 
                 <input
                   id="tenantSubCity"
                   name="tenantSubCity"
-                  type="text"
                   value={
                     formData.tenantSubCity
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="tenantWoreda">
-                  Woreda
+                  Woreda *
                 </label>
 
                 <input
                   id="tenantWoreda"
                   name="tenantWoreda"
-                  type="text"
                   value={
                     formData.tenantWoreda
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="tenantHouseNumber">
-                  House Number
+                  House Number *
                 </label>
 
                 <input
                   id="tenantHouseNumber"
                   name="tenantHouseNumber"
-                  type="text"
                   value={
                     formData.tenantHouseNumber
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="tenantEmergencyContactName">
-                  Emergency Contact Name
+                  Emergency Contact Name *
                 </label>
 
                 <input
                   id="tenantEmergencyContactName"
                   name="tenantEmergencyContactName"
-                  type="text"
                   value={
                     formData.tenantEmergencyContactName
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="tenantEmergencyContactPhone">
-                  Emergency Contact Phone
+                  Emergency Contact Phone *
                 </label>
 
                 <input
@@ -2162,156 +2413,126 @@ function CreateAgreement({
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="tenantEmployer">
-                  Employer
+                  Employer *
                 </label>
 
                 <input
                   id="tenantEmployer"
                   name="tenantEmployer"
-                  type="text"
                   value={
                     formData.tenantEmployer
                   }
                   onChange={handleChange}
                   disabled={
-                    !landlordVerification.verified ||
-                    tenantVerification.verified ||
-                    submitting
+                    verificationInitialized
                   }
                 />
               </div>
+
             </div>
 
-            {tenantVerification.sent &&
-              !tenantVerification.verified && (
-                <form
-                  className="national-id-otp-panel"
-                  onSubmit={
-                    handleTenantVerify
+            <div className="form-actions">
+
+              <button
+                type="button"
+                className="cancel-button"
+                onClick={() =>
+                  setCurrentStep(1)
+                }
+              >
+                Back
+              </button>
+
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  setError("");
+                  setSuccess("");
+
+                  const validationError =
+                    validateTenant();
+
+                  if (
+                    validationError
+                  ) {
+                    setError(
+                      validationError
+                    );
+                    return;
                   }
-                >
-                  <div>
-                    <span className="verification-eyebrow">
-                      IDENTITY VERIFICATION
-                    </span>
 
-                    <h3>
-                      Verify Tenant National ID
-                    </h3>
+                  setCurrentStep(3);
+                }}
+              >
+                Continue to Agreement
+              </button>
 
-                    <p>
-                      A 6-digit verification code
-                      has been sent to the
-                      tenant's phone.
-                    </p>
-                  </div>
-
-                  <div className="otp-inline-form">
-                    <div className="form-group">
-                      <label htmlFor="tenantOtp">
-                        Verification Code
-                      </label>
-
-                      <input
-                        id="tenantOtp"
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={
-                          tenantVerification.otp
-                        }
-                        onChange={(event) =>
-                          setTenantVerification(
-                            (previous) => ({
-                              ...previous,
-                              otp: event.target.value
-                                .replace(
-                                  /\D/g,
-                                  ""
-                                )
-                                .slice(
-                                  0,
-                                  6
-                                ),
-                            })
-                          )
-                        }
-                        placeholder="Enter 6-digit code"
-                        autoComplete="one-time-code"
-                        autoFocus
-                        disabled={
-                          tenantVerification.loading
-                        }
-                        required
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="primary-button"
-                      disabled={
-                        tenantVerification.loading ||
-                        tenantVerification.otp.length !==
-                          6
-                      }
-                    >
-                      {tenantVerification.loading
-                        ? "Verifying..."
-                        : "Verify Tenant"}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-            {!tenantVerification.sent &&
-              !tenantVerification.verified && (
-                <div className="verification-action">
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={
-                      handleTenantContinue
-                    }
-                    disabled={submitting}
-                  >
-                    {submitting
-                      ? "Checking..."
-                      : "Verify Tenant National ID"}
-                  </button>
-                </div>
-              )}
-
-            {tenantVerification.verified && (
-              <div className="verification-success-box">
-                ✓ Tenant National ID verified successfully.
-              </div>
-            )}
+            </div>
           </section>
         )}
 
         {/* =================================================
-            STEP 3: AGREEMENT
+            STEP 3 - AGREEMENT
         ================================================= */}
 
         {currentStep === 3 && (
           <form
-            onSubmit={handleSubmit}
+            onSubmit={async (
+              event
+            ) => {
+              event.preventDefault();
+
+              setError("");
+              setSuccess("");
+              setReferenceNumber("");
+
+              const validationError =
+                validateAgreement();
+
+              if (
+                validationError
+              ) {
+                setError(
+                  validationError
+                );
+                return;
+              }
+
+              setSubmitting(true);
+
+              try {
+                await initializeAgreement();
+              } catch (err) {
+                console.error(
+                  "Agreement submission error:",
+                  err
+                );
+
+                setError(
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to create rental agreement."
+                );
+              } finally {
+                setSubmitting(false);
+              }
+            }}
           >
-            {/* =================================================
-                PROPERTY
-            ================================================= */}
+
+            {/* PROPERTY */}
 
             <section className="form-section">
+
               <div className="section-header">
+
                 <div>
                   <span className="section-number">
                     03
@@ -2322,79 +2543,84 @@ function CreateAgreement({
                   </h2>
 
                   <p>
-                    Enter the property where the
-                    rental unit is located.
+                    Enter the property details.
                   </p>
                 </div>
+
               </div>
 
               <div className="form-grid">
+
                 <div className="form-group full-width">
+
                   <label htmlFor="propertyLocation">
-                    Property Address / Location
+                    Property Address / Location *
                   </label>
 
                   <input
                     id="propertyLocation"
                     name="propertyLocation"
-                    type="text"
                     value={
                       formData.propertyLocation
                     }
                     onChange={handleChange}
-                    required
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="propertySubCity">
-                    Sub-city
+                    Sub-city *
                   </label>
 
                   <input
                     id="propertySubCity"
                     name="propertySubCity"
-                    type="text"
                     value={
                       formData.propertySubCity
                     }
                     onChange={handleChange}
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="propertyWoreda">
-                    Woreda
+                    Woreda *
                   </label>
 
                   <input
                     id="propertyWoreda"
                     name="propertyWoreda"
-                    type="text"
                     value={
                       formData.propertyWoreda
                     }
                     onChange={handleChange}
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="propertyHouseNumber">
-                    House Number
+                    House Number *
                   </label>
 
                   <input
                     id="propertyHouseNumber"
                     name="propertyHouseNumber"
-                    type="text"
                     value={
                       formData.propertyHouseNumber
                     }
                     onChange={handleChange}
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="propertyType">
                     Property Type
                   </label>
@@ -2419,9 +2645,11 @@ function CreateAgreement({
                       Mixed
                     </option>
                   </select>
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="numberOfUnits">
                     Number of Units
                   </label>
@@ -2438,16 +2666,19 @@ function CreateAgreement({
                       handleNumberChange
                     }
                   />
+
                 </div>
+
               </div>
+
             </section>
 
-            {/* =================================================
-                UNIT
-            ================================================= */}
+            {/* UNIT */}
 
             <section className="form-section">
+
               <div className="section-header">
+
                 <div>
                   <span className="section-number">
                     04
@@ -2458,64 +2689,72 @@ function CreateAgreement({
                   </h2>
 
                   <p>
-                    Enter details for the
-                    specific rental unit.
+                    Enter the rental unit details.
                   </p>
                 </div>
+
               </div>
 
               <div className="form-grid">
+
                 <div className="form-group">
+
                   <label htmlFor="unitNumber">
-                    Unit Number
+                    Unit Number *
                   </label>
 
                   <input
                     id="unitNumber"
                     name="unitNumber"
-                    type="text"
                     value={
                       formData.unitNumber
                     }
                     onChange={handleChange}
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="unitFloor">
-                    Floor
+                    Floor *
                   </label>
 
                   <input
                     id="unitFloor"
                     name="unitFloor"
                     type="number"
+                    min="1"
                     value={
                       formData.unitFloor
                     }
                     onChange={handleChange}
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="unitSizeSqMeters">
-                    Size (m²)
+                    Size (m²) *
                   </label>
 
                   <input
                     id="unitSizeSqMeters"
                     name="unitSizeSqMeters"
                     type="number"
-                    min="0"
+                    min="0.01"
                     step="0.01"
                     value={
                       formData.unitSizeSqMeters
                     }
                     onChange={handleChange}
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="unitBedrooms">
                     Bedrooms
                   </label>
@@ -2532,9 +2771,11 @@ function CreateAgreement({
                       handleNumberChange
                     }
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="unitBathrooms">
                     Bathrooms
                   </label>
@@ -2551,9 +2792,11 @@ function CreateAgreement({
                       handleNumberChange
                     }
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="unitRentAmountFloor">
                     Minimum Rent Amount
                   </label>
@@ -2569,16 +2812,19 @@ function CreateAgreement({
                     }
                     onChange={handleChange}
                   />
+
                 </div>
+
               </div>
+
             </section>
 
-            {/* =================================================
-                HOUSE
-            ================================================= */}
+            {/* HOUSE */}
 
             <section className="form-section">
+
               <div className="section-header">
+
                 <div>
                   <span className="section-number">
                     05
@@ -2589,14 +2835,16 @@ function CreateAgreement({
                   </h2>
 
                   <p>
-                    Record the physical details
-                    of the rental property.
+                    Record physical property details.
                   </p>
                 </div>
+
               </div>
 
               <div className="form-grid">
+
                 <div className="form-group">
+
                   <label htmlFor="houseType">
                     Type of House *
                   </label>
@@ -2608,7 +2856,6 @@ function CreateAgreement({
                       formData.houseType
                     }
                     onChange={handleChange}
-                    required
                   >
                     <option value="">
                       Select house type
@@ -2638,9 +2885,11 @@ function CreateAgreement({
                       Other
                     </option>
                   </select>
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="houseNumber">
                     House Number *
                   </label>
@@ -2648,16 +2897,16 @@ function CreateAgreement({
                   <input
                     id="houseNumber"
                     name="houseNumber"
-                    type="text"
                     value={
                       formData.houseNumber
                     }
                     onChange={handleChange}
-                    required
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="numberOfRooms">
                     Number of Rooms
                   </label>
@@ -2674,9 +2923,11 @@ function CreateAgreement({
                       handleNumberChange
                     }
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="numberOfBathrooms">
                     Number of Bathrooms / Service Rooms
                   </label>
@@ -2693,9 +2944,11 @@ function CreateAgreement({
                       handleNumberChange
                     }
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="numberOfDoors">
                     Number of Doors
                   </label>
@@ -2712,9 +2965,11 @@ function CreateAgreement({
                       handleNumberChange
                     }
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="numberOfWindows">
                     Number of Windows
                   </label>
@@ -2731,16 +2986,19 @@ function CreateAgreement({
                       handleNumberChange
                     }
                   />
+
                 </div>
+
               </div>
+
             </section>
 
-            {/* =================================================
-                RENTAL TERMS
-            ================================================= */}
+            {/* RENTAL TERMS */}
 
             <section className="form-section">
+
               <div className="section-header">
+
                 <div>
                   <span className="section-number">
                     06
@@ -2751,14 +3009,17 @@ function CreateAgreement({
                   </h2>
 
                   <p>
-                    Enter duration, rental amount,
-                    dates, and payment conditions.
+                    Enter the rental terms and
+                    payment conditions.
                   </p>
                 </div>
+
               </div>
 
               <div className="form-grid">
+
                 <div className="form-group">
+
                   <label htmlFor="durationValue">
                     Rental Duration *
                   </label>
@@ -2774,11 +3035,12 @@ function CreateAgreement({
                     onChange={
                       handleNumberChange
                     }
-                    required
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="durationUnit">
                     Duration Unit *
                   </label>
@@ -2790,7 +3052,6 @@ function CreateAgreement({
                       formData.durationUnit
                     }
                     onChange={handleChange}
-                    required
                   >
                     <option value="MONTH">
                       Month(s)
@@ -2800,9 +3061,11 @@ function CreateAgreement({
                       Year(s)
                     </option>
                   </select>
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="effectiveDate">
                     Start Date *
                   </label>
@@ -2815,11 +3078,12 @@ function CreateAgreement({
                       formData.effectiveDate
                     }
                     onChange={handleChange}
-                    required
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="terminationDate">
                     End Date
                   </label>
@@ -2833,9 +3097,11 @@ function CreateAgreement({
                     }
                     onChange={handleChange}
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="rentalAmount">
                     Rental Amount *
                   </label>
@@ -2844,18 +3110,18 @@ function CreateAgreement({
                     id="rentalAmount"
                     name="rentalAmount"
                     type="number"
-                    min="0"
+                    min="0.01"
                     step="0.01"
                     value={
                       formData.rentalAmount
                     }
                     onChange={handleChange}
-                    placeholder="ETB"
-                    required
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="advancePayment">
                     Amount Paid in Advance
                   </label>
@@ -2870,11 +3136,12 @@ function CreateAgreement({
                       formData.advancePayment
                     }
                     onChange={handleChange}
-                    placeholder="ETB"
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label htmlFor="paymentFrequencyName">
                     Payment Frequency
                   </label>
@@ -2903,11 +3170,13 @@ function CreateAgreement({
                       Annually
                     </option>
                   </select>
+
                 </div>
 
                 <div className="form-group full-width">
+
                   <label htmlFor="paymentTerms">
-                    Rental Payment Terms / Conditions
+                    Rental Payment Terms / Conditions *
                   </label>
 
                   <textarea
@@ -2920,11 +3189,13 @@ function CreateAgreement({
                     onChange={handleChange}
                     placeholder="Enter payment terms and conditions..."
                   />
+
                 </div>
 
                 <div className="form-group full-width">
+
                   <label htmlFor="notes">
-                    Additional Notes
+                    Additional Notes *
                   </label>
 
                   <textarea
@@ -2935,49 +3206,453 @@ function CreateAgreement({
                       formData.notes
                     }
                     onChange={handleChange}
-                    placeholder="Enter any additional notes..."
+                    placeholder="Enter additional notes..."
                   />
+
                 </div>
+
               </div>
+
             </section>
 
-            {/* =================================================
-                FINAL ACTIONS
-            ================================================= */}
-
             <div className="form-actions">
+
               <button
                 type="button"
                 className="cancel-button"
-                onClick={onClose}
-                disabled={submitting}
+                onClick={() =>
+                  setCurrentStep(2)
+                }
+                disabled={
+                  submitting
+                }
               >
-                Cancel
+                Back
               </button>
 
               <button
                 type="submit"
                 className="primary-button"
                 disabled={
-                  submitting ||
-                  !landlordVerification.verified ||
-                  !tenantVerification.verified
+                  submitting
                 }
               >
                 {submitting
-                  ? "Creating Agreement..."
+                  ? "Processing..."
                   : "Create Rental Agreement"}
               </button>
+
             </div>
+
           </form>
         )}
 
         {/* =================================================
-            STEP 4: COMPLETE
+            STEP 4 - NATIONAL ID VERIFICATION
         ================================================= */}
 
         {currentStep === 4 && (
+          <section className="form-section">
+
+            <div className="section-header">
+
+              <div>
+                <span className="section-number">
+                  04
+                </span>
+
+                <h2>
+                  National ID Verification
+                </h2>
+
+                <p>
+                  Verify only the parties whose National
+                  IDs are not already verified.
+                </p>
+              </div>
+
+            </div>
+
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "14px 16px",
+                border:
+                  "1px solid #dceae6",
+                borderRadius: "9px",
+                background:
+                  "#f8fcfb",
+                color: "#53636c",
+                fontSize: "13px",
+                lineHeight: 1.6,
+              }}
+            >
+              The verification code is sent to the
+              party's registered phone number. Enter
+              the 6-digit code provided to the landlord
+              or tenant.
+            </div>
+
+            {/* LANDLORD */}
+
+            <div
+              className="national-id-otp-panel"
+              style={{
+                marginBottom: "20px",
+                opacity:
+                  landlordVerification.verified
+                    ? 0.8
+                    : 1,
+              }}
+            >
+
+              <div>
+
+                <span className="verification-eyebrow">
+                  LANDLORD
+                </span>
+
+                <h3>
+                  Verify Landlord National ID
+                </h3>
+
+                {landlordVerification.verified ? (
+                  <p
+                    style={{
+                      color: "#047857",
+                      fontWeight: 600,
+                    }}
+                  >
+                    ✓ Landlord National ID verified.
+                  </p>
+                ) : landlordVerification.sent ? (
+                  <p>
+                    A 6-digit code was sent to the
+                    landlord's registered phone.
+                  </p>
+                ) : (
+                  <p>
+                    Waiting for the landlord verification
+                    code to be sent.
+                  </p>
+                )}
+
+              </div>
+
+              {!landlordVerification.verified &&
+                landlordVerification.sent && (
+
+                  <form
+                    onSubmit={
+                      handleLandlordVerify
+                    }
+                  >
+
+                    <div className="otp-inline-form">
+
+                      <div className="form-group">
+
+                        <label htmlFor="landlordOtp">
+                          Verification Code
+                        </label>
+
+                        <input
+                          id="landlordOtp"
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={
+                            landlordVerification.otp
+                          }
+                          onChange={(event) =>
+                            setLandlordVerification(
+                              (previous) => ({
+                                ...previous,
+                                otp:
+                                  event.target.value
+                                    .replace(
+                                      /\D/g,
+                                      ""
+                                    )
+                                    .slice(
+                                      0,
+                                      6
+                                    ),
+                              })
+                            )
+                          }
+                          placeholder="Enter 6-digit code"
+                          autoComplete="one-time-code"
+                          disabled={
+                            landlordVerification.loading ||
+                            finalizing
+                          }
+                          autoFocus
+                        />
+
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="primary-button"
+                        disabled={
+                          landlordVerification.loading ||
+                          finalizing ||
+                          landlordVerification.otp.length !==
+                            6
+                        }
+                      >
+                        {landlordVerification.loading
+                          ? "Verifying..."
+                          : "Verify Landlord"}
+                      </button>
+
+                    </div>
+
+                  </form>
+
+                )}
+
+              {!landlordVerification.verified &&
+                landlordVerification.userId && (
+
+                  <button
+                    type="button"
+                    onClick={
+                      resendLandlordCode
+                    }
+                    disabled={
+                      landlordVerification.loading ||
+                      finalizing
+                    }
+                    style={{
+                      marginTop: "12px",
+                      background:
+                        "transparent",
+                      border: "none",
+                      color: "#008f78",
+                      cursor:
+                        "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Resend landlord code
+                  </button>
+
+                )}
+
+            </div>
+
+            {/* TENANT */}
+
+            <div
+              className="national-id-otp-panel"
+              style={{
+                marginBottom: "20px",
+                opacity:
+                  tenantVerification.verified
+                    ? 0.8
+                    : 1,
+              }}
+            >
+
+              <div>
+
+                <span className="verification-eyebrow">
+                  TENANT
+                </span>
+
+                <h3>
+                  Verify Tenant National ID
+                </h3>
+
+                {tenantVerification.verified ? (
+                  <p
+                    style={{
+                      color: "#047857",
+                      fontWeight: 600,
+                    }}
+                  >
+                    ✓ Tenant National ID verified.
+                  </p>
+                ) : tenantVerification.sent ? (
+                  <p>
+                    A 6-digit code was sent to the
+                    tenant's registered phone.
+                  </p>
+                ) : (
+                  <p>
+                    Waiting for the tenant verification
+                    code to be sent.
+                  </p>
+                )}
+
+              </div>
+
+              {!tenantVerification.verified &&
+                tenantVerification.sent && (
+
+                  <form
+                    onSubmit={
+                      handleTenantVerify
+                    }
+                  >
+
+                    <div className="otp-inline-form">
+
+                      <div className="form-group">
+
+                        <label htmlFor="tenantOtp">
+                          Verification Code
+                        </label>
+
+                        <input
+                          id="tenantOtp"
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={
+                            tenantVerification.otp
+                          }
+                          onChange={(event) =>
+                            setTenantVerification(
+                              (previous) => ({
+                                ...previous,
+                                otp:
+                                  event.target.value
+                                    .replace(
+                                      /\D/g,
+                                      ""
+                                    )
+                                    .slice(
+                                      0,
+                                      6
+                                    ),
+                              })
+                            )
+                          }
+                          placeholder="Enter 6-digit code"
+                          autoComplete="one-time-code"
+                          disabled={
+                            tenantVerification.loading ||
+                            finalizing
+                          }
+                        />
+
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="primary-button"
+                        disabled={
+                          tenantVerification.loading ||
+                          finalizing ||
+                          tenantVerification.otp.length !==
+                            6
+                        }
+                      >
+                        {tenantVerification.loading
+                          ? "Verifying..."
+                          : "Verify Tenant"}
+                      </button>
+
+                    </div>
+
+                  </form>
+
+                )}
+
+              {!tenantVerification.verified &&
+                tenantVerification.userId && (
+
+                  <button
+                    type="button"
+                    onClick={
+                      resendTenantCode
+                    }
+                    disabled={
+                      tenantVerification.loading ||
+                      finalizing
+                    }
+                    style={{
+                      marginTop: "12px",
+                      background:
+                        "transparent",
+                      border: "none",
+                      color: "#008f78",
+                      cursor:
+                        "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Resend tenant code
+                  </button>
+
+                )}
+
+            </div>
+
+            {/* BOTH VERIFIED */}
+
+            {landlordVerification.verified &&
+              tenantVerification.verified &&
+              !finalizing &&
+              !agreementFinalized && (
+
+                <div
+                  className="verification-success-box"
+                  style={{
+                    marginTop: "20px",
+                  }}
+                >
+                  ✓ Both National IDs have been verified.
+                  The rental agreement will now be created.
+                </div>
+
+              )}
+
+            {/* FINALIZING */}
+
+            {finalizing && (
+
+              <div
+                style={{
+                  marginTop: "20px",
+                  padding: "24px",
+                  textAlign: "center",
+                  border:
+                    "1px solid #dceae6",
+                  borderRadius: "10px",
+                  background:
+                    "#f8fcfb",
+                }}
+              >
+
+                <h3>
+                  Creating Rental Agreement
+                </h3>
+
+                <p>
+                  Both identities are verified.
+                  Finalizing the rental agreement
+                  and sending USSD consent codes...
+                </p>
+
+              </div>
+
+            )}
+
+          </section>
+        )}
+
+        {/* =================================================
+            STEP 5 - COMPLETE
+        ================================================= */}
+
+        {currentStep === 5 && (
+
           <div className="agreement-complete-state">
+
             <div className="agreement-complete-icon">
               ✓
             </div>
@@ -2987,14 +3662,15 @@ function CreateAgreement({
             </h2>
 
             <p>
-              The rental agreement has been
-              registered successfully and is now
-              proceeding through the SmartRent ET
-              verification workflow.
+              The rental agreement has been registered
+              successfully. The parties can now complete
+              the USSD consent verification process.
             </p>
 
             {referenceNumber && (
+
               <div className="agreement-reference-card">
+
                 <span>
                   Agreement Reference
                 </span>
@@ -3002,8 +3678,34 @@ function CreateAgreement({
                 <strong>
                   {referenceNumber}
                 </strong>
+
               </div>
+
             )}
+
+            <div
+              style={{
+                marginTop: "18px",
+                padding: "14px 16px",
+                border:
+                  "1px solid #dceae6",
+                borderRadius: "9px",
+                background:
+                  "#f8fcfb",
+                color:
+                  "#53636c",
+                fontSize: "13px",
+                lineHeight: 1.6,
+              }}
+            >
+              <strong>
+                Next step:
+              </strong>{" "}
+              The landlord and tenant will use the
+              USSD verification codes sent to their
+              registered phones to consent to the
+              agreement.
+            </div>
 
             <button
               type="button"
@@ -3012,8 +3714,11 @@ function CreateAgreement({
             >
               Done
             </button>
+
           </div>
+
         )}
+
       </div>
     </div>
   );

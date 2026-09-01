@@ -7,19 +7,24 @@ import Unauthorized from "./pages/auth/Unauthorized";
 import OfficeAdminDashboard from "./pages/admin/OfficeAdminDashboard";
 import OfficersManagement from "./pages/admin/OfficersManagement";
 import AuditLogs from "./pages/admin/AuditLogs";
+import AdminAgreements from "./pages/admin/AdminAgreements";
+
 // Super Admin
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
 import CreateAdmin from "./pages/super-admin/CreateAdmin";
 import Administrators from "./pages/super-admin/Administrators";
 import Officers from "./pages/super-admin/Officers";
 import GovernmentOffices from "./pages/super-admin/GovernmentOffices";
-import SystemSettings from "./pages/super-admin/SystemSettings";
+
+import Agreements from "./pages/super-admin/Agreements";
 
 // Officer
 import OfficerDashboard from "./pages/officer/OfficerDashboard";
 import RentalAgreements from "./pages/officer/RentalAgreements";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+
+
 
 function App() {
   return (
@@ -58,7 +63,7 @@ function App() {
           path="/super-admin/create-admin"
           element={<CreateAdmin />}
         />
-
+        
         <Route
           path="/super-admin/administrators"
           element={<Administrators />}
@@ -73,12 +78,14 @@ function App() {
           path="/super-admin/officers"
           element={<Officers />}
         />
-
-        <Route
-          path="/super-admin/settings"
-          element={<SystemSettings />}
-        />
+       <Route
+         path="/super-admin/agreements"
+         element={<Agreements />}
+      />
+        
       </Route>
+
+      
 
      {/* =========================
     OFFICE ADMIN
@@ -98,10 +105,16 @@ function App() {
     path="/office-admin/officers"
     element={<OfficersManagement />}
   />
+  
 
   <Route
     path="/office-admin/audit-logs"
     element={<AuditLogs />}
+  />
+
+  <Route
+    path="/office-admin/agreements"
+    element={<AdminAgreements />}
   />
 </Route>
       {/* =========================
@@ -160,5 +173,6 @@ function App() {
     </Routes>
   );
 }
+
 
 export default App;

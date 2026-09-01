@@ -10,6 +10,7 @@ type Officer = {
   position?: string | null;
   assignedArea?: string | null;
   createdAt: string;
+
   user: {
     userId: string;
     firstName: string;
@@ -19,7 +20,9 @@ type Officer = {
     username?: string | null;
     role: string;
     isActive: boolean;
+    isNationalIdVerified?: boolean;
   };
+
   office: {
     officeId: string;
     officeCode: string;
@@ -35,8 +38,25 @@ type OfficerListResponse = {
   data: Officer[];
 };
 
+type AccountStatusResponse = {
+  success: boolean;
+  message?: string;
+  error?: string;
+  data?: {
+    userId: string;
+    firstName: string;
+    lastName: string;
+    username?: string | null;
+    phone: string;
+    email?: string | null;
+    role: string;
+    isActive: boolean;
+    isNationalIdVerified?: boolean;
+  };
+};
+
 type StoredUser = {
-  userId?: number | string;
+  userId?: string;
   username?: string;
   firstName?: string;
   lastName?: string;
@@ -50,6 +70,11 @@ function Officers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+
+  const [statusLoadingId, setStatusLoadingId] =
+    useState<string | null>(null);
+
+  const [success, setSuccess] = useState("");
 
   const storedUser = localStorage.getItem("user");
 
@@ -113,39 +138,126 @@ function Officers() {
     void loadOfficers();
   }, []);
 
+  const handleAccountStatus = async (
+    officer: Officer
+  ) => {
+    const nextStatus = !officer.user.isActive;
+
+    const action = nextStatus
+      ? "activate"
+      : "deactivate";
+
+    const confirmed = window.confirm(
+      `Are you sure you want to ${action} ${officer.user.firstName} ${officer.user.lastName}'s account?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setStatusLoadingId(officer.officerId);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const response =
+        await apiRequest<AccountStatusResponse>(
+          `/auth/users/${officer.user.userId}/status`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token
+                ? {
+                    Authorization: `Bearer ${token}`,
+                  }
+                : {}),
+            },
+            body: JSON.stringify({
+              isActive: nextStatus,
+            }),
+          }
+        );
+
+      setOfficers((previous) =>
+        previous.map((item) =>
+          item.officerId === officer.officerId
+            ? {
+                ...item,
+                user: {
+                  ...item.user,
+                  isActive:
+                    response.data?.isActive ??
+                    nextStatus,
+                },
+              }
+            : item
+        )
+      );
+
+      setSuccess(
+        response.message ||
+          `Officer account ${
+            nextStatus ? "activated" : "deactivated"
+          } successfully.`
+      );
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(
+          `Failed to ${action} officer account.`
+        );
+      }
+    } finally {
+      setStatusLoadingId(null);
+    }
+  };
+
   const activeCount = officers.filter(
     (officer) => officer.user.isActive
   ).length;
 
-  const filteredOfficers = officers.filter((officer) => {
+  const inactiveCount =
+    officers.length - activeCount;
+
+  const filteredOfficers = useMemo(() => {
     const query = search.trim().toLowerCase();
 
     if (!query) {
-      return true;
+      return officers;
     }
 
-    return [
-      officer.user.firstName,
-      officer.user.lastName,
-      officer.user.username,
-      officer.user.email,
-      officer.user.phone,
-      officer.employeeId,
-      officer.position,
-      officer.assignedArea,
-      officer.office.officeCode,
-      officer.office.officeName,
-      officer.office.subCity,
-      officer.office.woreda,
-    ]
-      .filter(Boolean)
-      .some((value) =>
-        String(value).toLowerCase().includes(query)
-      );
-  });
+    return officers.filter((officer) => {
+      return [
+        officer.user.firstName,
+        officer.user.lastName,
+        officer.user.username,
+        officer.user.email,
+        officer.user.phone,
+        officer.employeeId,
+        officer.position,
+        officer.assignedArea,
+        officer.office.officeCode,
+        officer.office.officeName,
+        officer.office.subCity,
+        officer.office.woreda,
+      ]
+        .filter(Boolean)
+        .some((value) =>
+          String(value)
+            .toLowerCase()
+            .includes(query)
+        );
+    });
+  }, [officers, search]);
 
   return (
     <div className="super-admin-page">
+      {/* ================= SIDEBAR ================= */}
+
       <aside className="super-admin-sidebar">
         <div className="super-admin-sidebar-brand">
           <img
@@ -181,7 +293,9 @@ function Officers() {
             type="button"
             className="super-admin-nav-item"
             onClick={() =>
-              navigate("/super-admin/administrators")
+              navigate(
+                "/super-admin/administrators"
+              )
             }
           >
             <span className="super-admin-nav-icon">
@@ -212,25 +326,26 @@ function Officers() {
             </span>
             <span>Government Offices</span>
           </button>
-
           <button
-            type="button"
-            className="super-admin-nav-item"
-            onClick={() =>
-              navigate("/super-admin/settings")
-            }
-          >
-            <span className="super-admin-nav-icon">
-              ⚙
-            </span>
-            <span>System Settings</span>
-          </button>
+  type="button"
+  className="super-admin-nav-item"
+  onClick={() =>
+    navigate("/super-admin/agreements")
+  }
+>
+  <span className="super-admin-nav-icon">
+    □
+  </span>
+  <span>Agreements</span>
+</button>
         </nav>
 
         <div className="super-admin-sidebar-bottom">
           <div className="super-admin-profile">
             <div className="super-admin-avatar">
-              {displayName.charAt(0).toUpperCase()}
+              {displayName
+                .charAt(0)
+                .toUpperCase()}
             </div>
 
             <div className="super-admin-profile-info">
@@ -245,7 +360,11 @@ function Officers() {
         </div>
       </aside>
 
+      {/* ================= MAIN ================= */}
+
       <div className="super-admin-main">
+        {/* ================= TOP BAR ================= */}
+
         <header className="super-admin-topbar">
           <div className="super-admin-search">
             <span className="super-admin-search-icon">
@@ -272,6 +391,8 @@ function Officers() {
           </div>
         </header>
 
+        {/* ================= CONTENT ================= */}
+
         <main className="super-admin-content">
           <section className="super-admin-page-heading">
             <div>
@@ -293,9 +414,13 @@ function Officers() {
               onClick={() => void loadOfficers()}
               disabled={loading}
             >
-              {loading ? "Refreshing..." : "Refresh"}
+              {loading
+                ? "Refreshing..."
+                : "Refresh"}
             </button>
           </section>
+
+          {/* ================= STATS ================= */}
 
           <section className="super-admin-stat-grid">
             <article className="super-admin-stat-card">
@@ -305,8 +430,14 @@ function Officers() {
 
               <div className="super-admin-stat-content">
                 <span>Total Officers</span>
-                <strong>{officers.length}</strong>
-                <small>Registered officers</small>
+
+                <strong>
+                  {officers.length}
+                </strong>
+
+                <small>
+                  Registered officers
+                </small>
               </div>
             </article>
 
@@ -317,25 +448,55 @@ function Officers() {
 
               <div className="super-admin-stat-content">
                 <span>Active Officers</span>
+
                 <strong>{activeCount}</strong>
-                <small>Currently active</small>
+
+                <small>
+                  Currently active
+                </small>
               </div>
             </article>
 
             <article className="super-admin-stat-card">
               <div className="super-admin-stat-icon">
-                ◎
+                ○
               </div>
 
               <div className="super-admin-stat-content">
                 <span>Inactive Officers</span>
+
                 <strong>
-                  {officers.length - activeCount}
+                  {inactiveCount}
                 </strong>
-                <small>Currently inactive</small>
+
+                <small>
+                  Currently inactive
+                </small>
               </div>
             </article>
           </section>
+
+          {/* ================= MESSAGES ================= */}
+
+          {success && (
+            <div
+              className="super-admin-form-success"
+              role="status"
+            >
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div
+              className="super-admin-form-error"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
+          {/* ================= OFFICER TABLE ================= */}
 
           <section className="super-admin-management-card">
             <div className="super-admin-management-header">
@@ -354,20 +515,14 @@ function Officers() {
               <button
                 type="button"
                 className="super-admin-outline-button"
-                onClick={() => navigate("/super-admin")}
+                onClick={() => void loadOfficers()}
+                disabled={loading}
               >
-                Back to Dashboard
+                {loading
+                  ? "Refreshing..."
+                  : "Refresh"}
               </button>
             </div>
-
-            {error && (
-              <div
-                className="super-admin-form-error"
-                role="alert"
-              >
-                {error}
-              </div>
-            )}
 
             {loading ? (
               <div className="super-admin-empty-state">
@@ -381,7 +536,8 @@ function Officers() {
                   Retrieving officer accounts.
                 </p>
               </div>
-            ) : filteredOfficers.length === 0 ? (
+            ) : filteredOfficers.length ===
+              0 ? (
               <div className="super-admin-empty-state">
                 <div className="super-admin-empty-icon">
                   ♟
@@ -403,26 +559,33 @@ function Officers() {
               <div
                 style={{
                   overflowX: "auto",
-                  padding: "20px 28px 28px",
+                  padding:
+                    "20px 28px 28px",
                 }}
               >
                 <table
                   style={{
                     width: "100%",
-                    borderCollapse: "collapse",
-                    minWidth: "1000px",
+                    borderCollapse:
+                      "collapse",
+                    minWidth:
+                      "1180px",
                   }}
                 >
                   <thead>
                     <tr>
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Officer
@@ -430,12 +593,16 @@ function Officers() {
 
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Employee ID
@@ -443,12 +610,16 @@ function Officers() {
 
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Position
@@ -456,12 +627,16 @@ function Officers() {
 
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Office
@@ -469,12 +644,16 @@ function Officers() {
 
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Assigned Area
@@ -482,131 +661,292 @@ function Officers() {
 
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Status
+                      </th>
+
+                      <th
+                        style={{
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
+                          borderBottom:
+                            "1px solid #e8edeb",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
+                        }}
+                      >
+                        Actions
                       </th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {filteredOfficers.map((officer) => (
-                      <tr key={officer.officerId}>
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                          }}
-                        >
-                          <strong>
-                            {officer.user.firstName}{" "}
-                            {officer.user.lastName}
-                          </strong>
+                    {filteredOfficers.map(
+                      (officer) => {
+                        const changingStatus =
+                          statusLoadingId ===
+                          officer.officerId;
 
-                          <div
-                            style={{
-                              marginTop: "4px",
-                              color: "#788991",
-                              fontSize: "12px",
-                            }}
+                        return (
+                          <tr
+                            key={
+                              officer.officerId
+                            }
                           >
-                            @{officer.user.username ||
-                              "No username"}
-                          </div>
-                        </td>
+                            <td
+                              style={{
+                                padding:
+                                  "16px 12px",
+                                borderBottom:
+                                  "1px solid #eef2f0",
+                              }}
+                            >
+                              <strong>
+                                {
+                                  officer.user
+                                    .firstName
+                                }{" "}
+                                {
+                                  officer.user
+                                    .lastName
+                                }
+                              </strong>
 
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                          }}
-                        >
-                          {officer.employeeId}
-                        </td>
+                              <div
+                                style={{
+                                  marginTop:
+                                    "4px",
+                                  color:
+                                    "#788991",
+                                  fontSize:
+                                    "12px",
+                                }}
+                              >
+                                @
+                                {officer.user
+                                  .username ||
+                                  "No username"}
+                              </div>
 
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                            color: "#53636c",
-                          }}
-                        >
-                          {officer.position || "—"}
-                        </td>
+                              <div
+                                style={{
+                                  marginTop:
+                                    "4px",
+                                  color:
+                                    "#9aa6ab",
+                                  fontSize:
+                                    "11px",
+                                }}
+                              >
+                                {
+                                  officer.user
+                                    .phone
+                                }
+                              </div>
+                            </td>
 
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                          }}
-                        >
-                          <strong>
-                            {officer.office.officeCode}
-                          </strong>
+                            <td
+                              style={{
+                                padding:
+                                  "16px 12px",
+                                borderBottom:
+                                  "1px solid #eef2f0",
+                              }}
+                            >
+                              {
+                                officer.employeeId
+                              }
+                            </td>
 
-                          <div
-                            style={{
-                              marginTop: "4px",
-                              color: "#788991",
-                              fontSize: "12px",
-                            }}
-                          >
-                            {officer.office.officeName}
-                          </div>
-                        </td>
+                            <td
+                              style={{
+                                padding:
+                                  "16px 12px",
+                                borderBottom:
+                                  "1px solid #eef2f0",
+                                color:
+                                  "#53636c",
+                              }}
+                            >
+                              {
+                                officer.position ||
+                                "—"
+                              }
+                            </td>
 
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                            color: "#53636c",
-                          }}
-                        >
-                          {officer.assignedArea || "—"}
-                        </td>
+                            <td
+                              style={{
+                                padding:
+                                  "16px 12px",
+                                borderBottom:
+                                  "1px solid #eef2f0",
+                              }}
+                            >
+                              <strong>
+                                {
+                                  officer.office
+                                    .officeCode
+                                }
+                              </strong>
 
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                          }}
-                        >
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "6px 10px",
-                              borderRadius: "999px",
-                              background:
-                                officer.user.isActive
-                                  ? "#e6f7f3"
-                                  : "#f3f4f6",
-                              color:
-                                officer.user.isActive
-                                  ? "#008f78"
-                                  : "#6b7280",
-                              fontSize: "12px",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {officer.user.isActive
-                              ? "Active"
-                              : "Inactive"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                              <div
+                                style={{
+                                  marginTop:
+                                    "4px",
+                                  color:
+                                    "#788991",
+                                  fontSize:
+                                    "12px",
+                                }}
+                              >
+                                {
+                                  officer.office
+                                    .officeName
+                                }
+                              </div>
+                            </td>
+
+                            <td
+                              style={{
+                                padding:
+                                  "16px 12px",
+                                borderBottom:
+                                  "1px solid #eef2f0",
+                                color:
+                                  "#53636c",
+                              }}
+                            >
+                              {
+                                officer.assignedArea ||
+                                "—"
+                              }
+                            </td>
+
+                            <td
+                              style={{
+                                padding:
+                                  "16px 12px",
+                                borderBottom:
+                                  "1px solid #eef2f0",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  display:
+                                    "inline-block",
+                                  padding:
+                                    "6px 10px",
+                                  borderRadius:
+                                    "999px",
+                                  background:
+                                    officer
+                                      .user
+                                      .isActive
+                                      ? "#e6f7f3"
+                                      : "#f3f4f6",
+                                  color:
+                                    officer
+                                      .user
+                                      .isActive
+                                      ? "#008f78"
+                                      : "#6b7280",
+                                  fontSize:
+                                    "12px",
+                                  fontWeight:
+                                    700,
+                                }}
+                              >
+                                {officer
+                                  .user
+                                  .isActive
+                                  ? "Active"
+                                  : "Inactive"}
+                              </span>
+                            </td>
+
+                            <td
+                              style={{
+                                padding:
+                                  "16px 12px",
+                                borderBottom:
+                                  "1px solid #eef2f0",
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleAccountStatus(
+                                    officer
+                                  )
+                                }
+                                disabled={
+                                  changingStatus
+                                }
+                                style={{
+                                  minWidth:
+                                    "100px",
+                                  height:
+                                    "36px",
+                                  padding:
+                                    "0 12px",
+                                  border:
+                                    "1px solid #d4ddda",
+                                  borderRadius:
+                                    "6px",
+                                  background:
+                                    officer
+                                      .user
+                                      .isActive
+                                      ? "#fff5f5"
+                                      : "#ecfdf5",
+                                  color:
+                                    officer
+                                      .user
+                                      .isActive
+                                      ? "#b42318"
+                                      : "#047857",
+                                  fontSize:
+                                    "12px",
+                                  fontWeight:
+                                    700,
+                                  cursor:
+                                    changingStatus
+                                      ? "not-allowed"
+                                      : "pointer",
+                                  opacity:
+                                    changingStatus
+                                      ? 0.65
+                                      : 1,
+                                }}
+                              >
+                                {changingStatus
+                                  ? "Updating..."
+                                  : officer
+                                      .user
+                                      .isActive
+                                  ? "Deactivate"
+                                  : "Activate"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      }
+                    )}
                   </tbody>
                 </table>
               </div>

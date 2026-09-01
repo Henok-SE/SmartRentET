@@ -7,8 +7,8 @@ type AuditLog = {
   auditId: string;
   action: string;
   entityType: string;
-  entityId: string;
-  description: string;
+  entityId?: string | null;
+  description?: string | null;
   ipAddress?: string | null;
   createdAt: string;
 
@@ -32,38 +32,6 @@ type AuditLogResponse = {
   data: AuditLog[];
 };
 
-type Officer = {
-  officerId: string;
-  employeeId: string;
-  position?: string | null;
-  assignedArea?: string | null;
-  createdAt: string;
-
-  user: {
-    userId: string;
-    firstName: string;
-    lastName: string;
-    username?: string | null;
-    phone: string;
-    email?: string | null;
-    isActive: boolean;
-  };
-
-  office: {
-    officeId: string;
-    officeCode: string;
-    officeName: string;
-    subCity?: string | null;
-    woreda?: string | null;
-  };
-};
-
-type OfficerListResponse = {
-  success: boolean;
-  message?: string;
-  data: Officer[];
-};
-
 type OfficeAdmin = {
   officeAdminId: string;
   employeeId: string;
@@ -84,8 +52,11 @@ type OfficeAdmin = {
     officeId: string;
     officeCode: string;
     officeName: string;
+    region?: string | null;
+    city?: string | null;
     subCity?: string | null;
     woreda?: string | null;
+    status?: "ACTIVE" | "INACTIVE";
   };
 };
 
@@ -96,7 +67,7 @@ type OfficeAdminListResponse = {
 };
 
 type StoredUser = {
-  userId?: number | string;
+  userId?: string | number;
   username?: string;
   firstName?: string;
   lastName?: string;
@@ -116,44 +87,60 @@ function formatDateTime(value: string) {
   }).format(date);
 }
 
+function getActionClass(action: string) {
+  switch (action) {
+    case "CREATE":
+    case "ACTIVATE":
+    case "APPROVE":
+    case "PAYMENT_RECORDED":
+    case "VERIFICATION_COMPLETED":
+    case "SERVICE_FEE_PAID":
+      return "audit-action-success";
+
+    case "UPDATE":
+    case "LOGIN":
+    case "LOGOUT":
+    case "VERIFICATION_SENT":
+    case "SERVICE_FEE_INITIATED":
+      return "audit-action-info";
+
+    case "REJECT":
+    case "DEACTIVATE":
+    case "DELETE":
+      return "audit-action-danger";
+
+    default:
+      return "audit-action-default";
+  }
+}
+
 function AuditLogs() {
   const navigate = useNavigate();
   const location = useLocation();
 
   const [logs, setLogs] = useState<AuditLog[]>([]);
 
-  const [officers, setOfficers] = useState<Officer[]>(
-    []
-  );
+  const [officeName, setOfficeName] = useState("");
+  const [officeCode, setOfficeCode] = useState("");
 
-  const [officeId, setOfficeId] = useState<
-    string | null
-  >(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [officeName, setOfficeName] =
-    useState("");
+  const [search, setSearch] = useState("");
 
-  const [officeCode, setOfficeCode] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  const [search, setSearch] =
+  const [actionFilter, setActionFilter] =
     useState("");
 
   const [currentDateTime, setCurrentDateTime] =
     useState(new Date());
 
-  /* =========================================================
-     CURRENT USER
-  ========================================================== */
+  /*
+   * =========================================================
+   * CURRENT USER
+   * =========================================================
+   */
 
-  const storedUser =
-    localStorage.getItem("user");
+  const storedUser = localStorage.getItem("user");
 
   const user: StoredUser = useMemo(() => {
     if (!storedUser) {
@@ -172,16 +159,13 @@ function AuditLogs() {
   const displayName =
     user.firstName && user.lastName
       ? `${user.firstName} ${user.lastName}`
-      : user.username ||
-        "Office Admin";
+      : user.username || "Office Admin";
 
   const userInitials =
     user.firstName && user.lastName
       ? `${user.firstName.charAt(
           0
-        )}${user.lastName.charAt(
-          0
-        )}`.toUpperCase()
+        )}${user.lastName.charAt(0)}`.toUpperCase()
       : displayName
           .split(" ")
           .filter(Boolean)
@@ -192,9 +176,29 @@ function AuditLogs() {
           .join("")
           .toUpperCase() || "OA";
 
-  /* =========================================================
-     LIVE DATE / TIME
-  ========================================================== */
+  /*
+   * =========================================================
+   * AUTH
+   * =========================================================
+   */
+
+  const getAuthHeaders = () => {
+    const token =
+      localStorage.getItem("token");
+
+    return token
+      ? {
+          Authorization:
+            `Bearer ${token}`,
+        }
+      : undefined;
+  };
+
+  /*
+   * =========================================================
+   * DATE / TIME
+   * =========================================================
+   */
 
   useEffect(() => {
     const timer =
@@ -230,29 +234,26 @@ function AuditLogs() {
       }
     ).format(currentDateTime);
 
-  /* =========================================================
-     LOAD OFFICE ADMIN
-  ========================================================== */
+  /*
+   * =========================================================
+   * LOAD OFFICE DETAILS
+   * =========================================================
+   *
+   * We only use this to display the Office Admin's office
+   * context. Audit-log authorization/scoping remains on the
+   * backend.
+   */
 
   const loadOfficeDetails =
     async () => {
-      const token =
-        localStorage.getItem(
-          "token"
-        );
-
       const response =
         await apiRequest<OfficeAdminListResponse>(
           "/dashboard/office-admins",
           {
             method: "GET",
             cache: "no-store",
-            headers: token
-              ? {
-                  Authorization:
-                    `Bearer ${token}`,
-                }
-              : undefined,
+            headers:
+              getAuthHeaders(),
           }
         );
 
@@ -291,84 +292,34 @@ function AuditLogs() {
         );
       }
 
-      setOfficeId(
-        String(
-          currentAdmin.office.officeId
-        )
-      );
-
       setOfficeName(
-        currentAdmin.office.officeName ||
+        currentAdmin.office
+          .officeName ||
           "Government Office"
       );
 
       setOfficeCode(
-        currentAdmin.office.officeCode ||
-          ""
+        currentAdmin.office
+          .officeCode || ""
       );
     };
 
-  /* =========================================================
-     LOAD OFFICERS
-  ========================================================== */
-
-  const loadOfficers =
-    async () => {
-      const token =
-        localStorage.getItem(
-          "token"
-        );
-
-      const response =
-        await apiRequest<OfficerListResponse>(
-          "/dashboard/officers",
-          {
-            method: "GET",
-            cache: "no-store",
-            headers: token
-              ? {
-                  Authorization:
-                    `Bearer ${token}`,
-                }
-              : undefined,
-          }
-        );
-
-      if (!response.success) {
-        throw new Error(
-          response.message ||
-            "Failed to load officers."
-        );
-      }
-
-      setOfficers(
-        response.data ?? []
-      );
-    };
-
-  /* =========================================================
-     LOAD AUDIT LOGS
-  ========================================================== */
+  /*
+   * =========================================================
+   * LOAD AUDIT LOGS
+   * =========================================================
+   */
 
   const loadAuditLogs =
     async () => {
-      const token =
-        localStorage.getItem(
-          "token"
-        );
-
       const response =
         await apiRequest<AuditLogResponse>(
           "/dashboard/audit-logs",
           {
             method: "GET",
             cache: "no-store",
-            headers: token
-              ? {
-                  Authorization:
-                    `Bearer ${token}`,
-                }
-              : undefined,
+            headers:
+              getAuthHeaders(),
           }
         );
 
@@ -384,9 +335,11 @@ function AuditLogs() {
       );
     };
 
-  /* =========================================================
-     LOAD PAGE
-  ========================================================== */
+  /*
+   * =========================================================
+   * LOAD PAGE
+   * =========================================================
+   */
 
   const loadPage =
     async () => {
@@ -396,7 +349,6 @@ function AuditLogs() {
       try {
         await Promise.all([
           loadOfficeDetails(),
-          loadOfficers(),
           loadAuditLogs(),
         ]);
       } catch (err) {
@@ -405,17 +357,11 @@ function AuditLogs() {
           err
         );
 
-        if (
+        setError(
           err instanceof Error
-        ) {
-          setError(
-            err.message
-          );
-        } else {
-          setError(
-            "Failed to load audit logs."
-          );
-        }
+            ? err.message
+            : "Failed to load audit logs."
+        );
       } finally {
         setLoading(false);
       }
@@ -432,82 +378,11 @@ function AuditLogs() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.userId]);
 
-  /* =========================================================
-     USERS BELONGING TO CURRENT OFFICE
-  ========================================================== */
-
-  const officeUserIds =
-    useMemo(() => {
-      const ids =
-        new Set<string>();
-
-      /*
-       * Current Office Admin
-       */
-      if (user.userId) {
-        ids.add(
-          String(user.userId)
-        );
-      }
-
-      /*
-       * Officers returned for the office.
-       */
-      officers.forEach(
-        (officer) => {
-          if (
-            !officeId ||
-            String(
-              officer.office.officeId
-            ) === String(officeId)
-          ) {
-            ids.add(
-              String(
-                officer.user.userId
-              )
-            );
-          }
-        }
-      );
-
-      return ids;
-    }, [
-      officers,
-      officeId,
-      user.userId,
-    ]);
-
-  /* =========================================================
-     OFFICE-SCOPED AUDIT LOGS
-  ========================================================== */
-
-  const officeLogs =
-    useMemo(() => {
-      /*
-       * System logs without a user are kept only if
-       * the backend has already scoped the response.
-       */
-      return logs.filter(
-        (log) => {
-          if (!log.user) {
-            return true;
-          }
-
-          return officeUserIds.has(
-            String(
-              log.user.userId
-            )
-          );
-        }
-      );
-    }, [
-      logs,
-      officeUserIds,
-    ]);
-
-  /* =========================================================
-     SEARCH
-  ========================================================== */
+  /*
+   * =========================================================
+   * FILTER
+   * =========================================================
+   */
 
   const filteredLogs =
     useMemo(() => {
@@ -516,48 +391,94 @@ function AuditLogs() {
           .trim()
           .toLowerCase();
 
-      if (!query) {
-        return officeLogs;
-      }
+      return logs.filter((log) => {
+        const matchesAction =
+          !actionFilter ||
+          log.action ===
+            actionFilter;
 
-      return officeLogs.filter(
-        (log) => {
-          const actor =
-            log.user
-              ? `${log.user.firstName} ${log.user.lastName} ${log.user.username || ""}`
-              : "system";
-
-          return [
-            log.action,
-            log.entityType,
-            log.entityId,
-            log.description,
-            log.ipAddress,
-            actor,
-          ]
-            .filter(Boolean)
-            .some((value) =>
-              String(value)
-                .toLowerCase()
-                .includes(query)
-            );
+        if (!matchesAction) {
+          return false;
         }
-      );
+
+        if (!query) {
+          return true;
+        }
+
+        const actor = log.user
+          ? `${log.user.firstName} ${log.user.lastName} ${
+              log.user.username || ""
+            }`
+          : "system";
+
+        return [
+          log.action,
+          log.entityType,
+          log.entityId,
+          log.description,
+          log.ipAddress,
+          actor,
+        ]
+          .filter(Boolean)
+          .some((value) =>
+            String(value)
+              .toLowerCase()
+              .includes(query)
+          );
+      });
     }, [
-      officeLogs,
+      logs,
       search,
+      actionFilter,
     ]);
 
-  /* =========================================================
-     RENDER
-  ========================================================== */
+  /*
+   * =========================================================
+   * COUNTS
+   * =========================================================
+   */
+
+  const totalLogs =
+    logs.length;
+
+  const createCount =
+    logs.filter(
+      (log) =>
+        log.action === "CREATE"
+    ).length;
+
+  const statusChangeCount =
+    logs.filter(
+      (log) =>
+        log.action ===
+          "ACTIVATE" ||
+        log.action ===
+          "DEACTIVATE"
+    ).length;
+
+  /*
+   * =========================================================
+   * CLEAR FILTERS
+   * =========================================================
+   */
+
+  const clearFilters = () => {
+    setSearch("");
+    setActionFilter("");
+  };
+
+  /*
+   * =========================================================
+   * RENDER
+   * =========================================================
+   */
 
   return (
     <div className="office-admin-page">
 
-      {/* =====================================================
+      {/* ===================================================
           SIDEBAR
-      ===================================================== */}
+          =================================================== */}
 
       <aside className="office-admin-sidebar">
 
@@ -570,7 +491,6 @@ function AuditLogs() {
           />
 
           <div>
-
             <h2>
               SmartRent ET
             </h2>
@@ -578,7 +498,6 @@ function AuditLogs() {
             <span>
               OFFICE ADMIN PORTAL
             </span>
-
           </div>
 
         </div>
@@ -636,6 +555,27 @@ function AuditLogs() {
             type="button"
             className={`office-admin-nav-item ${
               location.pathname ===
+              "/office-admin/agreements"
+                ? "active"
+                : ""
+            }`}
+            onClick={() =>
+              navigate(
+                "/office-admin/agreements"
+              )
+            }
+          >
+            <span className="nav-icon">
+              □
+            </span>
+
+            Agreements
+          </button>
+
+          <button
+            type="button"
+            className={`office-admin-nav-item ${
+              location.pathname ===
               "/office-admin/audit-logs"
                 ? "active"
                 : ""
@@ -664,7 +604,6 @@ function AuditLogs() {
             </div>
 
             <div>
-
               <strong>
                 {displayName}
               </strong>
@@ -672,12 +611,16 @@ function AuditLogs() {
               <span>
                 Office Administrator
               </span>
-
             </div>
 
           </div>
 
-          <div style={{ marginTop: "14px" }}>
+          <div
+            style={{
+              marginTop:
+                "14px",
+            }}
+          >
             <LogoutButton />
           </div>
 
@@ -685,9 +628,9 @@ function AuditLogs() {
 
       </aside>
 
-      {/* =====================================================
+      {/* ===================================================
           MAIN
-      ===================================================== */}
+          =================================================== */}
 
       <main className="office-admin-main">
 
@@ -697,7 +640,9 @@ function AuditLogs() {
 
           <div className="office-admin-search">
 
-            <span>⌕</span>
+            <span>
+              ⌕
+            </span>
 
             <input
               type="text"
@@ -716,13 +661,15 @@ function AuditLogs() {
           <div
             className="office-admin-user"
             style={{
-              gap: "16px",
+              gap:
+                "16px",
             }}
           >
 
             <div
               style={{
-                display: "flex",
+                display:
+                  "flex",
                 flexDirection:
                   "column",
                 alignItems:
@@ -734,7 +681,8 @@ function AuditLogs() {
                 style={{
                   fontSize:
                     "13px",
-                  fontWeight: 700,
+                  fontWeight:
+                    700,
                   color:
                     "#27343a",
                 }}
@@ -783,7 +731,7 @@ function AuditLogs() {
 
           <div className="officers-management-page">
 
-            {/* HEADER */}
+            {/* PAGE HEADER */}
 
             <div className="officers-management-header">
 
@@ -798,9 +746,9 @@ function AuditLogs() {
                 </h1>
 
                 <p>
-                  Review recorded system
-                  actions and administrative
-                  activity for your office.
+                  Review recorded system actions
+                  and administrative activity for
+                  your Government Office.
                 </p>
 
                 {officeName && (
@@ -827,7 +775,7 @@ function AuditLogs() {
 
               <button
                 type="button"
-                className="office-admin-refresh-button"
+                className="create-officer-button"
                 onClick={() =>
                   void loadPage()
                 }
@@ -840,24 +788,312 @@ function AuditLogs() {
 
             </div>
 
-            {/* ERROR */}
+            {/* FILTERS */}
 
-            {error && (
+            <section
+              className="office-admin-table-card"
+              style={{
+                marginBottom:
+                  "20px",
+              }}
+            >
+
+              <div className="office-admin-table-header">
+
+                <div>
+
+                  <span className="office-admin-eyebrow">
+                    ACTIVITY FILTERS
+                  </span>
+
+                  <h2>
+                    Search & Filter
+                  </h2>
+
+                  <p>
+                    Search recorded activity or
+                    filter by action.
+                  </p>
+
+                </div>
+
+              </div>
+
               <div
-                className="auth-error"
-                role="alert"
                 style={{
-                  marginBottom:
+                  display:
+                    "grid",
+                  gridTemplateColumns:
+                    "2fr 1fr auto",
+                  gap:
+                    "14px",
+                  alignItems:
+                    "end",
+                  padding:
                     "20px",
                 }}
               >
-                {error}
-              </div>
-            )}
 
-            {/* TABLE CARD */}
+                <div className="form-group">
+                  <label htmlFor="audit-search">
+                    Search
+                  </label>
+
+                  <input
+                    id="audit-search"
+                    type="text"
+                    value={
+                      search
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setSearch(
+                        event
+                          .target
+                          .value
+                      )
+                    }
+                    placeholder="Search action, user, entity, description..."
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="audit-action">
+                    Action
+                  </label>
+
+                  <select
+                    id="audit-action"
+                    value={
+                      actionFilter
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setActionFilter(
+                        event
+                          .target
+                          .value
+                      )
+                    }
+                  >
+                    <option value="">
+                      All actions
+                    </option>
+
+                    <option value="CREATE">
+                      CREATE
+                    </option>
+
+                    <option value="UPDATE">
+                      UPDATE
+                    </option>
+
+                    <option value="DELETE">
+                      DELETE
+                    </option>
+
+                    <option value="LOGIN">
+                      LOGIN
+                    </option>
+
+                    <option value="LOGOUT">
+                      LOGOUT
+                    </option>
+
+                    <option value="APPROVE">
+                      APPROVE
+                    </option>
+
+                    <option value="REJECT">
+                      REJECT
+                    </option>
+
+                    <option value="ACTIVATE">
+                      ACTIVATE
+                    </option>
+
+                    <option value="DEACTIVATE">
+                      DEACTIVATE
+                    </option>
+
+                    <option value="PAYMENT_RECORDED">
+                      PAYMENT_RECORDED
+                    </option>
+
+                    <option value="VERIFICATION_SENT">
+                      VERIFICATION_SENT
+                    </option>
+
+                    <option value="VERIFICATION_COMPLETED">
+                      VERIFICATION_COMPLETED
+                    </option>
+
+                    <option value="SERVICE_FEE_INITIATED">
+                      SERVICE_FEE_INITIATED
+                    </option>
+
+                    <option value="SERVICE_FEE_PAID">
+                      SERVICE_FEE_PAID
+                    </option>
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  className="office-admin-outline-button"
+                  onClick={
+                    clearFilters
+                  }
+                >
+                  Clear
+                </button>
+
+              </div>
+
+            </section>
+
+            {/* STATISTICS */}
+
+            <section className="office-admin-stats">
+
+              <article className="office-admin-stat-card">
+
+                <div className="office-admin-stat-icon">
+                  ◷
+                </div>
+
+                <div>
+                  <span>
+                    Total Activity
+                  </span>
+
+                  <strong>
+                    {loading
+                      ? "—"
+                      : totalLogs}
+                  </strong>
+
+                  <small>
+                    Recorded audit events
+                  </small>
+                </div>
+
+              </article>
+
+              <article className="office-admin-stat-card">
+
+                <div className="office-admin-stat-icon">
+                  +
+                </div>
+
+                <div>
+                  <span>
+                    Create Actions
+                  </span>
+
+                  <strong>
+                    {loading
+                      ? "—"
+                      : createCount}
+                  </strong>
+
+                  <small>
+                    CREATE events
+                  </small>
+                </div>
+
+              </article>
+
+              <article className="office-admin-stat-card">
+
+                <div className="office-admin-stat-icon">
+                  ✓
+                </div>
+
+                <div>
+                  <span>
+                    Status Changes
+                  </span>
+
+                  <strong>
+                    {loading
+                      ? "—"
+                      : statusChangeCount}
+                  </strong>
+
+                  <small>
+                    Activate / Deactivate
+                  </small>
+                </div>
+
+              </article>
+
+            </section>
+
+            {/* LOG TABLE */}
 
             <div className="officers-management-card">
+
+              <div
+                style={{
+                  padding:
+                    "20px",
+                  borderBottom:
+                    "1px solid #e8edeb",
+                }}
+              >
+
+                <span className="office-admin-eyebrow">
+                  AUDIT HISTORY
+                </span>
+
+                <h2
+                  style={{
+                    margin:
+                      "4px 0 0",
+                    color:
+                      "#25343a",
+                    fontSize:
+                      "20px",
+                  }}
+                >
+                  Office Activity
+                </h2>
+
+                <p
+                  style={{
+                    margin:
+                      "6px 0 0",
+                    color:
+                      "#788991",
+                    fontSize:
+                      "13px",
+                  }}
+                >
+                  {filteredLogs.length}{" "}
+                  {filteredLogs.length ===
+                  1
+                    ? "record"
+                    : "records"}{" "}
+                  shown.
+                </p>
+
+              </div>
+
+              {error && (
+                <div
+                  className="auth-error"
+                  role="alert"
+                  style={{
+                    margin:
+                      "20px",
+                  }}
+                >
+                  {error}
+                </div>
+              )}
 
               {loading ? (
 
@@ -877,8 +1113,8 @@ function AuditLogs() {
                   </h3>
 
                   <p>
-                    Retrieving recorded
-                    system activity.
+                    Retrieving recorded system
+                    activity.
                   </p>
 
                 </div>
@@ -897,27 +1133,71 @@ function AuditLogs() {
                   }}
                 >
 
-                  <h3>
+                  <div
+                    style={{
+                      width:
+                        "64px",
+                      height:
+                        "64px",
+                      margin:
+                        "0 auto 16px",
+                      display:
+                        "flex",
+                      alignItems:
+                        "center",
+                      justifyContent:
+                        "center",
+                      borderRadius:
+                        "50%",
+                      background:
+                        "#eaf8f5",
+                      color:
+                        "#08a68b",
+                      fontSize:
+                        "24px",
+                    }}
+                  >
+                    ◷
+                  </div>
 
-                    {search
+                  <h3>
+                    {search ||
+                    actionFilter
                       ? "No audit logs found"
                       : "No audit logs yet"}
-
                   </h3>
 
                   <p>
-
-                    {search
-                      ? `No audit records match "${search}".`
-                      : "Recorded system activity for your office will appear here."}
-
+                    {search ||
+                    actionFilter
+                      ? "No audit records match the selected filters."
+                      : "Recorded office activity will appear here when audit events are created."}
                   </p>
+
+                  {(search ||
+                    actionFilter) && (
+                    <button
+                      type="button"
+                      className="office-admin-outline-button"
+                      onClick={
+                        clearFilters
+                      }
+                    >
+                      Clear Filters
+                    </button>
+                  )}
 
                 </div>
 
               ) : (
 
-                <div className="officers-table-wrapper">
+                <div
+                  className="officers-table-wrapper"
+                  style={{
+                    overflowX:
+                      "auto",
+                  }}
+                >
 
                   <table className="officers-table">
 
@@ -965,7 +1245,12 @@ function AuditLogs() {
 
                             {/* DATE */}
 
-                            <td>
+                            <td
+                              style={{
+                                whiteSpace:
+                                  "nowrap",
+                              }}
+                            >
                               {formatDateTime(
                                 log.createdAt
                               )}
@@ -976,7 +1261,9 @@ function AuditLogs() {
                             <td>
 
                               <span
-                                className="officer-management-status officer-status-active"
+                                className={`audit-action-badge ${getActionClass(
+                                  log.action
+                                )}`}
                               >
                                 {
                                   log.action
@@ -1017,21 +1304,19 @@ function AuditLogs() {
                                     }}
                                   >
                                     @
-                                    {
-                                      log
-                                        .user
-                                        .username ||
-                                      "No username"
-                                    }
+                                    {log
+                                      .user
+                                      .username ||
+                                      "No username"}
                                   </div>
 
                                 </>
 
                               ) : (
 
-                                <span>
+                                <strong>
                                   System
-                                </span>
+                                </strong>
 
                               )}
 
@@ -1061,10 +1346,13 @@ function AuditLogs() {
                                     "hidden",
                                   textOverflow:
                                     "ellipsis",
+                                  whiteSpace:
+                                    "nowrap",
                                 }}
                               >
                                 {
-                                  log.entityId
+                                  log.entityId ||
+                                  "—"
                                 }
                               </div>
 
@@ -1076,18 +1364,26 @@ function AuditLogs() {
                               style={{
                                 minWidth:
                                   "280px",
+                                maxWidth:
+                                  "420px",
                                 whiteSpace:
                                   "normal",
                               }}
                             >
                               {
-                                log.description
+                                log.description ||
+                                "—"
                               }
                             </td>
 
                             {/* IP */}
 
-                            <td>
+                            <td
+                              style={{
+                                whiteSpace:
+                                  "nowrap",
+                              }}
+                            >
                               {
                                 log.ipAddress ||
                                 "—"

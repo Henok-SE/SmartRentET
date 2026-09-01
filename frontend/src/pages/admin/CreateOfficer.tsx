@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { FormEvent, ChangeEvent } from "react";
+import { useEffect, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { apiRequest } from "../../services/api";
 
 /* =========================================================
@@ -36,8 +36,11 @@ type OfficeAdmin = {
     officeId: string;
     officeCode: string;
     officeName: string;
+    region?: string | null;
+    city?: string | null;
     subCity?: string | null;
     woreda?: string | null;
+    status?: "ACTIVE" | "INACTIVE";
   };
 };
 
@@ -47,8 +50,6 @@ type OfficerForm = {
   phone: string;
   nationalId: string;
   username: string;
-  password: string;
-  confirmPassword: string;
   position: string;
   officeId: string;
   assignedArea: string;
@@ -69,11 +70,25 @@ type OfficeAdminListResponse = {
 type CreateOfficerResponse = {
   success: boolean;
   message: string;
-  data?: unknown;
+  data?: {
+    user?: {
+      userId?: string;
+      firstName?: string;
+      lastName?: string;
+      username?: string | null;
+      phone?: string;
+      email?: string | null;
+      role?: string;
+      isActive?: boolean;
+    };
+
+    generatedUsername?: string;
+    passwordSent?: boolean;
+  };
 };
 
 type StoredUser = {
-  userId?: number | string;
+  userId?: string | number;
   username?: string;
   firstName?: string;
   lastName?: string;
@@ -94,11 +109,9 @@ const createEmptyForm = (): OfficerForm => ({
   phone: "",
   nationalId: "",
   username: "",
-  password: "",
-  confirmPassword: "",
   position: "",
-  assignedArea: "",
   officeId: "",
+  assignedArea: "",
 });
 
 /* =========================================================
@@ -118,6 +131,14 @@ function CreateOfficer({
       []
     );
 
+  const [currentUser, setCurrentUser] =
+    useState<StoredUser>({});
+
+  const [currentOffice, setCurrentOffice] =
+    useState<GovernmentOffice | null>(
+      null
+    );
+
   const [officeLoading, setOfficeLoading] =
     useState(true);
 
@@ -129,14 +150,6 @@ function CreateOfficer({
 
   const [success, setSuccess] =
     useState("");
-
-  const [currentUser, setCurrentUser] =
-    useState<StoredUser>({});
-
-  const [currentOffice, setCurrentOffice] =
-    useState<GovernmentOffice | null>(
-      null
-    );
 
   /* =======================================================
      CURRENT USER
@@ -194,8 +207,8 @@ function CreateOfficer({
            * OFFICE ADMIN
            * =================================================
            *
-           * Get the current Office Admin and
-           * automatically determine their office.
+           * Office Admin must be restricted to their own
+           * Government Office.
            */
 
           if (isOfficeAdmin) {
@@ -205,7 +218,6 @@ function CreateOfficer({
                 {
                   method: "GET",
                   cache: "no-store",
-
                   headers: token
                     ? {
                         Authorization:
@@ -259,10 +271,18 @@ function CreateOfficer({
                   admin.office.officeCode,
                 officeName:
                   admin.office.officeName,
+                region:
+                  admin.office.region ??
+                  null,
+                city:
+                  admin.office.city ??
+                  null,
                 subCity:
-                  admin.office.subCity,
+                  admin.office.subCity ??
+                  null,
                 woreda:
-                  admin.office.woreda,
+                  admin.office.woreda ??
+                  null,
               };
 
             setCurrentOffice(
@@ -270,8 +290,8 @@ function CreateOfficer({
             );
 
             /*
-             * Automatically assign the
-             * Office Admin's office.
+             * Automatically assign the Office Admin's
+             * office to the officer.
              */
             setForm(
               (previous) => ({
@@ -291,7 +311,8 @@ function CreateOfficer({
            * SUPER ADMIN
            * =================================================
            *
-           * Super Admin can choose any office.
+           * Super Admin can create an officer in any
+           * existing Government Office.
            */
 
           if (isSuperAdmin) {
@@ -301,7 +322,6 @@ function CreateOfficer({
                 {
                   method: "GET",
                   cache: "no-store",
-
                   headers: token
                     ? {
                         Authorization:
@@ -331,8 +351,7 @@ function CreateOfficer({
                   ...previous,
                   officeId:
                     String(
-                      response
-                        .data[0]
+                      response.data[0]
                         .officeId
                     ),
                 })
@@ -346,17 +365,11 @@ function CreateOfficer({
             "You are not authorized to create an officer."
           );
         } catch (err) {
-          if (
+          setError(
             err instanceof Error
-          ) {
-            setError(
-              err.message
-            );
-          } else {
-            setError(
-              "Failed to load office information."
-            );
-          }
+              ? err.message
+              : "Failed to load office information."
+          );
         } finally {
           setOfficeLoading(
             false
@@ -371,28 +384,6 @@ function CreateOfficer({
     isOfficeAdmin,
     isSuperAdmin,
   ]);
-
-  /* =======================================================
-     DISPLAY OFFICE LIST
-  ======================================================= */
-
-  const availableOffices =
-    useMemo(() => {
-      if (
-        isOfficeAdmin &&
-        currentOffice
-      ) {
-        return [
-          currentOffice,
-        ];
-      }
-
-      return offices;
-    }, [
-      isOfficeAdmin,
-      currentOffice,
-      offices,
-    ]);
 
   /* =======================================================
      FORM HANDLING
@@ -418,8 +409,7 @@ function CreateOfficer({
     event: ChangeEvent<HTMLSelectElement>
   ) => {
     /*
-     * Office Admin must never manually
-     * change their office.
+     * Office Admin cannot change their assigned office.
      */
 
     if (isOfficeAdmin) {
@@ -436,6 +426,45 @@ function CreateOfficer({
   };
 
   /* =======================================================
+     VALIDATION
+  ======================================================= */
+
+  const validateForm = (): string | null => {
+    if (!form.firstName.trim()) {
+      return "First name is required.";
+    }
+
+    if (!form.lastName.trim()) {
+      return "Last name is required.";
+    }
+
+    if (!form.username.trim()) {
+      return "Username is required.";
+    }
+
+    if (!form.phone.trim()) {
+      return "Phone number is required.";
+    }
+
+    if (!form.nationalId.trim()) {
+      return "National ID is required.";
+    }
+
+    if (!form.officeId) {
+      return "Government Office is required.";
+    }
+
+    if (
+      isOfficeAdmin &&
+      !currentOffice
+    ) {
+      return "Your Government Office could not be determined.";
+    }
+
+    return null;
+  };
+
+  /* =======================================================
      SUBMIT
   ======================================================= */
 
@@ -447,101 +476,12 @@ function CreateOfficer({
     setError("");
     setSuccess("");
 
-    /* -----------------------------------------------
-       VALIDATION
-    ----------------------------------------------- */
+    const validationError =
+      validateForm();
 
-    if (
-      !form.firstName.trim()
-    ) {
+    if (validationError) {
       setError(
-        "First name is required."
-      );
-      return;
-    }
-
-    if (
-      !form.lastName.trim()
-    ) {
-      setError(
-        "Last name is required."
-      );
-      return;
-    }
-
-    if (
-      !form.username.trim()
-    ) {
-      setError(
-        "Username is required."
-      );
-      return;
-    }
-
-    if (
-      !form.phone.trim()
-    ) {
-      setError(
-        "Phone number is required."
-      );
-      return;
-    }
-
-    if (
-      !form.nationalId.trim()
-    ) {
-      setError(
-        "National ID is required."
-      );
-      return;
-    }
-
-    if (
-      !form.password.trim()
-    ) {
-      setError(
-        "Password is required."
-      );
-      return;
-    }
-
-    if (
-      form.password.length <
-      6
-    ) {
-      setError(
-        "Password must be at least 6 characters."
-      );
-      return;
-    }
-
-    if (
-      form.password !==
-      form.confirmPassword
-    ) {
-      setError(
-        "Passwords do not match."
-      );
-      return;
-    }
-
-    /*
-     * Office Admin must have their
-     * automatically assigned office.
-     */
-    if (
-      isOfficeAdmin &&
-      !currentOffice
-    ) {
-      setError(
-        "Your Government Office could not be determined."
-      );
-      return;
-    }
-
-    if (!form.officeId) {
-      setError(
-        "Please select a Government Office."
+        validationError
       );
       return;
     }
@@ -555,8 +495,10 @@ function CreateOfficer({
         );
 
       /*
-       * Use the automatically determined
-       * office for Office Admin.
+       * Office Admin always uses the automatically
+       * determined office.
+       *
+       * Super Admin uses the selected office.
        */
       const selectedOfficeId =
         isOfficeAdmin &&
@@ -564,56 +506,72 @@ function CreateOfficer({
           ? currentOffice.officeId
           : form.officeId;
 
-      await apiRequest<CreateOfficerResponse>(
-        "/auth/officer",
-        {
-          method: "POST",
+      /*
+       * IMPORTANT:
+       *
+       * Do NOT send password or confirmPassword.
+       * The backend generates the password automatically
+       * and sends it to the officer by SMS.
+       */
+      const response =
+        await apiRequest<CreateOfficerResponse>(
+          "/auth/officer",
+          {
+            method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
+            headers: {
+              "Content-Type":
+                "application/json",
 
-            ...(token
-              ? {
-                  Authorization:
-                    `Bearer ${token}`,
-                }
-              : {}),
-          },
+              ...(token
+                ? {
+                    Authorization:
+                      `Bearer ${token}`,
+                  }
+                : {}),
+            },
 
-          body: JSON.stringify({
-            firstName:
-              form.firstName.trim(),
+            body: JSON.stringify({
+              firstName:
+                form.firstName.trim(),
 
-            lastName:
-              form.lastName.trim(),
+              lastName:
+                form.lastName.trim(),
 
-            username:
-              form.username.trim(),
+              username:
+                form.username.trim(),
 
-            phone:
-              form.phone.trim(),
+              phone:
+                form.phone.trim(),
 
-            nationalId:
-              form.nationalId.trim(),
+              nationalId:
+                form.nationalId.trim(),
 
-            position:
-              form.position.trim(),
+              employeeId:
+                `OFF-${Date.now()}`,
 
-            assignedArea:
-              form.assignedArea.trim(),
+              officeId:
+                selectedOfficeId,
 
-            officeId:
-              selectedOfficeId,
+              position:
+                form.position.trim(),
 
-            password:
-              form.password,
-          }),
-        }
-      );
+              assignedArea:
+                form.assignedArea.trim(),
+            }),
+          }
+        );
+
+      if (!response.success) {
+        throw new Error(
+          response.message ||
+            "Failed to create officer."
+        );
+      }
 
       setSuccess(
-        "Officer created successfully."
+        response.message ||
+          "Officer created successfully. Login credentials have been sent by SMS."
       );
 
       setForm(
@@ -621,8 +579,7 @@ function CreateOfficer({
       );
 
       /*
-       * Preserve Office Admin's office
-       * after clearing the form.
+       * Preserve Office Admin's assigned office after reset.
        */
       if (
         isOfficeAdmin &&
@@ -637,52 +594,79 @@ function CreateOfficer({
         );
       }
 
+      /*
+       * Close the modal and refresh the officer list
+       * after successful creation.
+       */
       window.setTimeout(() => {
         onClose(true);
       }, 1200);
     } catch (err) {
-      if (
+      setError(
         err instanceof Error
-      ) {
-        setError(
-          err.message
-        );
-      } else {
-        setError(
-          "Failed to create officer."
-        );
-      }
+          ? err.message
+          : "Failed to create officer."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   /* =======================================================
+     CANCEL
+  ======================================================= */
+
+  const handleCancel = () => {
+    if (loading) {
+      return;
+    }
+
+    onClose(false);
+  };
+
+  /* =======================================================
+     OFFICE OPTIONS
+  ======================================================= */
+
+  const availableOffices =
+    isOfficeAdmin
+      ? currentOffice
+        ? [currentOffice]
+        : []
+      : offices;
+
+  /* =======================================================
      RENDER
   ======================================================= */
 
   return (
-    <div className="auth-page">
-
+    <div
+      className="auth-page"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-officer-title"
+    >
       <div className="auth-card">
 
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
         <div className="auth-header">
-
-          <h1>
+          <h1 id="create-officer-title">
             Create Officer
           </h1>
 
           <p>
             {isOfficeAdmin
-              ? "Create an Officer for your Government Office."
-              : "Create an Officer and assign an existing Government Office."}
+              ? "Create an Officer for your Government Office. The system will generate and send the temporary password automatically."
+              : "Create an Officer and assign an existing Government Office. The system will generate and send the temporary password automatically."}
           </p>
-
         </div>
 
-        {/* ERROR */}
+        {/* =================================================
+            ERROR
+        ================================================= */}
 
         {error && (
           <div
@@ -693,19 +677,23 @@ function CreateOfficer({
           </div>
         )}
 
-        {/* SUCCESS */}
+        {/* =================================================
+            SUCCESS
+        ================================================= */}
 
         {success && (
           <div
             style={{
               background:
                 "#ecfdf5",
-              color: "#047857",
+              color:
+                "#047857",
               border:
                 "1px solid #a7f3d0",
               padding:
                 "12px 16px",
-              borderRadius: "8px",
+              borderRadius:
+                "8px",
               marginBottom:
                 "20px",
             }}
@@ -718,13 +706,13 @@ function CreateOfficer({
         <form
           onSubmit={handleSubmit}
         >
-
-          {/* NAME */}
+          {/* =================================================
+              NAME
+          ================================================= */}
 
           <div className="form-row">
 
             <div className="form-group">
-
               <label htmlFor="firstName">
                 First Name
               </label>
@@ -744,11 +732,9 @@ function CreateOfficer({
                 disabled={loading}
                 required
               />
-
             </div>
 
             <div className="form-group">
-
               <label htmlFor="lastName">
                 Last Name
               </label>
@@ -768,17 +754,17 @@ function CreateOfficer({
                 disabled={loading}
                 required
               />
-
             </div>
 
           </div>
 
-          {/* USERNAME / POSITION */}
+          {/* =================================================
+              USERNAME / POSITION
+          ================================================= */}
 
           <div className="form-row">
 
             <div className="form-group">
-
               <label htmlFor="username">
                 Username
               </label>
@@ -799,10 +785,12 @@ function CreateOfficer({
                 required
               />
 
+              <small>
+                Username must be unique.
+              </small>
             </div>
 
             <div className="form-group">
-
               <label htmlFor="position">
                 Position
               </label>
@@ -820,15 +808,15 @@ function CreateOfficer({
                 placeholder="e.g. Rental Officer"
                 disabled={loading}
               />
-
             </div>
 
           </div>
 
-          {/* PHONE */}
+          {/* =================================================
+              PHONE
+          ================================================= */}
 
           <div className="form-group">
-
             <label htmlFor="phone">
               Phone Number
             </label>
@@ -849,12 +837,17 @@ function CreateOfficer({
               required
             />
 
+            <small>
+              The generated password will be sent to this
+              phone number by SMS.
+            </small>
           </div>
 
-          {/* NATIONAL ID */}
+          {/* =================================================
+              NATIONAL ID
+          ================================================= */}
 
           <div className="form-group">
-
             <label htmlFor="nationalId">
               National ID
             </label>
@@ -873,13 +866,13 @@ function CreateOfficer({
               disabled={loading}
               required
             />
-
           </div>
 
-          {/* ASSIGNED AREA */}
+          {/* =================================================
+              ASSIGNED AREA
+          ================================================= */}
 
           <div className="form-group">
-
             <label htmlFor="assignedArea">
               Assigned Area
             </label>
@@ -897,20 +890,20 @@ function CreateOfficer({
               placeholder="e.g. Bole"
               disabled={loading}
             />
-
           </div>
 
           {/* =================================================
-              OFFICE
+              GOVERNMENT OFFICE
           ================================================= */}
 
           <div
             style={{
-              marginTop: "24px",
-              marginBottom: "20px",
+              marginTop:
+                "24px",
+              marginBottom:
+                "20px",
             }}
           >
-
             <h2
               style={{
                 marginBottom:
@@ -928,47 +921,46 @@ function CreateOfficer({
               }}
             >
               {isOfficeAdmin
-                ? "The officer will be assigned to your Government Office."
-                : "Assign this officer to an existing Government Office."}
+                ? "The officer will automatically be assigned to your Government Office."
+                : "Assign the officer to an existing Government Office."}
             </p>
-
           </div>
 
           {isOfficeAdmin ? (
-
-            /* OFFICE ADMIN */
+            /* =================================================
+               OFFICE ADMIN OFFICE
+            ================================================= */
 
             <div className="form-group">
-
-              <label>
+              <label htmlFor="office-display">
                 Government Office
               </label>
 
               <input
+                id="office-display"
                 type="text"
                 value={
                   currentOffice
                     ? `${currentOffice.officeCode} — ${currentOffice.officeName}`
                     : officeLoading
                     ? "Loading Government Office..."
-                    : "Government Office not available"
+                    : "Government Office unavailable"
                 }
                 readOnly
                 disabled
               />
 
               <small>
-                Your office is assigned automatically.
+                Your office is assigned automatically and
+                cannot be changed.
               </small>
-
             </div>
-
           ) : (
-
-            /* SUPER ADMIN */
+            /* =================================================
+               SUPER ADMIN OFFICE
+            ================================================= */
 
             <div className="form-group">
-
               <label htmlFor="officeId">
                 Government Office
               </label>
@@ -990,7 +982,6 @@ function CreateOfficer({
                 }
                 required
               >
-
                 <option value="">
                   {officeLoading
                     ? "Loading Government Offices..."
@@ -1020,14 +1011,13 @@ function CreateOfficer({
                     </option>
                   )
                 )}
-
               </select>
-
             </div>
-
           )}
 
-          {/* NO OFFICES */}
+          {/* =================================================
+              NO OFFICES
+          ================================================= */}
 
           {isSuperAdmin &&
             availableOffices.length ===
@@ -1048,72 +1038,65 @@ function CreateOfficer({
                   marginBottom:
                     "20px",
                 }}
+                role="status"
               >
-                No Government Offices are
-                available. Create a
-                Government Office first.
+                No Government Offices are available.
+                Create a Government Office first.
               </div>
             )}
 
-          {/* PASSWORD */}
+          {/* =================================================
+              AUTO PASSWORD NOTICE
+          ================================================= */}
 
-          <div className="form-group">
+          <div
+            style={{
+              marginTop:
+                "20px",
+              padding:
+                "14px 16px",
+              background:
+                "#f0fdfa",
+              border:
+                "1px solid #b7e4db",
+              borderRadius:
+                "8px",
+            }}
+          >
+            <strong
+              style={{
+                display:
+                  "block",
+                color:
+                  "#006f60",
+                fontSize:
+                  "13px",
+              }}
+            >
+              Automatic Password Generation
+            </strong>
 
-            <label htmlFor="password">
-              Temporary Password
-            </label>
-
-            <input
-              id="password"
-              name="password"
-              type="password"
-              value={
-                form.password
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Create password"
-              autoComplete="new-password"
-              minLength={6}
-              disabled={loading}
-              required
-            />
-
-            <small>
-              Minimum 6 characters.
-            </small>
-
+            <p
+              style={{
+                margin:
+                  "6px 0 0",
+                color:
+                  "#52736d",
+                fontSize:
+                  "12px",
+                lineHeight:
+                  "1.5",
+              }}
+            >
+              You do not need to create a password.
+              SmartRent ET will generate a secure temporary
+              password and send it to the officer by SMS.
+            </p>
           </div>
 
-          {/* CONFIRM PASSWORD */}
-
-          <div className="form-group">
-
-            <label htmlFor="confirmPassword">
-              Confirm Password
-            </label>
-
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              value={
-                form.confirmPassword
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Confirm password"
-              autoComplete="new-password"
-              minLength={6}
-              disabled={loading}
-              required
-            />
-
-          </div>
-
-          {/* SUBMIT */}
+          {/* =================================================
+              ACTIONS
+          ================================================= */}
 
           <button
             type="submit"
@@ -1122,22 +1105,25 @@ function CreateOfficer({
               officeLoading ||
               !form.officeId
             }
+            style={{
+              marginTop:
+                "20px",
+            }}
           >
             {loading
               ? "Creating Officer..."
               : "Create Officer"}
           </button>
 
-          {/* CANCEL */}
-
           <button
             type="button"
-            onClick={() =>
-              onClose(false)
+            onClick={
+              handleCancel
             }
             disabled={loading}
             style={{
-              marginTop: "10px",
+              marginTop:
+                "10px",
               background:
                 "#e5e7eb",
               color:
@@ -1146,11 +1132,8 @@ function CreateOfficer({
           >
             Cancel
           </button>
-
         </form>
-
       </div>
-
     </div>
   );
 }
