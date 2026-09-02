@@ -623,9 +623,228 @@
   .figma-login-button {
     transition: none;
   }
+}/* =========================================================
+   OTP VERIFICATION
+   ========================================================= */
+
+.otp-login-form {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
 }
-.figma-login-field input#otp {
+
+.otp-card {
+  width: 100%;
+  padding: 34px 38px 30px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5ebe9;
+  border-radius: 12px;
+
+  box-shadow:
+    0 10px 30px rgba(15, 23, 42, 0.06);
+
   text-align: center;
-  letter-spacing: 3px;
-  max-width: 260px;
+}
+
+.otp-security-icon {
+  width: 66px;
+  height: 66px;
+
+  margin: 0 auto 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #e7f8f4;
+  color: #08b58c;
+}
+
+.otp-security-icon span {
+  width: 36px;
+  height: 36px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 2px solid currentColor;
+  border-radius: 50%;
+
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.otp-card h2 {
+  margin: 0;
+
+  color: #111111;
+
+  font-size: 27px;
+  line-height: 1.25;
+
+  font-weight: 700;
+}
+
+.otp-description {
+  max-width: 410px;
+
+  margin: 10px auto 26px;
+
+  color: #6f777b;
+
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.otp-field {
+  width: 100%;
+}
+
+.otp-field label {
+  display: block;
+
+  margin-bottom: 12px;
+
+  color: #111111;
+
+  font-size: 16px;
+  font-weight: 700;
+
+  text-align: center;
+}
+
+.otp-input-group {
+  display: flex;
+  justify-content: center;
+
+  gap: 10px;
+}
+
+.otp-input-group input {
+  width: 54px;
+  height: 58px;
+
+  padding: 0;
+
+  border: 1px solid #d5ddda;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #111111;
+
+  font-size: 23px;
+  font-weight: 700;
+
+  text-align: center;
+
+  outline: none;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.otp-input-group input:focus {
+  border-color: #08b58c;
+
+  box-shadow:
+    0 0 0 3px rgba(8, 181, 140, 0.12);
+}
+
+.otp-input-group input:disabled {
+  background: #f5f6f6;
+
+  cursor: not-allowed;
+}
+
+.otp-help-text {
+  display: block;
+
+  margin-top: 10px;
+
+  color: #858f93;
+
+  font-size: 12px;
+}
+
+.otp-login-form .figma-login-error {
+  margin-bottom: 20px;
+}
+
+.otp-login-form .figma-login-button {
+  width: 100%;
+
+  height: 52px;
+
+  margin-top: 22px;
+
+  border-radius: 7px;
+
+  line-height: normal;
+
+  font-size: 16px;
+}
+
+.otp-footer-message {
+  margin-top: 24px;
+  padding-top: 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  border-top: 1px solid #ecefee;
+
+  color: #7b8488;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   OTP RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 600px) {
+  .otp-card {
+    padding: 28px 20px 24px;
+  }
+
+  .otp-card h2 {
+    font-size: 23px;
+  }
+
+  .otp-description {
+    font-size: 13px;
+  }
+
+  .otp-input-group {
+    gap: 7px;
+  }
+
+  .otp-input-group input {
+    width: 44px;
+    height: 50px;
+
+    font-size: 19px;
+  }
+}
+
+@media (max-width: 400px) {
+  .otp-input-group {
+    gap: 5px;
+  }
+
+  .otp-input-group input {
+    width: 40px;
+    height: 48px;
+  }
 }

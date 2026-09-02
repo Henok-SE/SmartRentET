@@ -1,59 +1,48 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/auth');
+const { authorizeRoles } = require('../middleware/role');
+const { validate } = require('../middleware/validate');
+
 const {
     createPayment,
     getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
+    getPaymentRecords,
     updatePaymentStatus,
+    handleProviderWebhook,
     handleMockPaymentCallback
 } = require('../controllers/paymentController');
 
-const { validate } = require('../middleware/validate');
-
 const {
     createPaymentSchema,
-    updatePaymentStatusSchema
+    updatePaymentStatusSchema,
+    getPaymentRecordsSchema
 } = require('../validations/paymentValidation');
 
-// ============================================
-// ALL ROUTES - Authentication required
-// ============================================
-router.use(authenticateToken);
+// Public payment settlement endpoints
+router.get('/inquiry/:referenceNumber', getPaymentInquiry);
+router.post('/', validate(createPaymentSchema), createPayment);
+router.get('/:paymentId', getPaymentById);
 
-// ============================================
-// PAYMENT ROUTES
-// ============================================
+// Webhook and simulation endpoints
+router.post('/provider-webhook', handleProviderWebhook);
+router.post('/mock-callback', handleMockPaymentCallback);
 
-router.post(
+// Authenticated ledger and management endpoints (strictly scoped to assigned government office)
+router.get(
     '/',
-    validate(createPaymentSchema),
-    createPayment
+    authenticateToken,
+    authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+    validate(getPaymentRecordsSchema, 'query'),
+    getPaymentRecords
 );
-
-router.get(
-    '/inquiry/:referenceNumber',
-    getPaymentInquiry
-);
-
-router.get(
-    '/agreement/:agreementId',
-    getPaymentHistory
-);
-
-router.post(
-    '/mock-callback',
-    handleMockPaymentCallback
-);
-
-router.get(
-    '/:paymentId',
-    getPaymentById
-);
-
+router.get('/agreement/:agreementId', authenticateToken, getPaymentHistory);
 router.patch(
     '/:paymentId/status',
+    authenticateToken,
+    authorizeRoles('SUPER_ADMIN', 'OFFICE_ADMIN', 'OFFICER'),
     validate(updatePaymentStatusSchema),
     updatePaymentStatus
 );

@@ -1,38 +1,53 @@
 const prisma = require('../config/db');
 const telebirrService = require('./telebirrService');
 const cbeService = require('./cbeService');
-const agreementService = require('./agreementService');
-const afroSMSService = require('./afroSMSService');
+const {
+    NotFoundError,
+    BadRequestError,
+    ConflictError,
+    PaymentError,
+    ForbiddenError
+} = require('../utils/errors');
+const {
+    toPaymentInquiryDTO,
+    toPaymentReceiptDTO,
+    toPaymentHistoryDTO
+} = require('../dtos/paymentDto');
 
-// ============================================
-// GET PAYMENT PROVIDER
-// ============================================
-
+// Get payment provider service
 const getPaymentProvider = (paymentMethod) => {
     switch (paymentMethod) {
         case 'TELEBIRR':
             return telebirrService;
+
         case 'CBE':
             return cbeService;
+
         default:
-            throw new Error(`Unsupported payment method: ${paymentMethod}`);
+            throw new BadRequestError(`Unsupported payment method: ${paymentMethod}`);
     }
 };
 
-// ============================================
-// GET PAYMENT INQUIRY
-// ============================================
-
+// Inquire rental agreement payment due details
 const getPaymentInquiry = async (referenceNumber) => {
     if (!referenceNumber) {
-        throw new Error('Reference number is required');
+        throw new BadRequestError('Reference number is required');
     }
 
     const agreement = await prisma.rentalAgreement.findUnique({
-        where: { referenceNumber },
-        include: {
+        where: {
+            referenceNumber
+        },
+        select: {
+            agreementId: true,
+            referenceNumber: true,
+            rentalAmount: true,
+            status: true,
+            effectiveDate: true,
             tenant: {
-                include: {
+                select: {
+                    address: true,
+                    subCity: true,
                     user: {
                         select: {
                             firstName: true,
@@ -42,93 +57,95 @@ const getPaymentInquiry = async (referenceNumber) => {
                     }
                 }
             },
-            paymentFrequency: true
+            paymentFrequency: {
+                select: {
+                    name: true,
+                    minimumInterval: true
+                }
+            }
         }
     });
 
     if (!agreement) {
-        throw new Error('Rental agreement not found');
+        throw new NotFoundError(
+            'Rental agreement reference not found in the official registry. Please check the reference code and try again.'
+        );
     }
 
-    if (agreement.status !== 'ACTIVE' && agreement.status !== 'APPROVED') {
-        throw new Error('Payment cannot be made for this agreement');
+    if (
+        agreement.status !== 'ACTIVE' &&
+        agreement.status !== 'APPROVED'
+    ) {
+        throw new BadRequestError(
+            `Payment cannot be made for agreement in ${agreement.status} status`
+        );
     }
 
     const latestPayment = await prisma.payment.findFirst({
-        where: { agreementId: agreement.agreementId },
-        orderBy: { dueDate: 'desc' }
+        where: {
+            agreementId: agreement.agreementId
+        },
+        orderBy: {
+            dueDate: 'desc'
+        },
+        select: {
+            paymentId: true,
+            dueDate: true,
+            status: true
+        }
     });
 
     if (latestPayment && latestPayment.status === 'PENDING') {
-        throw new Error('A payment is already pending for this agreement');
+        throw new ConflictError('A payment is already pending confirmation for this agreement');
     }
 
-    const amount = Number(agreement.rentalAmount);
-    let dueDate = agreement.effectiveDate;
-
-    if (latestPayment && latestPayment.status === 'PAID') {
-        dueDate = new Date(latestPayment.dueDate);
-        dueDate.setDate(dueDate.getDate() + agreement.paymentFrequency.minimumInterval);
-    }
-
-    return {
-        referenceNumber: agreement.referenceNumber,
-        agreementId: agreement.agreementId,
-        customerName: `${agreement.tenant.user.firstName} ${agreement.tenant.user.lastName}`,
-        customerPhoneNumber: agreement.tenant.user.phone,
-        amount,
-        currency: 'ETB',
-        dueDate,
-        description: 'Rental payment'
-    };
+    return toPaymentInquiryDTO(agreement, latestPayment);
 };
 
-// ============================================
-// CREATE PAYMENT
-// ============================================
-
+// Initiate a new payment transaction
 const createPayment = async ({
     referenceNumber,
     amount,
     paymentMethod,
     customerName,
-    customerPhoneNumber
+    customerPhoneNumber,
+    mode,
+    delayMs
 }) => {
     if (!referenceNumber) {
-        throw new Error('Reference number is required');
+        throw new BadRequestError('Reference number is required');
     }
 
     if (!amount || Number(amount) <= 0) {
-        throw new Error('Payment amount must be greater than zero');
+        throw new BadRequestError('Payment amount must be greater than zero');
     }
 
     if (!paymentMethod) {
-        throw new Error('Payment method is required');
+        throw new BadRequestError('Payment method is required');
     }
 
+    // Validate agreement and amount
     const inquiry = await getPaymentInquiry(referenceNumber);
+
     const paymentAmount = Number(amount);
-
     if (paymentAmount !== inquiry.amount) {
-        throw new Error(`Payment amount must be exactly ${inquiry.amount} ETB`);
+        throw new BadRequestError(
+            `Payment amount must be exactly ${inquiry.amount} ETB`
+        );
     }
 
-    const provider = getPaymentProvider(paymentMethod);
-    const providerResult = await provider.initiatePayment({
-        amount: inquiry.amount,
-        customerName: customerName || inquiry.customerName,
-        customerPhoneNumber: customerPhoneNumber || inquiry.customerPhoneNumber,
-        referenceNumber
-    });
+    const method =
+        paymentMethod === 'TELEBIRR'
+            ? 'MOBILE_MONEY'
+            : 'BANK_TRANSFER';
 
-    if (!providerResult || !providerResult.success) {
-        throw new Error(providerResult?.message || 'Payment provider failed to initiate payment');
-    }
+    const paymentProvider =
+        paymentMethod === 'TELEBIRR'
+            ? 'TELEBIRR'
+            : 'BANK';
 
-    const method = paymentMethod === 'TELEBIRR' ? 'MOBILE_MONEY' : 'BANK_TRANSFER';
-    const paymentProvider = paymentMethod === 'TELEBIRR' ? 'TELEBIRR' : 'BANK';
-
-    const payment = await prisma.payment.create({
+    // Create pending payment record
+    const initialPayment = await prisma.payment.create({
         data: {
             agreementId: inquiry.agreementId,
             amount: inquiry.amount,
@@ -136,99 +153,301 @@ const createPayment = async ({
             status: 'PENDING',
             method,
             provider: paymentProvider,
-            transactionReference: providerResult.transactionReference,
-            notes: providerResult.message
+            notes: 'Payment initiated. Awaiting provider confirmation.'
         }
     });
 
-    return {
-        success: true,
-        paymentId: payment.paymentId,
-        agreementId: inquiry.agreementId,
-        referenceNumber: inquiry.referenceNumber,
-        amount: payment.amount,
-        currency: 'ETB',
-        paymentMethod: payment.method,
-        provider: payment.provider,
-        status: payment.status,
-        transactionReference: payment.transactionReference,
-        message: providerResult.message
-    };
-};
+    console.log(`[Payment Service] Created PENDING payment record with paymentId: ${initialPayment.paymentId}`);
 
-// ============================================
-// GET PAYMENT HISTORY
-// ============================================
+    // Request initiation from payment provider
+    const provider = getPaymentProvider(paymentMethod);
 
-const getPaymentHistory = async (agreementId) => {
-    if (!agreementId) {
-        throw new Error('Agreement ID is required');
+    let providerResult;
+    try {
+        providerResult = await provider.initiatePayment({
+            paymentId: initialPayment.paymentId,
+            amount: inquiry.amount,
+            customerName: customerName || inquiry.customerName,
+            customerPhoneNumber: customerPhoneNumber || inquiry.customerPhoneNumber,
+            referenceNumber: inquiry.referenceNumber,
+            mode,
+            delayMs
+        });
+    } catch (err) {
+        // Update payment record to FAILED on provider error
+        await prisma.payment.update({
+            where: { paymentId: initialPayment.paymentId },
+            data: {
+                status: 'FAILED',
+                notes: `Provider initiation failed: ${err.message}`
+            }
+        });
+        throw new PaymentError(err.message || 'Payment provider rejected payment initiation');
     }
 
-    const agreement = await prisma.rentalAgreement.findUnique({
-        where: { agreementId }
-    });
-
-    if (!agreement) {
-        throw new Error('Rental agreement not found');
+    if (!providerResult || !providerResult.success) {
+        await prisma.payment.update({
+            where: { paymentId: initialPayment.paymentId },
+            data: {
+                status: 'FAILED',
+                notes: providerResult?.message || 'Provider initiation rejected'
+            }
+        });
+        throw new PaymentError(
+            providerResult?.message || 'Payment provider failed to initiate payment'
+        );
     }
 
-    return prisma.payment.findMany({
-        where: { agreementId },
-        orderBy: { dueDate: 'desc' }
+    // Update payment record with provider transaction reference
+    const updatedPayment = await prisma.payment.update({
+        where: {
+            paymentId: initialPayment.paymentId
+        },
+        data: {
+            transactionReference: providerResult.transactionReference,
+            notes: providerResult.message
+        },
+        include: {
+            agreement: {
+                select: {
+                    referenceNumber: true,
+                    tenant: {
+                        select: {
+                            user: {
+                                select: {
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    return toPaymentReceiptDTO(updatedPayment);
+};
+
+// Process provider webhook with transaction locking and idempotency
+const handleProviderWebhook = async ({
+    paymentId,
+    transactionReference,
+    status,
+    notes,
+    provider
+}) => {
+    if (!paymentId) {
+        throw new BadRequestError('paymentId is required in webhook payload');
+    }
+
+    if (!transactionReference) {
+        throw new BadRequestError('transactionReference is required in webhook payload');
+    }
+
+    const normalizedStatus = (status || '').toUpperCase();
+    if (normalizedStatus !== 'SUCCESS' && normalizedStatus !== 'FAILED') {
+        throw new BadRequestError('Invalid callback status: must be SUCCESS or FAILED');
+    }
+
+    // Execute in transaction to prevent race conditions
+    return await prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.findUnique({
+            where: { paymentId },
+            include: {
+                agreement: {
+                    select: {
+                        referenceNumber: true,
+                        tenant: {
+                            select: {
+                                user: {
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!payment) {
+            throw new NotFoundError(`Payment record not found for paymentId: ${paymentId}`);
+        }
+
+        // Acknowledge idempotent duplicate success
+        if (payment.status === 'PAID' && normalizedStatus === 'SUCCESS') {
+            console.log(`[Provider Webhook] Idempotent duplicate callback acknowledged for paymentId: ${paymentId}`);
+            return {
+                payment: toPaymentReceiptDTO(payment),
+                isDuplicate: true,
+                message: 'Payment already recorded as PAID (Idempotent duplicate acknowledged)'
+            };
+        }
+
+        // Acknowledge idempotent duplicate failure
+        if (payment.status === 'FAILED' && normalizedStatus === 'FAILED') {
+            console.log(`[Provider Webhook] Idempotent duplicate FAILED callback acknowledged for paymentId: ${paymentId}`);
+            return {
+                payment: toPaymentReceiptDTO(payment),
+                isDuplicate: true,
+                message: 'Payment already recorded as FAILED (Idempotent duplicate acknowledged)'
+            };
+        }
+
+        // Reject update if payment is in terminal state
+        if (payment.status !== 'PENDING') {
+            throw new BadRequestError(
+                `Payment is in terminal status "${payment.status}" and cannot be updated to "${normalizedStatus}"`
+            );
+        }
+
+        // Update payment status and record payment date if successful
+        const updatedPayment = await tx.payment.update({
+            where: { paymentId },
+            data: {
+                status: normalizedStatus === 'SUCCESS' ? 'PAID' : 'FAILED',
+                transactionReference: transactionReference || payment.transactionReference,
+                paidDate: normalizedStatus === 'SUCCESS' ? new Date() : null,
+                notes: notes || (normalizedStatus === 'SUCCESS' ? 'Payment confirmed by provider webhook' : 'Payment marked FAILED by provider webhook')
+            },
+            include: {
+                agreement: {
+                    select: {
+                        referenceNumber: true,
+                        tenant: {
+                            select: {
+                                user: {
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        console.log(`[Provider Webhook] Transitioned paymentId=${paymentId} from PENDING -> ${updatedPayment.status}`);
+
+        return {
+            payment: toPaymentReceiptDTO(updatedPayment),
+            isDuplicate: false,
+            message: `Payment status successfully updated to ${updatedPayment.status}`
+        };
+    }, {
+        maxWait: 10000,
+        timeout: 15000
     });
 };
 
-// ============================================
-// GET SINGLE PAYMENT
-// ============================================
-
+// Retrieve single payment record by ID
 const getPaymentById = async (paymentId) => {
     if (!paymentId) {
-        throw new Error('Payment ID is required');
+        throw new BadRequestError('Payment ID is required');
     }
 
     const payment = await prisma.payment.findUnique({
-        where: { paymentId },
-        include: {
+        where: {
+            paymentId
+        },
+        select: {
+            paymentId: true,
+            agreementId: true,
+            amount: true,
+            dueDate: true,
+            paidDate: true,
+            status: true,
+            method: true,
+            provider: true,
+            transactionReference: true,
+            notes: true,
+            createdAt: true,
             agreement: {
                 select: {
                     agreementId: true,
                     referenceNumber: true,
                     rentalAmount: true,
-                    status: true
+                    status: true,
+                    tenant: {
+                        select: {
+                            user: {
+                                select: {
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     });
 
     if (!payment) {
-        throw new Error('Payment not found');
+        throw new NotFoundError('Payment record not found');
     }
 
-    return payment;
+    return toPaymentReceiptDTO(payment);
 };
 
-// ============================================
-// UPDATE PAYMENT STATUS
-// ============================================
+// Retrieve payment history for an agreement
+const getPaymentHistory = async (agreementId) => {
+    if (!agreementId) {
+        throw new BadRequestError('Agreement ID is required');
+    }
 
+    const agreement = await prisma.rentalAgreement.findUnique({
+        where: { agreementId },
+        select: { agreementId: true }
+    });
+
+    if (!agreement) {
+        throw new NotFoundError('Rental agreement not found');
+    }
+
+    const payments = await prisma.payment.findMany({
+        where: { agreementId },
+        orderBy: { dueDate: 'desc' },
+        select: {
+            paymentId: true,
+            agreementId: true,
+            amount: true,
+            dueDate: true,
+            paidDate: true,
+            status: true,
+            method: true,
+            provider: true,
+            transactionReference: true,
+            notes: true,
+            createdAt: true
+        }
+    });
+
+    return toPaymentHistoryDTO(payments);
+};
+
+// Update payment status manually
 const updatePaymentStatus = async ({
     paymentId,
     status,
     transactionReference
 }) => {
     if (!paymentId) {
-        throw new Error('Payment ID is required');
+        throw new BadRequestError('Payment ID is required');
     }
 
     if (!status) {
-        throw new Error('Payment status is required');
+        throw new BadRequestError('Payment status is required');
     }
 
     const allowedStatuses = ['PENDING', 'PAID', 'FAILED', 'CANCELLED'];
     if (!allowedStatuses.includes(status)) {
-        throw new Error(`Invalid payment status: ${status}`);
+        throw new BadRequestError(`Invalid payment status: ${status}`);
     }
 
     const payment = await prisma.payment.findUnique({
@@ -236,15 +455,15 @@ const updatePaymentStatus = async ({
     });
 
     if (!payment) {
-        throw new Error('Payment not found');
+        throw new NotFoundError('Payment record not found');
     }
 
     if (payment.status !== 'PENDING') {
-        throw new Error(`Payment cannot be changed from ${payment.status}`);
+        throw new BadRequestError(`Payment cannot be changed from ${payment.status}`);
     }
 
-    if (status === 'PAID' && !transactionReference) {
-        throw new Error('Transaction reference is required when marking payment as PAID');
+    if (status === 'PAID' && !transactionReference && !payment.transactionReference) {
+        throw new BadRequestError('Transaction reference is required when marking payment as PAID');
     }
 
     const updatedPayment = await prisma.payment.update({
@@ -253,172 +472,210 @@ const updatePaymentStatus = async ({
             status,
             transactionReference: transactionReference || payment.transactionReference,
             paidDate: status === 'PAID' ? new Date() : null
+        },
+        include: {
+            agreement: {
+                select: {
+                    referenceNumber: true,
+                    tenant: {
+                        select: {
+                            user: {
+                                select: {
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     });
 
-    // ✅ If payment is PAID, auto-approve the agreement
-    if (status === 'PAID') {
-        await autoApproveAgreementAfterPayment(payment.agreementId);
-    }
-
-    return updatedPayment;
+    return toPaymentReceiptDTO(updatedPayment);
 };
 
-// ============================================
-// HANDLE MOCK PAYMENT CALLBACK
-// ============================================
-
-const handleMockPaymentCallback = async ({
-    paymentId,
-    transactionReference,
-    status
-}) => {
-    if (!paymentId) {
-        throw new Error('Payment ID is required');
-    }
-
-    if (!transactionReference) {
-        throw new Error('Transaction reference is required');
-    }
-
-    if (status !== 'SUCCESS' && status !== 'FAILED') {
-        throw new Error('Invalid callback status');
-    }
-
-    const payment = await prisma.payment.findUnique({
-        where: { paymentId }
-    });
-
-    if (!payment) {
-        throw new Error('Payment not found');
-    }
-
-    if (payment.status !== 'PENDING') {
-        throw new Error(`Payment cannot be changed from ${payment.status}`);
-    }
-
-    if (payment.transactionReference !== transactionReference) {
-        throw new Error('Transaction reference does not match payment');
-    }
-
-    const newStatus = status === 'SUCCESS' ? 'PAID' : 'FAILED';
-
-    const updatedPayment = await prisma.payment.update({
-        where: { paymentId },
-        data: {
-            status: newStatus,
-            paidDate: status === 'SUCCESS' ? new Date() : null
-        }
-    });
-
-    // ✅ If payment is SUCCESS, auto-approve the agreement
-    if (status === 'SUCCESS') {
-        await autoApproveAgreementAfterPayment(payment.agreementId);
-    }
-
-    return updatedPayment;
+// Handle mock payment callback in development or test mode
+const handleMockPaymentCallback = async (payload) => {
+    const result = await handleProviderWebhook(payload);
+    return result.payment;
 };
 
-// ============================================
-// AUTO-APPROVE AGREEMENT AFTER PAYMENT
-// ============================================
+// Retrieve payment records scoped to the officer's or office admin's assigned government office
+const getOfficerPaymentRecords = async ({ userId, role, query = {} }) => {
+    let officeId = null;
 
-const autoApproveAgreementAfterPayment = async (agreementId) => {
-    try {
-        console.log('=== AUTO-APPROVE AGREEMENT AFTER PAYMENT ===');
-        console.log('agreementId:', agreementId);
-
-        // Get agreement with related data
-        const agreement = await prisma.rentalAgreement.findUnique({
-            where: { agreementId },
-            include: {
-                serviceFeePayment: true,
-                tenant: { include: { user: true } },
-                landlord: { include: { user: true } }
-            }
-        });
-
-        if (!agreement) {
-            console.log('Agreement not found:', agreementId);
-            return;
-        }
-
-        // ✅ Only auto-approve if status is APPROVED (waiting for final approval)
-        if (agreement.status !== 'APPROVED') {
-            console.log('Agreement status is not APPROVED, skipping auto-approval');
-            console.log('Current status:', agreement.status);
-            return;
-        }
-
-        // ✅ Check if service fee is paid
-        if (!agreement.serviceFeePayment || agreement.serviceFeePayment.status !== 'PAID') {
-            console.log('Service fee not paid yet, waiting for payment confirmation');
-            return;
-        }
-
-        // ✅ Check if there are any PAID rent payments
-        const payments = await prisma.payment.findMany({
-            where: {
-                agreementId: agreementId,
-                status: 'PAID'
-            }
-        });
-
-        if (payments.length === 0) {
-            console.log('No paid rent payments found, waiting for first rent payment');
-            return;
-        }
-
-        // Find the officer who created the agreement
+    if (role === 'OFFICER') {
         const officer = await prisma.officer.findUnique({
-            where: { officerId: agreement.createdByOfficerId }
+            where: { userId },
+            select: { officeId: true }
         });
-
-        if (!officer) {
-            console.log('Officer not found, cannot auto-approve');
-            return;
+        if (!officer || !officer.officeId) {
+            throw new ForbiddenError('Officer is not assigned to an active government office');
         }
-
-        // ✅ Auto-approve the agreement using the agreement service
-        console.log('✅ Auto-approving agreement:', agreementId);
-        
-        const result = await agreementService.approveAgreement(
-            agreementId,
-            officer.userId,
-            `Auto-approved after successful rent payment of ${payments[0].amount} ETB`
-        );
-
-        // ✅ Send SMS notifications
-        await afroSMSService.sendSMS(
-            agreement.tenant.user.phone,
-            `SmartRent: Your rental agreement ${agreement.referenceNumber} has been approved after payment.`
-        );
-
-        await afroSMSService.sendSMS(
-            agreement.landlord.user.phone,
-            `SmartRent: Rental agreement ${agreement.referenceNumber} approved after tenant payment.`
-        );
-
-        console.log('✅ Agreement auto-approved:', result.referenceNumberGenerated);
-        return result;
-
-    } catch (error) {
-        console.error('Auto-approve agreement error:', error);
-        // Don't throw - we don't want to break the payment flow
+        officeId = officer.officeId;
+    } else if (role === 'OFFICE_ADMIN') {
+        const admin = await prisma.officeAdmin.findUnique({
+            where: { userId },
+            select: { officeId: true }
+        });
+        if (!admin || !admin.officeId) {
+            throw new ForbiddenError('Office Admin is not assigned to an active government office');
+        }
+        officeId = admin.officeId;
+    } else {
+        throw new ForbiddenError('Access restricted to Officers and Office Admins only');
     }
-};
 
-// ============================================
-// EXPORT
-// ============================================
+    const page = parseInt(query.page, 10) || 1;
+    const limit = parseInt(query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+
+    const {
+        status,
+        paymentMethod,
+        provider,
+        referenceNumber,
+        search,
+        startDate,
+        endDate
+    } = query;
+
+    // Build Prisma where clause strictly enforcing the user's assigned officeId
+    const where = {
+        agreement: {
+            officeId
+        }
+    };
+
+    if (status) {
+        where.status = status;
+    }
+
+    if (paymentMethod) {
+        where.method = paymentMethod;
+    }
+
+    if (provider) {
+        where.provider = provider;
+    }
+
+    if (referenceNumber) {
+        where.agreement.referenceNumber = {
+            contains: referenceNumber,
+            mode: 'insensitive'
+        };
+    }
+
+    if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) {
+            where.createdAt.gte = new Date(startDate);
+        }
+        if (endDate) {
+            where.createdAt.lte = new Date(endDate);
+        }
+    }
+
+    if (search) {
+        where.OR = [
+            {
+                agreement: {
+                    referenceNumber: {
+                        contains: search,
+                        mode: 'insensitive'
+                    }
+                }
+            },
+            {
+                transactionReference: {
+                    contains: search,
+                    mode: 'insensitive'
+                }
+            },
+            {
+                agreement: {
+                    tenant: {
+                        user: {
+                            OR: [
+                                { firstName: { contains: search, mode: 'insensitive' } },
+                                { lastName: { contains: search, mode: 'insensitive' } },
+                                { phone: { contains: search, mode: 'insensitive' } }
+                            ]
+                        }
+                    }
+                }
+            }
+        ];
+    }
+
+    const [total, payments] = await Promise.all([
+        prisma.payment.count({ where }),
+        prisma.payment.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: {
+                paymentId: true,
+                agreementId: true,
+                amount: true,
+                dueDate: true,
+                paidDate: true,
+                status: true,
+                method: true,
+                provider: true,
+                transactionReference: true,
+                notes: true,
+                createdAt: true,
+                agreement: {
+                    select: {
+                        agreementId: true,
+                        referenceNumber: true,
+                        rentalAmount: true,
+                        status: true,
+                        tenant: {
+                            select: {
+                                user: {
+                                    select: {
+                                        firstName: true,
+                                        lastName: true,
+                                        phone: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    ]);
+
+    const records = payments.map(toPaymentReceiptDTO);
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    return {
+        records,
+        meta: {
+            total,
+            page,
+            limit,
+            totalPages
+        }
+    };
+};
 
 module.exports = {
     createPayment,
     getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
+    getOfficerPaymentRecords,
     updatePaymentStatus,
+    handleProviderWebhook,
     handleMockPaymentCallback,
-    getPaymentProvider,
-    autoApproveAgreementAfterPayment
+    getPaymentProvider
 };

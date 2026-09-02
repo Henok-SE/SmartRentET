@@ -2,6 +2,7 @@ const prisma = require('../config/db');
 const afroSMSService = require('./afroSMSService');
 const bcrypt = require('bcryptjs');
 const approvalService = require('./approvalService');
+const { generateReferenceNumber } = require('../utils/agreementReferenceNumber');
 const { agreementDTO, generateUsername, generateSecurePassword } = require('../utils/userUtils');
 
 const MAX_VERIFICATION_ATTEMPTS = 3;
@@ -15,20 +16,6 @@ const validateNationalId = (nationalId) => {
   if (!nationalId) return false;
   const numericRegex = /^\d{16}$/;
   return numericRegex.test(nationalId);
-};
-
-// ============================================
-// GENERATE REFERENCE NUMBER
-// ============================================
-
-const generateReferenceNumber = async () => {
-  const year = new Date().getFullYear();
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let randomPart = '';
-  for (let i = 0; i < 8; i++) {
-    randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return `AGR-${year}-${randomPart}`;
 };
 
 // ============================================
@@ -49,24 +36,21 @@ const hashCode = async (code) => {
 // ============================================
 
 const checkVerificationStatus = async (phone, nationalId, role) => {
-  const existingUser = await prisma.user.findFirst({
+  // Only reuse a user if there's an EXACT match — same phone, same role,
+  // same National ID, and it's already verified. Anything else (no match,
+  // unverified match, mismatched ID) always creates a brand new user record
+  // requiring a fresh National ID verification.
+  const verifiedUser = await prisma.user.findFirst({
     where: {
       phone: phone,
-      role: role
+      role: role,
+      nationalId: nationalId,
+      isNationalIdVerified: true
     }
   });
 
-  if (existingUser) {
-    if (existingUser.nationalId && existingUser.nationalId !== nationalId) {
-      throw new Error(
-        `${role === 'LANDLORD' ? 'Landlord' : 'Tenant'} National ID does not match our records for this phone number.`
-      );
-    }
-
-    if (!existingUser.isNationalIdVerified) {
-      return { needsVerification: true, user: existingUser, isNew: false };
-    }
-    return { needsVerification: false, user: existingUser, isNew: false };
+  if (verifiedUser) {
+    return { needsVerification: false, user: verifiedUser, isNew: false };
   }
 
   return { needsVerification: true, user: null, isNew: true };
@@ -100,7 +84,6 @@ const createPendingPartyUser = async (phone, firstName, lastName, nationalId, ro
 const rollbackAgreement = async (agreementId, reason = 'Verification failed', triggeredByUserId = null) => {
   console.log(`Rolling back agreement ${agreementId}: ${reason}`);
 
-  
   return prisma.$transaction(async (tx) => {
     const agreement = await tx.rentalAgreement.findUnique({
       where: { agreementId: agreementId }
@@ -145,11 +128,11 @@ const rollbackAgreement = async (agreementId, reason = 'Verification failed', tr
 };
 
 // ============================================
-// CREATE AGREEMENT — Minimal Transaction
+// CREATE AGREEMENT
 // ============================================
 
 const createAgreement = async (data, userId, officerId, officeId) => {
-  console.log('=== CREATE AGREEMENT (OPTIMIZED) ===');
+  console.log('=== CREATE AGREEMENT ===');
 
   if (!officerId) {
     throw new Error('officerId is required. Please ensure you are logged in as an Officer.');
@@ -208,27 +191,23 @@ const createAgreement = async (data, userId, officerId, officeId) => {
     needsVerification.push({ party: 'Tenant', status: tenantStatus });
   }
 
-  // If verification needed — create users using prisma directly (no transaction needed)
+  // If verification needed — create brand new users, don't create the agreement yet
   if (needsVerification.length > 0) {
     console.log('National IDs need verification:', needsVerification.map(v => v.party));
 
     let resolvedUsers = [];
 
     for (const item of needsVerification) {
-      const { party, status } = item;
+      const { party } = item;
 
-      if (status.isNew) {
-        const result = await createPendingPartyUser(
-          party === 'Landlord' ? landlordPhone : tenantPhone,
-          party === 'Landlord' ? landlordFirstName : tenantFirstName,
-          party === 'Landlord' ? landlordLastName : tenantLastName,
-          party === 'Landlord' ? landlordNationalId : tenantNationalId,
-          party === 'Landlord' ? 'LANDLORD' : 'TENANT'
-        );
-        resolvedUsers.push({ party, user: result.user });
-      } else if (status.user) {
-        resolvedUsers.push({ party, user: status.user });
-      }
+      const result = await createPendingPartyUser(
+        party === 'Landlord' ? landlordPhone : tenantPhone,
+        party === 'Landlord' ? landlordFirstName : tenantFirstName,
+        party === 'Landlord' ? landlordLastName : tenantLastName,
+        party === 'Landlord' ? landlordNationalId : tenantNationalId,
+        party === 'Landlord' ? 'LANDLORD' : 'TENANT'
+      );
+      resolvedUsers.push({ party, user: result.user });
     }
 
     const landlordUserId = resolvedUsers.find(u => u.party === 'Landlord')?.user?.userId || landlordStatus.user?.userId || null;
@@ -252,7 +231,6 @@ const createAgreement = async (data, userId, officerId, officeId) => {
 
   console.log('Both National IDs are verified! Creating agreement...');
 
- 
   let paymentFrequency = await prisma.paymentFrequency.findUnique({
     where: { name: paymentFrequencyName || 'MONTHLY' }
   });
@@ -266,7 +244,6 @@ const createAgreement = async (data, userId, officerId, officeId) => {
     });
   }
 
-
   const referenceNumber = await generateReferenceNumber();
   const tenantCode = generateVerificationCode();
   const landlordCode = generateVerificationCode();
@@ -275,44 +252,11 @@ const createAgreement = async (data, userId, officerId, officeId) => {
   const tenantCodeHash = await hashCode(tenantCode);
   const landlordCodeHash = await hashCode(landlordCode);
 
-  
-  let landlordUser = landlordStatus.user;
-  if (!landlordUser) {
-    const username = await generateUsername(landlordFirstName, landlordLastName);
-    landlordUser = await prisma.user.create({
-      data: {
-        firstName: landlordFirstName,
-        lastName: landlordLastName,
-        phone: landlordPhone,
-        nationalId: landlordNationalId || null,
-        username,
-        passwordHash: null,
-        role: 'LANDLORD',
-        isActive: true,
-        isNationalIdVerified: true
-      }
-    });
-  }
-
-
-  let tenantUser = tenantStatus.user;
-  if (!tenantUser) {
-    const username = await generateUsername(tenantFirstName, tenantLastName);
-    tenantUser = await prisma.user.create({
-      data: {
-        firstName: tenantFirstName,
-        lastName: tenantLastName,
-        phone: tenantPhone,
-        nationalId: tenantNationalId || null,
-        username,
-        passwordHash: null,
-        role: 'TENANT',
-        isActive: true,
-        isNationalIdVerified: true
-      }
-    });
-  }
-
+  // checkVerificationStatus only ever returns a user here when they are
+  // already National-ID-verified, so there is nothing left to create —
+  // both landlordUser and tenantUser are guaranteed to exist at this point.
+  const landlordUser = landlordStatus.user;
+  const tenantUser = tenantStatus.user;
 
   let landlord = await prisma.landlord.findUnique({
     where: { userId: landlordUser.userId }
@@ -342,7 +286,6 @@ const createAgreement = async (data, userId, officerId, officeId) => {
       }
     });
   }
-
 
   let tenant = await prisma.tenant.findUnique({
     where: { userId: tenantUser.userId }
@@ -375,7 +318,6 @@ const createAgreement = async (data, userId, officerId, officeId) => {
     });
   }
 
- 
   const property = await prisma.property.create({
     data: {
       landlordId: landlord.landlordId,
@@ -390,7 +332,6 @@ const createAgreement = async (data, userId, officerId, officeId) => {
     }
   });
 
- 
   const unit = await prisma.unit.create({
     data: {
       propertyId: property.propertyId,
@@ -403,7 +344,6 @@ const createAgreement = async (data, userId, officerId, officeId) => {
       rentAmountFloor: unitRentAmountFloor || rentalAmount || 0
     }
   });
-
 
   const agreement = await prisma.rentalAgreement.create({
     data: {
@@ -439,7 +379,6 @@ const createAgreement = async (data, userId, officerId, officeId) => {
     }
   });
 
-
   await prisma.agreementVerification.create({
     data: {
       agreementId: agreement.agreementId,
@@ -462,7 +401,6 @@ const createAgreement = async (data, userId, officerId, officeId) => {
     }
   });
 
-  
   await prisma.auditLog.create({
     data: {
       userId: userId,
@@ -472,7 +410,6 @@ const createAgreement = async (data, userId, officerId, officeId) => {
       description: `Created rental agreement ${referenceNumber} (PENDING VERIFICATION)`
     }
   });
-
 
   await afroSMSService.sendUSSDConsentWithCode(
     tenantUser.phone,
@@ -651,12 +588,11 @@ const processServiceFeePayment = async (agreementId, phone, pin) => {
     where: { agreementId: agreementId },
     data: { status: 'APPROVED' }
   });
-}
 
-
-return {
-  success: true,
-  message: '50 Birr service fee paid successfully.'
+  return {
+    success: true,
+    message: '50 Birr service fee paid successfully.'
+  };
 };
 
 // ============================================

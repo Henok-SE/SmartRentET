@@ -46,7 +46,7 @@ const getContracts = async (req, res) => {
       subCity,
       landlord,
       tenant,
-      user: req.user, 
+      user: req.user,
     });
 
     res.status(200).json({
@@ -63,6 +63,7 @@ const getContracts = async (req, res) => {
     });
   } catch (error) {
     console.error('Dashboard contracts error:', error);
+
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve rental agreements',
