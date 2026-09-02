@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import CreateOfficer from "./CreateOfficer";
+import LogoutButton from "../../components/LogoutButton";
 import { apiRequest } from "../../services/api";
+
 
 type Officer = {
   officerId: string;
@@ -152,6 +154,8 @@ export default function OfficersManagement() {
 
   const [statusSuccess, setStatusSuccess] =
     useState("");
+  const [currentDateTime, setCurrentDateTime] =
+  useState(new Date());  
 
   /*
    * =========================================================
@@ -177,6 +181,39 @@ export default function OfficersManagement() {
       setCurrentUser({});
     }
   }, []);
+ useEffect(() => {
+    const timer =
+      window.setInterval(() => {
+        setCurrentDateTime(
+          new Date()
+        );
+      }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const formattedDate =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }
+    ).format(currentDateTime);
+
+  const formattedTime =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+      }
+    ).format(currentDateTime);
 
   /*
    * =========================================================
@@ -722,7 +759,7 @@ export default function OfficersManagement() {
           </button>
         </nav>
 
-        <div className="office-admin-sidebar-bottom">
+       <div className="office-admin-sidebar-bottom">
           <div className="office-admin-profile">
             <div className="office-admin-avatar">
               {userInitials}
@@ -738,6 +775,8 @@ export default function OfficersManagement() {
               </span>
             </div>
           </div>
+
+          <LogoutButton />
         </div>
       </aside>
 
@@ -769,21 +808,27 @@ export default function OfficersManagement() {
             />
           </div>
 
-          <div className="office-admin-user">
-            <div className="office-admin-user-avatar">
-              {userInitials}
-            </div>
+           <div className="office-admin-user">
+  <div className="office-admin-user-avatar">
+    {userInitials}
+  </div>
 
-            <div className="office-admin-user-details">
-              <strong>
-                {displayName}
-              </strong>
+  <div className="office-admin-user-details">
+    <strong>{displayName}</strong>
 
-              <span>
-                Office Administrator
-              </span>
-            </div>
-          </div>
+    <span>{formattedDate}</span>
+
+    <small
+      style={{
+        display: "block",
+        marginTop: "2px",
+        color: "#6b7280",
+      }}
+    >
+      {formattedTime}
+    </small>
+  </div>
+</div>
         </header>
 
         {/* =================================================

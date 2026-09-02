@@ -385,10 +385,15 @@ function Officers() {
           <div className="super-admin-topbar-user">
             <span className="super-admin-user-status" />
 
+            <span className="super-admin-role-badge">
+              SUPER ADMIN
+            </span>
+
             <span className="super-admin-topbar-name">
               {displayName}
             </span>
           </div>
+        
         </header>
 
         {/* ================= CONTENT ================= */}

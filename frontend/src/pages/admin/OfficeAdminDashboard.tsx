@@ -653,13 +653,7 @@ function OfficeAdminDashboard() {
             </div>
           </div>
 
-          <div
-            style={{
-              marginTop: "14px",
-            }}
-          >
-            <LogoutButton />
-          </div>
+          <LogoutButton />
         </div>
       </aside>
 
@@ -689,62 +683,27 @@ function OfficeAdminDashboard() {
             />
           </div>
 
-          <div
-            className="office-admin-user"
-            style={{
-              gap: "16px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection:
-                  "column",
-                alignItems:
-                  "flex-end",
-              }}
-            >
-              <span
-                style={{
-                  fontSize:
-                    "13px",
-                  fontWeight:
-                    700,
-                  color:
-                    "#27343a",
-                }}
-              >
-                {formattedDate}
-              </span>
+          <div className="office-admin-user">
+  <div className="office-admin-user-avatar">
+    {userInitials}
+  </div>
 
-              <span
-                style={{
-                  marginTop:
-                    "3px",
-                  fontSize:
-                    "12px",
-                  color:
-                    "#778790",
-                }}
-              >
-                {formattedTime}
-              </span>
-            </div>
+  <div className="office-admin-user-details">
+    <strong>{displayName}</strong>
 
-            <div className="office-admin-user-avatar">
-              {userInitials}
-            </div>
+    <span>{formattedDate}</span>
 
-            <div className="office-admin-user-details">
-              <strong>
-                {displayName}
-              </strong>
-
-              <span>
-                Office Administrator
-              </span>
-            </div>
-          </div>
+    <small
+      style={{
+        display: "block",
+        marginTop: "2px",
+        color: "#6b7280",
+      }}
+    >
+      {formattedTime}
+    </small>
+  </div>
+</div>
         </header>
 
         {/* =================================================

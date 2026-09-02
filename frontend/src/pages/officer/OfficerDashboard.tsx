@@ -1325,7 +1325,16 @@ function OfficerDashboard() {
             </span>
 
           </button>
-
+         
+         <button
+  type="button"
+  className="officer-dashboard-nav-item"
+  onClick={() => navigate("/officer/payment-records")}
+>
+  <CreditCard size={19} />
+  <span>Payment Records</span>
+</button>
+         
           {/* SETTINGS */}
 
           <button
@@ -1371,7 +1380,7 @@ function OfficerDashboard() {
               </strong>
 
               <span>
-                Government Officer
+                Rental Monitoring Officer
               </span>
 
             </div>
