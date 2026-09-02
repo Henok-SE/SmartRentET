@@ -21,7 +21,8 @@ import Agreements from "./pages/super-admin/Agreements";
 // Officer
 import OfficerDashboard from "./pages/officer/OfficerDashboard";
 import RentalAgreements from "./pages/officer/RentalAgreements";
-
+import PaymentRecords from "./pages/officer/PaymentRecords";
+import PaymentHistory from "./pages/officer/PaymentHistory";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 
@@ -140,6 +141,15 @@ function App() {
           path="/officer/rental-agreements"
           element={<RentalAgreements />}
         />
+      <Route
+    path="/officer/payment-records"
+    element={<PaymentRecords />}
+     />
+       <Route
+    path="/officer/payment-records/:agreementId"
+    element={<PaymentHistory />}
+  />
+        
       </Route>
 
       {/* =========================

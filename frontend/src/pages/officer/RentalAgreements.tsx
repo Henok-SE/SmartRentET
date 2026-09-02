@@ -18,7 +18,6 @@ import {
   CreditCard,
   Eye,
   FileText,
-  History,
   LogOut,
   Menu,
   RefreshCw,
@@ -139,31 +138,6 @@ type GenericResponse = {
   message?: string;
   error?: string;
   data?: unknown;
-};
-
-type ApprovalHistoryItem = {
-  approvalId?: string;
-  agreementId?: string;
-  action?: string;
-  status?: string;
-  comments?: string | null;
-  approvalDate?: string;
-  createdAt?: string;
-  officer?: {
-    officerId?: string;
-    employeeId?: string;
-    user?: {
-      firstName?: string;
-      lastName?: string;
-      username?: string | null;
-    };
-  };
-};
-
-type ApprovalHistoryResponse = {
-  success: boolean;
-  message?: string;
-  data: ApprovalHistoryItem[];
 };
 
 type RentalAgreement = {
@@ -333,23 +307,6 @@ const getPersonName = (
     }`.trim();
 
   return name || "—";
-};
-
-const getApprovalActionLabel = (
-  item: ApprovalHistoryItem
-) => {
-  const action =
-    item.action ||
-    item.status ||
-    "—";
-
-  return action
-    .replaceAll("_", " ")
-    .replace(
-      /\b\w/g,
-      (char) =>
-        char.toUpperCase()
-    );
 };
 
 const getStatusClass = (
@@ -704,80 +661,19 @@ const RentalAgreements: React.FC =
       setPaymentMessage,
     ] = useState("");
 
+    
+
     /* =====================================================
-       APPROVAL MODAL
+       CLOCK
     ===================================================== */
 
     const [
-      approvalModalOpen,
-      setApprovalModalOpen,
-    ] = useState(false);
-
-    const [
-      approvalAgreement,
-      setApprovalAgreement,
-    ] =
-      useState<RentalAgreement | null>(
-        null
-      );
-
-    const [
-      approvalComments,
-      setApprovalComments,
-    ] = useState("");
-
-    const [
-      approvalAction,
-      setApprovalAction,
-    ] = useState<
-      "APPROVE" | "REJECT"
-    >("APPROVE");
-
-    const [
-      approvalLoading,
-      setApprovalLoading,
-    ] = useState(false);
-
-    const [
-      approvalError,
-      setApprovalError,
-    ] = useState("");
-
-    /* =====================================================
-       HISTORY MODAL
-    ===================================================== */
-
-    const [
-      historyModalOpen,
-      setHistoryModalOpen,
-    ] = useState(false);
-
-    const [
-      historyAgreement,
-      setHistoryAgreement,
-    ] =
-      useState<RentalAgreement | null>(
-        null
-      );
-
-    const [
-      approvalHistory,
-      setApprovalHistory,
-    ] = useState<
-      ApprovalHistoryItem[]
-    >([]);
-
-    const [
-      historyLoading,
-      setHistoryLoading,
-    ] = useState(false);
-
-    const [
-      historyError,
-      setHistoryError,
-    ] = useState("");
-
-    /* =====================================================
+      currentDateTime,
+      setCurrentDateTime,
+    ] = useState(
+      new Date()
+    );
+/* =====================================================
        USER
     ===================================================== */
 
@@ -833,6 +729,49 @@ const RentalAgreements: React.FC =
         : displayName
             .slice(0, 2)
             .toUpperCase();
+
+    /* =====================================================
+       LIVE CLOCK
+    ===================================================== */
+
+    useEffect(() => {
+      const timer =
+        window.setInterval(
+          () => {
+            setCurrentDateTime(
+              new Date()
+            );
+          },
+          1000
+        );
+
+      return () =>
+        window.clearInterval(
+          timer
+        );
+    }, []);
+
+    const formattedDate =
+      currentDateTime.toLocaleDateString(
+        "en-US",
+        {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }
+      );
+
+    const formattedTime =
+      currentDateTime.toLocaleTimeString(
+        "en-US",
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }
+      );
+
 
     /* =====================================================
        AUTH
@@ -1525,265 +1464,6 @@ const RentalAgreements: React.FC =
       };
 
     /* =====================================================
-       OPEN APPROVAL / REJECTION
-    ===================================================== */
-
-    const openApprovalModal =
-      (
-        agreement: RentalAgreement,
-        action:
-          | "APPROVE"
-          | "REJECT"
-      ) => {
-        setApprovalAgreement(
-          agreement
-        );
-
-        setApprovalAction(
-          action
-        );
-
-        setApprovalComments(
-          ""
-        );
-
-        setApprovalError(
-          ""
-        );
-
-        setApprovalModalOpen(
-          true
-        );
-      };
-
-    /* =====================================================
-       APPROVE / REJECT
-    ===================================================== */
-
-    const handleApprovalAction =
-      async (
-        event: React.FormEvent
-      ) => {
-        event.preventDefault();
-
-        if (
-          !approvalAgreement
-        ) {
-          return;
-        }
-
-        const token =
-          getToken();
-
-        if (!token) {
-          handleLogout();
-          return;
-        }
-
-        const route =
-          approvalAction ===
-          "APPROVE"
-            ? "approve"
-            : "reject";
-
-        setApprovalLoading(
-          true
-        );
-
-        setApprovalError(
-          ""
-        );
-
-        try {
-          const response =
-            await fetch(
-              `${API_URL}/approval/${approvalAgreement.id}/${route}`,
-              {
-                method: "POST",
-
-                headers: {
-                  "Content-Type":
-                    "application/json",
-
-                  Authorization:
-                    `Bearer ${token}`,
-                },
-
-                body: JSON.stringify({
-                  comments:
-                    approvalComments.trim() ||
-                    null,
-                }),
-              }
-            );
-
-          const result =
-            (await response.json()) as GenericResponse;
-
-          if (
-            response.status ===
-            401
-          ) {
-            handleLogout();
-            return;
-          }
-
-          if (
-            !response.ok ||
-            !result.success
-          ) {
-            throw new Error(
-              result.error ||
-                result.message ||
-                `Failed to ${
-                  approvalAction ===
-                  "APPROVE"
-                    ? "approve"
-                    : "reject"
-                } agreement.`
-            );
-          }
-
-          await loadAgreements(
-            false
-          );
-
-          setApprovalModalOpen(
-            false
-          );
-
-          setApprovalAgreement(
-            null
-          );
-
-          setApprovalComments(
-            ""
-          );
-
-          /*
-           * Refresh selected agreement
-           * by closing its view first.
-           */
-          setSelectedAgreement(
-            null
-          );
-        } catch (err) {
-          console.error(
-            "Approval action error:",
-            err
-          );
-
-          setApprovalError(
-            err instanceof Error
-              ? err.message
-              : `Failed to ${
-                  approvalAction ===
-                  "APPROVE"
-                    ? "approve"
-                    : "reject"
-                } agreement.`
-          );
-        } finally {
-          setApprovalLoading(
-            false
-          );
-        }
-      };
-
-    /* =====================================================
-       LOAD APPROVAL HISTORY
-    ===================================================== */
-
-    const openHistoryModal =
-      async (
-        agreement: RentalAgreement
-      ) => {
-        setHistoryAgreement(
-          agreement
-        );
-
-        setHistoryModalOpen(
-          true
-        );
-
-        setHistoryLoading(
-          true
-        );
-
-        setHistoryError("");
-
-        setApprovalHistory([]);
-
-        const token =
-          getToken();
-
-        if (!token) {
-          handleLogout();
-          return;
-        }
-
-        try {
-          const response =
-            await fetch(
-              `${API_URL}/approval/${agreement.id}/history`,
-              {
-                method: "GET",
-                headers: {
-                  Authorization:
-                    `Bearer ${token}`,
-                },
-                cache:
-                  "no-store",
-              }
-            );
-
-          const result =
-            (await response.json()) as ApprovalHistoryResponse & {
-              error?: string;
-            };
-
-          if (
-            response.status ===
-            401
-          ) {
-            handleLogout();
-            return;
-          }
-
-          if (
-            !response.ok ||
-            !result.success
-          ) {
-            throw new Error(
-              result.error ||
-                result.message ||
-                "Failed to load approval history."
-            );
-          }
-
-          setApprovalHistory(
-            result.data ??
-              []
-          );
-        } catch (err) {
-          console.error(
-            "Approval history error:",
-            err
-          );
-
-          setHistoryError(
-            err instanceof Error
-              ? err.message
-              : "Failed to load approval history."
-          );
-        } finally {
-          setHistoryLoading(
-            false
-          );
-        }
-      };
-
-    /* =====================================================
        CLOSE MODALS
     ===================================================== */
 
@@ -1817,23 +1497,6 @@ const RentalAgreements: React.FC =
         );
 
         setPaymentAgreement(
-          null
-        );
-      };
-
-    const closeApprovalModal =
-      () => {
-        if (
-          approvalLoading
-        ) {
-          return;
-        }
-
-        setApprovalModalOpen(
-          false
-        );
-
-        setApprovalAgreement(
           null
         );
       };
@@ -1876,50 +1539,61 @@ const RentalAgreements: React.FC =
             </div>
 
           </div>
-
           <nav className="officer-sidebar-navigation">
+
+            {/* DASHBOARD */}
 
             <button
               type="button"
               className="officer-nav-item"
-              onClick={() =>
-                navigate(
-                  "/officer/dashboard"
-                )
-              }
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigate("/officer/dashboard");
+              }}
             >
-              <Building2
-                size={
-                  19
-                }
-              />
+              <Building2 size={19} />
 
               <span>
                 Dashboard
               </span>
             </button>
 
+            {/* RENTAL AGREEMENTS */}
+
             <button
               type="button"
               className="officer-nav-item officer-nav-item-active"
-              onClick={() =>
-                navigate(
-                  "/officer/rental-agreements"
-                )
-              }
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigate("/officer/rental-agreements");
+              }}
             >
-              <FileText
-                size={
-                  19
-                }
-              />
+              <FileText size={19} />
 
               <span>
                 Rental Agreements
               </span>
             </button>
 
+            {/* PAYMENT RECORDS */}
+
+            <button
+              type="button"
+              className="officer-nav-item"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigate("/officer/payment-records");
+              }}
+            >
+              <CreditCard size={19} />
+
+              <span>
+                Payment Records
+              </span>
+            </button>
+
           </nav>
+
 
           <div className="officer-sidebar-bottom">
 
@@ -2039,26 +1713,38 @@ const RentalAgreements: React.FC =
               </div>
 
             </div>
+             <div className="officer-dashboard-user">
 
-            <div className="officer-account">
+            <div className="officer-dashboard-user-avatar">
+              {initials}
+            </div>
 
-              <div className="officer-account-avatar">
-                {initials}
-              </div>
+            <div>
 
-              <div>
+              <strong>
+                {displayName}
+              </strong>
 
-                <strong>
-                  {displayName}
-                </strong>
+              <span>
+                {formattedDate}
+              </span>
 
-                <span>
-                  Rental Officer
-                </span>
-
-              </div>
+              <small
+                style={{
+                  display:
+                    "block",
+                  marginTop:
+                    "2px",
+                  color:
+                    "#6b7280",
+                }}
+              >
+                {formattedTime}
+              </small>
 
             </div>
+
+          </div>
 
           </header>
 
@@ -2100,8 +1786,7 @@ const RentalAgreements: React.FC =
                   </h1>
 
                   <p>
-                    View, verify, process,
-                    approve, and manage rental
+                    View and manage rental
                     agreements registered in
                     SmartRent ET.
                   </p>
@@ -2199,9 +1884,9 @@ const RentalAgreements: React.FC =
                   </h2>
 
                   <p>
-                    Review agreement details
-                    and continue the verification,
-                    payment, and approval workflow.
+                    Review agreement details and
+                    continue the verification and
+                    service-fee process.
                   </p>
 
                 </div>
@@ -2560,36 +2245,6 @@ const RentalAgreements: React.FC =
 
                                 )}
 
-                                {(agreement.backendStatus ===
-                                  "APPROVED" ||
-                                  agreement.backendStatus ===
-                                    "ACTIVE") && (
-
-                                  <button
-                                    type="button"
-                                    className="agreement-secondary-button"
-                                    style={{
-                                      height:
-                                        "36px",
-                                      padding:
-                                        "0 10px",
-                                    }}
-                                    onClick={() =>
-                                      void openHistoryModal(
-                                        agreement
-                                      )
-                                    }
-                                  >
-                                    <History
-                                      size={
-                                        15
-                                      }
-                                    />
-
-                                    History
-                                  </button>
-
-                                )}
 
                               </div>
 
@@ -3376,95 +3031,7 @@ const RentalAgreements: React.FC =
 
               <div className="agreement-modal-footer">
 
-                <div
-                  style={{
-                    display:
-                      "flex",
-                    gap:
-                      "8px",
-                    flexWrap:
-                      "wrap",
-                  }}
-                >
-
-                  {(selectedAgreement.backendStatus ===
-                    "APPROVED" ||
-                    selectedAgreement.backendStatus ===
-                      "ACTIVE") && (
-
-                    <button
-                      type="button"
-                      className="agreement-secondary-button"
-                      onClick={() =>
-                        void openHistoryModal(
-                          selectedAgreement
-                        )
-                      }
-                    >
-                      <History
-                        size={
-                          15
-                        }
-                      />
-
-                      Approval History
-                    </button>
-
-                  )}
-
-                  {selectedAgreement.backendStatus ===
-                    "APPROVED" && (
-
-                    <button
-                      type="button"
-                      className="agreement-primary-button"
-                      onClick={() =>
-                        openApprovalModal(
-                          selectedAgreement,
-                          "APPROVE"
-                        )
-                      }
-                    >
-                      <CheckCircle2
-                        size={
-                          15
-                        }
-                      />
-
-                      Approve
-                    </button>
-
-                  )}
-
-                  {selectedAgreement.backendStatus !==
-                    "REJECTED" &&
-                    selectedAgreement.backendStatus !==
-                      "ACTIVE" && (
-
-                    <button
-                      type="button"
-                      className="agreement-secondary-button"
-                      onClick={() =>
-                        openApprovalModal(
-                          selectedAgreement,
-                          "REJECT"
-                        )
-                      }
-                    >
-                      <XCircle
-                        size={
-                          15
-                        }
-                      />
-
-                      Reject
-                    </button>
-
-                  )}
-
-                </div>
-
-                <button
+                                <button
                   type="button"
                   className="agreement-secondary-button"
                   onClick={() =>
@@ -4077,639 +3644,6 @@ const RentalAgreements: React.FC =
                   </div>
 
                 </form>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        )}
-
-        {/* =================================================
-            APPROVAL / REJECTION MODAL
-        ================================================= */}
-
-        {approvalModalOpen &&
-          approvalAgreement && (
-
-          <div
-            className="agreement-modal-overlay"
-            role="dialog"
-            aria-modal="true"
-            onMouseDown={(
-              event
-            ) => {
-              if (
-                event.target ===
-                event.currentTarget
-              ) {
-                closeApprovalModal();
-              }
-            }}
-          >
-
-            <div className="agreement-view-modal">
-
-              <div className="agreement-modal-header">
-
-                <div>
-
-                  <span className="agreement-modal-eyebrow">
-                    AGREEMENT DECISION
-                  </span>
-
-                  <h2>
-                    {approvalAction ===
-                    "APPROVE"
-                      ? "Approve Agreement"
-                      : "Reject Agreement"}
-                  </h2>
-
-                  <p>
-                    {
-                      approvalAgreement.referenceNumber
-                    }
-                  </p>
-
-                </div>
-
-                <button
-                  type="button"
-                  className="modal-close-button"
-                  onClick={
-                    closeApprovalModal
-                  }
-                  disabled={
-                    approvalLoading
-                  }
-                >
-                  <X
-                    size={
-                      21
-                    }
-                  />
-                </button>
-
-              </div>
-
-              <div className="agreement-view-body">
-
-                <div
-                  style={{
-                    padding:
-                      "15px 16px",
-                    border:
-                      "1px solid #e7ecea",
-                    borderRadius:
-                      "10px",
-                    background:
-                      "#fafcfb",
-                    marginBottom:
-                      "18px",
-                  }}
-                >
-
-                  <strong>
-                    {
-                      approvalAgreement.referenceNumber
-                    }
-                  </strong>
-
-                  <p
-                    style={{
-                      margin:
-                        "7px 0 0",
-                      color:
-                        "#53636c",
-                      fontSize:
-                        "13px",
-                      lineHeight:
-                        1.6,
-                    }}
-                  >
-                    {approvalAction ===
-                    "APPROVE"
-                      ? "Confirm that you want to approve this rental agreement."
-                      : "Confirm that you want to reject this rental agreement."}
-                  </p>
-
-                </div>
-
-                <form
-                  onSubmit={
-                    handleApprovalAction
-                  }
-                >
-
-                  <div className="form-group">
-
-                    <label htmlFor="approval-comments">
-                      Comments
-                      {approvalAction ===
-                      "REJECT"
-                        ? " *"
-                        : ""}
-                    </label>
-
-                    <textarea
-                      id="approval-comments"
-                      rows={
-                        5
-                      }
-                      value={
-                        approvalComments
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setApprovalComments(
-                          event.target.value
-                        )
-                      }
-                      placeholder={
-                        approvalAction ===
-                        "REJECT"
-                          ? "Enter the reason for rejection..."
-                          : "Add approval comments (optional)..."
-                      }
-                      disabled={
-                        approvalLoading
-                      }
-                    />
-
-                  </div>
-
-                  {approvalAction ===
-                    "REJECT" &&
-                    !approvalComments.trim() && (
-
-                    <p
-                      style={{
-                        margin:
-                          "-8px 0 15px",
-                        fontSize:
-                          "12px",
-                        color:
-                          "#b45309",
-                      }}
-                    >
-                      A rejection reason is
-                      recommended.
-                    </p>
-
-                  )}
-
-                  {approvalError && (
-
-                    <div
-                      className="alert alert-error"
-                      role="alert"
-                    >
-                      {
-                        approvalError
-                      }
-                    </div>
-
-                  )}
-
-                  <div
-                    style={{
-                      display:
-                        "flex",
-                      justifyContent:
-                        "space-between",
-                      gap:
-                        "10px",
-                      marginTop:
-                        "20px",
-                    }}
-                  >
-
-                    <button
-                      type="button"
-                      className="agreement-secondary-button"
-                      onClick={
-                        closeApprovalModal
-                      }
-                      disabled={
-                        approvalLoading
-                      }
-                    >
-                      Cancel
-                    </button>
-
-                    <button
-                      type="submit"
-                      className={
-                        approvalAction ===
-                        "APPROVE"
-                          ? "agreement-primary-button"
-                          : "agreement-secondary-button"
-                      }
-                      disabled={
-                        approvalLoading
-                      }
-                    >
-
-                      {approvalAction ===
-                      "APPROVE" ? (
-                        <CheckCircle2
-                          size={
-                            16
-                          }
-                        />
-                      ) : (
-                        <XCircle
-                          size={
-                            16
-                          }
-                        />
-                      )}
-
-                      {approvalLoading
-                        ? "Processing..."
-                        : approvalAction ===
-                            "APPROVE"
-                          ? "Approve Agreement"
-                          : "Reject Agreement"}
-
-                    </button>
-
-                  </div>
-
-                </form>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        )}
-
-        {/* =================================================
-            APPROVAL HISTORY MODAL
-        ================================================= */}
-
-        {historyModalOpen &&
-          historyAgreement && (
-
-          <div
-            className="agreement-modal-overlay"
-            role="dialog"
-            aria-modal="true"
-            onMouseDown={(
-              event
-            ) => {
-              if (
-                event.target ===
-                event.currentTarget
-              ) {
-                setHistoryModalOpen(
-                  false
-                );
-
-                setHistoryAgreement(
-                  null
-                );
-              }
-            }}
-          >
-
-            <div className="agreement-view-modal">
-
-              <div className="agreement-modal-header">
-
-                <div>
-
-                  <span className="agreement-modal-eyebrow">
-                    APPROVAL HISTORY
-                  </span>
-
-                  <h2>
-                    Agreement History
-                  </h2>
-
-                  <p>
-                    {
-                      historyAgreement.referenceNumber
-                    }
-                  </p>
-
-                </div>
-
-                <button
-                  type="button"
-                  className="modal-close-button"
-                  onClick={() => {
-                    setHistoryModalOpen(
-                      false
-                    );
-
-                    setHistoryAgreement(
-                      null
-                    );
-                  }}
-                >
-                  <X
-                    size={
-                      21
-                    }
-                  />
-                </button>
-
-              </div>
-
-              <div className="agreement-view-body">
-
-                {historyLoading ? (
-
-                  <div
-                    style={{
-                      padding:
-                        "45px 20px",
-                      textAlign:
-                        "center",
-                      color:
-                        "#6b7280",
-                    }}
-                  >
-
-                    <RefreshCw
-                      size={
-                        28
-                      }
-                      className="refresh-spinning"
-                    />
-
-                    <h3>
-                      Loading approval history...
-                    </h3>
-
-                  </div>
-
-                ) : historyError ? (
-
-                  <div
-                    className="alert alert-error"
-                    role="alert"
-                  >
-                    {
-                      historyError
-                    }
-                  </div>
-
-                ) : approvalHistory.length ===
-                  0 ? (
-
-                  <div
-                    style={{
-                      padding:
-                        "45px 20px",
-                      textAlign:
-                        "center",
-                      color:
-                        "#6b7280",
-                    }}
-                  >
-
-                    <div
-                      style={{
-                        width:
-                          "65px",
-                        height:
-                          "65px",
-                        margin:
-                          "0 auto 15px",
-                        display:
-                          "flex",
-                        alignItems:
-                          "center",
-                        justifyContent:
-                          "center",
-                        borderRadius:
-                          "50%",
-                        background:
-                          "#f0f7f5",
-                        color:
-                          "#008f78",
-                      }}
-                    >
-                      <History
-                        size={
-                          28
-                        }
-                      />
-                    </div>
-
-                    <h3>
-                      No approval history
-                    </h3>
-
-                    <p>
-                      No approval or rejection
-                      actions have been recorded
-                      for this agreement yet.
-                    </p>
-
-                  </div>
-
-                ) : (
-
-                  <div
-                    style={{
-                      display:
-                        "flex",
-                      flexDirection:
-                        "column",
-                      gap:
-                        "12px",
-                    }}
-                  >
-
-                    {approvalHistory.map(
-                      (
-                        item,
-                        index
-                      ) => (
-
-                        <div
-                          key={
-                            item.approvalId ||
-                            `${historyAgreement.id}-${index}`
-                          }
-                          style={{
-                            padding:
-                              "15px 16px",
-                            border:
-                              "1px solid #e5ebe9",
-                            borderRadius:
-                              "10px",
-                            background:
-                              "#fbfdfc",
-                          }}
-                        >
-
-                          <div
-                            style={{
-                              display:
-                                "flex",
-                              justifyContent:
-                                "space-between",
-                              alignItems:
-                                "center",
-                              gap:
-                                "12px",
-                            }}
-                          >
-
-                            <strong>
-                              {getApprovalActionLabel(
-                                item
-                              )}
-                            </strong>
-
-                            <span
-                              style={{
-                                fontSize:
-                                  "12px",
-                                color:
-                                  "#788991",
-                              }}
-                            >
-                              {formatDateTime(
-                                item.approvalDate ||
-                                  item.createdAt
-                              )}
-                            </span>
-
-                          </div>
-
-                          {item.officer?.user && (
-
-                            <div
-                              style={{
-                                marginTop:
-                                  "9px",
-                              }}
-                            >
-
-                              <span
-                                style={{
-                                  fontSize:
-                                    "11px",
-                                  fontWeight:
-                                    700,
-                                  color:
-                                    "#88969c",
-                                }}
-                              >
-                                OFFICER
-                              </span>
-
-                              <strong
-                                style={{
-                                  display:
-                                    "block",
-                                  marginTop:
-                                    "3px",
-                                  color:
-                                    "#25343a",
-                                }}
-                              >
-                                {
-                                  getPersonName(
-                                    item
-                                      .officer
-                                      .user
-                                      .firstName,
-                                    item
-                                      .officer
-                                      .user
-                                      .lastName
-                                  )
-                                }
-                              </strong>
-
-                              {item.officer
-                                .employeeId && (
-
-                                <small
-                                  style={{
-                                    color:
-                                      "#788991",
-                                  }}
-                                >
-                                  Employee ID:{" "}
-                                  {
-                                    item
-                                      .officer
-                                      .employeeId
-                                  }
-                                </small>
-
-                              )}
-
-                            </div>
-
-                          )}
-
-                          {item.comments && (
-
-                            <div
-                              style={{
-                                marginTop:
-                                  "10px",
-                                padding:
-                                  "10px 12px",
-                                borderRadius:
-                                  "7px",
-                                background:
-                                  "#f4f7f6",
-                                color:
-                                  "#53636c",
-                                fontSize:
-                                  "13px",
-                                lineHeight:
-                                  1.5,
-                              }}
-                            >
-                              {
-                                item.comments
-                              }
-                            </div>
-
-                          )}
-
-                        </div>
-
-                      )
-                    )}
-
-                  </div>
-
-                )}
-
-              </div>
-
-              <div className="agreement-modal-footer">
-
-                <button
-                  type="button"
-                  className="agreement-secondary-button"
-                  onClick={() => {
-                    setHistoryModalOpen(
-                      false
-                    );
-
-                    setHistoryAgreement(
-                      null
-                    );
-                  }}
-                >
-                  Close
-                </button>
 
               </div>
 
