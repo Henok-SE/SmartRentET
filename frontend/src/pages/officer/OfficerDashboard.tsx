@@ -6,6 +6,8 @@ import {
   User,
   Home,
   ClipboardList,
+  CreditCard,
+
 } from "lucide-react";
 
 function OfficerDashboard() {
@@ -64,6 +66,13 @@ function OfficerDashboard() {
             <FileText size={19} />
             <span>Rental Agreements</span>
           </button>
+          <button
+  className="officer-dashboard-nav-item"
+  onClick={() => navigate("/officer/payment-records")}
+>
+  <CreditCard size={19} />
+  <span>Payment Records</span>
+</button>
         </nav>
 
         {/* Sidebar Bottom */}

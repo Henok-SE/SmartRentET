@@ -6,37 +6,30 @@ import {
   CreditCard,
   Loader2,
 } from "lucide-react";
+
 const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 type PaymentRecord = {
-  paymentId: number;
-  agreementId: number;
+  paymentId: string;
+  agreementId: string;
+  referenceNumber: string;
+  transactionReference: string | null;
   amount: number;
+  currency: string;
+  paymentMethod: string | null;
+  provider: string | null;
+  status: string;
   dueDate: string | null;
   paidDate: string | null;
-  status: string;
-  method: string | null;
-  provider: string | null;
-  transactionReference: string | null;
   notes: string | null;
+  customerName: string | null;
+  customerPhoneNumber: string | null;
   createdAt: string;
-  agreement?: {
-    agreementId: number;
-    referenceNumber: string;
-    rentalAmount: number;
-    status: string;
-    tenant?: {
-      user?: {
-        firstName: string;
-        lastName: string;
-        phone: string;
-      };
-    };
-  };
 };
 
 type PaymentResponse = {
+  success: boolean;
   data: PaymentRecord[];
   meta: {
     total: number;
@@ -78,8 +71,13 @@ function PaymentRecords() {
 
       const token = localStorage.getItem("token");
 
+      if (!token) {
+        setError("Authentication required. Please log in again.");
+        return;
+      }
+
       const response = await fetch(
-  `${API_URL}/payments?${params.toString()}`,
+        `${API_URL}/payments?${params.toString()}`,
         {
           method: "GET",
           headers: {
@@ -95,7 +93,14 @@ function PaymentRecords() {
 
       const result: PaymentResponse = await response.json();
 
-      setPayments(result.data || []);
+      if (!result.success) {
+        throw new Error(
+          result.message || "Failed to load payment records."
+        );
+      }
+
+      setPayments(Array.isArray(result.data) ? result.data : []);
+
       setMeta(
         result.meta || {
           total: 0,
@@ -105,8 +110,12 @@ function PaymentRecords() {
         }
       );
     } catch (err) {
-      console.error(err);
-      setError("Unable to load payment records.");
+      console.error("Payment records error:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load payment records."
+      );
     } finally {
       setLoading(false);
     }
@@ -118,8 +127,12 @@ function PaymentRecords() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
-    fetchPayments();
+
+    if (page === 1) {
+      fetchPayments();
+    } else {
+      setPage(1);
+    }
   };
 
   const formatDate = (date: string | null) => {
@@ -132,28 +145,8 @@ function PaymentRecords() {
     });
   };
 
-  const formatAmount = (amount: number) => {
-    return `${Number(amount).toLocaleString()} ETB`;
-  };
-
-  const getTenantName = (payment: PaymentRecord) => {
-    const user = payment.agreement?.tenant?.user;
-
-    if (!user) return "—";
-
-    return `${user.firstName} ${user.lastName}`;
-  };
-
-  const getPaymentMethod = (payment: PaymentRecord) => {
-    if (!payment.method && !payment.provider) {
-      return "—";
-    }
-
-    if (payment.provider && payment.method) {
-      return `${payment.provider} (${payment.method})`;
-    }
-
-    return payment.provider || payment.method || "—";
+  const formatAmount = (amount: number, currency: string) => {
+    return `${Number(amount).toLocaleString()} ${currency || "ETB"}`;
   };
 
   return (
@@ -201,7 +194,8 @@ function PaymentRecords() {
           <h2>Payment Records</h2>
 
           <span>
-            {meta.total} {meta.total === 1 ? "record" : "records"} found
+            {meta.total}{" "}
+            {meta.total === 1 ? "record" : "records"} found
           </span>
         </div>
       </div>
@@ -232,7 +226,10 @@ function PaymentRecords() {
             {loading ? (
               <tr>
                 <td colSpan={7} className="payment-loading">
-                  <Loader2 size={22} className="loading-spinner" />
+                  <Loader2
+                    size={22}
+                    className="loading-spinner"
+                  />
                   Loading payment records...
                 </td>
               </tr>
@@ -245,42 +242,56 @@ function PaymentRecords() {
             ) : (
               payments.map((payment) => (
                 <tr key={payment.paymentId}>
+                  {/* Reference Number */}
                   <td>
                     <span className="agreement-reference">
-                      {payment.agreement?.referenceNumber || "—"}
+                      {payment.referenceNumber || "—"}
                     </span>
                   </td>
 
+                  {/* Tenant */}
                   <td>
                     <div className="tenant-name">
-                      {getTenantName(payment)}
+                      {payment.customerName || "—"}
                     </div>
 
-                    {payment.agreement?.tenant?.user?.phone && (
+                    {payment.customerPhoneNumber && (
                       <div className="tenant-phone">
-                        {payment.agreement.tenant.user.phone}
+                        {payment.customerPhoneNumber}
                       </div>
                     )}
                   </td>
 
+                  {/* Transaction ID */}
                   <td>
                     <span className="transaction-reference">
                       {payment.transactionReference || "—"}
                     </span>
                   </td>
 
+                  {/* Payment Date */}
                   <td>
-                    {formatDate(payment.paidDate || payment.createdAt)}
+                    {formatDate(
+                      payment.paidDate || payment.createdAt
+                    )}
                   </td>
 
+                  {/* Payment Method */}
                   <td>
-                    {getPaymentMethod(payment)}
+                    {payment.paymentMethod || "—"}
                   </td>
 
+                  {/* Amount */}
                   <td>
-                    <strong>{formatAmount(payment.amount)}</strong>
+                    <strong>
+                      {formatAmount(
+                        payment.amount,
+                        payment.currency
+                      )}
+                    </strong>
                   </td>
 
+                  {/* Status */}
                   <td>
                     <span
                       className={`payment-status payment-status-${payment.status
@@ -307,7 +318,9 @@ function PaymentRecords() {
           <button
             type="button"
             disabled={page <= 1 || loading}
-            onClick={() => setPage((current) => current - 1)}
+            onClick={() =>
+              setPage((current) => current - 1)
+            }
             aria-label="Previous page"
           >
             <ChevronLeft size={18} />
@@ -315,8 +328,12 @@ function PaymentRecords() {
 
           <button
             type="button"
-            disabled={page >= meta.totalPages || loading}
-            onClick={() => setPage((current) => current + 1)}
+            disabled={
+              page >= meta.totalPages || loading
+            }
+            onClick={() =>
+              setPage((current) => current + 1)
+            }
             aria-label="Next page"
           >
             <ChevronRight size={18} />
@@ -328,3 +345,4 @@ function PaymentRecords() {
 }
 
 export default PaymentRecords;
+
