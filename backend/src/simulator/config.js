@@ -1,6 +1,4 @@
-/**
- * Provider Simulator Configuration for Deployed Render / Local Environment
- */
+// Provider simulator configuration
 const config = {
   port: process.env.PORT || 5000,
   callbackUrl: process.env.SMARTRENT_CALLBACK_URL || `http://localhost:${process.env.PORT || 5000}/api/payments/provider-webhook`,
@@ -8,7 +6,7 @@ const config = {
   defaultStatus: (process.env.SIMULATOR_DEFAULT_STATUS || 'SUCCESS').toUpperCase(),
   signatureSecret: process.env.PROVIDER_WEBHOOK_SECRET || 'smartrent_sim_secret_key_2026',
 
-  // Runtime mutable settings (for test overrides)
+  // Runtime settings overrides for test execution
   runtimeSettings: {
     delayMs: null,
     defaultStatus: null

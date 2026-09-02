@@ -43,9 +43,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// ============================================
-// MOUNT CORE API ROUTES
-// ============================================
+// Mount core API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/agreements', agreementRoutes);
@@ -53,10 +51,7 @@ app.use('/api/approvals', approvalRoutes);
 app.use('/api/offices', officeRoutes);
 app.use('/api/payments', paymentRoutes);
 
-// ============================================
-// MOUNT PROVIDER SIMULATOR ROUTES
-// (Runs seamlessly as one unified service on Render or Local)
-// ============================================
+// Mount provider simulator routes
 app.use('/api/v1', simulationRoutes);
 
 // ============================================

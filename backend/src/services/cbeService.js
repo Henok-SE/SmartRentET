@@ -1,9 +1,6 @@
 const axios = require('axios');
 
-/**
- * Commercial Bank of Ethiopia (CBE) Provider Integration Layer
- * Connects to external CBE API (or Provider Simulator in development / staging)
- */
+// CBE provider integration layer
 const initiatePayment = async ({
     paymentId,
     amount,
@@ -61,7 +58,7 @@ const initiatePayment = async ({
         }
     }
 
-    // Fallback only if PROVIDER_SIMULATOR_URL is explicitly not configured
+    // Fallback offline mock response
     return {
         success: true,
         provider: 'CBE',

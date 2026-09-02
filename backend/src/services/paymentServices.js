@@ -5,7 +5,8 @@ const {
     NotFoundError,
     BadRequestError,
     ConflictError,
-    PaymentError
+    PaymentError,
+    ForbiddenError
 } = require('../utils/errors');
 const {
     toPaymentInquiryDTO,
@@ -27,10 +28,7 @@ const getPaymentProvider = (paymentMethod) => {
     }
 };
 
-/**
- * 1. Inquire Rental Agreement payment due information
- * Optimized with targeted Prisma select projections & DTO filtering
- */
+// Inquire rental agreement payment due details
 const getPaymentInquiry = async (referenceNumber) => {
     if (!referenceNumber) {
         throw new BadRequestError('Reference number is required');
@@ -104,10 +102,7 @@ const getPaymentInquiry = async (referenceNumber) => {
     return toPaymentInquiryDTO(agreement, latestPayment);
 };
 
-/**
- * 2. Initiate Payment
- * Creates PENDING record in DB -> Invokes Provider Simulator -> Updates Transaction Reference
- */
+// Initiate a new payment transaction
 const createPayment = async ({
     referenceNumber,
     amount,
@@ -129,7 +124,7 @@ const createPayment = async ({
         throw new BadRequestError('Payment method is required');
     }
 
-    // Step 1: Inquire and validate against real agreement
+    // Validate agreement and amount
     const inquiry = await getPaymentInquiry(referenceNumber);
 
     const paymentAmount = Number(amount);
@@ -149,7 +144,7 @@ const createPayment = async ({
             ? 'TELEBIRR'
             : 'BANK';
 
-    // Step 2: Create initial Payment record in DB in PENDING status atomically
+    // Create pending payment record
     const initialPayment = await prisma.payment.create({
         data: {
             agreementId: inquiry.agreementId,
@@ -164,7 +159,7 @@ const createPayment = async ({
 
     console.log(`[Payment Service] Created PENDING payment record with paymentId: ${initialPayment.paymentId}`);
 
-    // Step 3: Call Provider Layer / Simulator passing generated paymentId
+    // Request initiation from payment provider
     const provider = getPaymentProvider(paymentMethod);
 
     let providerResult;
@@ -179,7 +174,7 @@ const createPayment = async ({
             delayMs
         });
     } catch (err) {
-        // Mark payment as FAILED if simulator/provider rejected
+        // Update payment record to FAILED on provider error
         await prisma.payment.update({
             where: { paymentId: initialPayment.paymentId },
             data: {
@@ -203,7 +198,7 @@ const createPayment = async ({
         );
     }
 
-    // Step 4: Update Payment record with returned transaction reference
+    // Update payment record with provider transaction reference
     const updatedPayment = await prisma.payment.update({
         where: {
             paymentId: initialPayment.paymentId
@@ -235,11 +230,7 @@ const createPayment = async ({
     return toPaymentReceiptDTO(updatedPayment);
 };
 
-/**
- * 3. Handle Provider Webhook
- * The authoritative payment status transition mechanism
- * Atomic execution with Prisma Interactive Transaction & Idempotency support
- */
+// Process provider webhook with transaction locking and idempotency
 const handleProviderWebhook = async ({
     paymentId,
     transactionReference,
@@ -260,7 +251,7 @@ const handleProviderWebhook = async ({
         throw new BadRequestError('Invalid callback status: must be SUCCESS or FAILED');
     }
 
-    // Execute atomic transaction for find-and-update to prevent race conditions
+    // Execute in transaction to prevent race conditions
     return await prisma.$transaction(async (tx) => {
         const payment = await tx.payment.findUnique({
             where: { paymentId },
@@ -271,11 +262,9 @@ const handleProviderWebhook = async ({
                         tenant: {
                             select: {
                                 user: {
-                                    select: {
-                                        firstName: true,
-                                        lastName: true,
-                                        phone: true
-                                    }
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true
                                 }
                             }
                         }
@@ -288,7 +277,7 @@ const handleProviderWebhook = async ({
             throw new NotFoundError(`Payment record not found for paymentId: ${paymentId}`);
         }
 
-        // Idempotency: If already PAID and duplicate SUCCESS arrives
+        // Acknowledge idempotent duplicate success
         if (payment.status === 'PAID' && normalizedStatus === 'SUCCESS') {
             console.log(`[Provider Webhook] Idempotent duplicate callback acknowledged for paymentId: ${paymentId}`);
             return {
@@ -298,7 +287,7 @@ const handleProviderWebhook = async ({
             };
         }
 
-        // Idempotency: If already FAILED and duplicate FAILED arrives
+        // Acknowledge idempotent duplicate failure
         if (payment.status === 'FAILED' && normalizedStatus === 'FAILED') {
             console.log(`[Provider Webhook] Idempotent duplicate FAILED callback acknowledged for paymentId: ${paymentId}`);
             return {
@@ -308,14 +297,14 @@ const handleProviderWebhook = async ({
             };
         }
 
-        // Terminal state check
+        // Reject update if payment is in terminal state
         if (payment.status !== 'PENDING') {
             throw new BadRequestError(
                 `Payment is in terminal status "${payment.status}" and cannot be updated to "${normalizedStatus}"`
             );
         }
 
-        // Update payment state
+        // Update payment status and record payment date if successful
         const updatedPayment = await tx.payment.update({
             where: { paymentId },
             data: {
@@ -331,11 +320,9 @@ const handleProviderWebhook = async ({
                         tenant: {
                             select: {
                                 user: {
-                                    select: {
-                                        firstName: true,
-                                        lastName: true,
-                                        phone: true
-                                    }
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true
                                 }
                             }
                         }
@@ -357,9 +344,7 @@ const handleProviderWebhook = async ({
     });
 };
 
-/**
- * 4. Get Single Payment by ID (Optimized DTO)
- */
+// Retrieve single payment record by ID
 const getPaymentById = async (paymentId) => {
     if (!paymentId) {
         throw new BadRequestError('Payment ID is required');
@@ -410,9 +395,7 @@ const getPaymentById = async (paymentId) => {
     return toPaymentReceiptDTO(payment);
 };
 
-/**
- * 5. Get Payment History by Agreement ID
- */
+// Retrieve payment history for an agreement
 const getPaymentHistory = async (agreementId) => {
     if (!agreementId) {
         throw new BadRequestError('Agreement ID is required');
@@ -448,9 +431,7 @@ const getPaymentHistory = async (agreementId) => {
     return toPaymentHistoryDTO(payments);
 };
 
-/**
- * 6. Update Payment Status (Admin Manual Adjustment)
- */
+// Update payment status manually
 const updatePaymentStatus = async ({
     paymentId,
     status,
@@ -515,12 +496,176 @@ const updatePaymentStatus = async ({
     return toPaymentReceiptDTO(updatedPayment);
 };
 
-/**
- * Legacy mock payment callback (Development/Testing only)
- */
+// Handle mock payment callback in development or test mode
 const handleMockPaymentCallback = async (payload) => {
     const result = await handleProviderWebhook(payload);
     return result.payment;
+};
+
+// Retrieve payment records scoped to the officer's or office admin's assigned government office
+const getOfficerPaymentRecords = async ({ userId, role, query = {} }) => {
+    let officeId = null;
+
+    if (role === 'OFFICER') {
+        const officer = await prisma.officer.findUnique({
+            where: { userId },
+            select: { officeId: true }
+        });
+        if (!officer || !officer.officeId) {
+            throw new ForbiddenError('Officer is not assigned to an active government office');
+        }
+        officeId = officer.officeId;
+    } else if (role === 'OFFICE_ADMIN') {
+        const admin = await prisma.officeAdmin.findUnique({
+            where: { userId },
+            select: { officeId: true }
+        });
+        if (!admin || !admin.officeId) {
+            throw new ForbiddenError('Office Admin is not assigned to an active government office');
+        }
+        officeId = admin.officeId;
+    } else {
+        throw new ForbiddenError('Access restricted to Officers and Office Admins only');
+    }
+
+    const page = parseInt(query.page, 10) || 1;
+    const limit = parseInt(query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+
+    const {
+        status,
+        paymentMethod,
+        provider,
+        referenceNumber,
+        search,
+        startDate,
+        endDate
+    } = query;
+
+    // Build Prisma where clause strictly enforcing the user's assigned officeId
+    const where = {
+        agreement: {
+            officeId
+        }
+    };
+
+    if (status) {
+        where.status = status;
+    }
+
+    if (paymentMethod) {
+        where.method = paymentMethod;
+    }
+
+    if (provider) {
+        where.provider = provider;
+    }
+
+    if (referenceNumber) {
+        where.agreement.referenceNumber = {
+            contains: referenceNumber,
+            mode: 'insensitive'
+        };
+    }
+
+    if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) {
+            where.createdAt.gte = new Date(startDate);
+        }
+        if (endDate) {
+            where.createdAt.lte = new Date(endDate);
+        }
+    }
+
+    if (search) {
+        where.OR = [
+            {
+                agreement: {
+                    referenceNumber: {
+                        contains: search,
+                        mode: 'insensitive'
+                    }
+                }
+            },
+            {
+                transactionReference: {
+                    contains: search,
+                    mode: 'insensitive'
+                }
+            },
+            {
+                agreement: {
+                    tenant: {
+                        user: {
+                            OR: [
+                                { firstName: { contains: search, mode: 'insensitive' } },
+                                { lastName: { contains: search, mode: 'insensitive' } },
+                                { phone: { contains: search, mode: 'insensitive' } }
+                            ]
+                        }
+                    }
+                }
+            }
+        ];
+    }
+
+    const [total, payments] = await Promise.all([
+        prisma.payment.count({ where }),
+        prisma.payment.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: {
+                paymentId: true,
+                agreementId: true,
+                amount: true,
+                dueDate: true,
+                paidDate: true,
+                status: true,
+                method: true,
+                provider: true,
+                transactionReference: true,
+                notes: true,
+                createdAt: true,
+                agreement: {
+                    select: {
+                        agreementId: true,
+                        referenceNumber: true,
+                        rentalAmount: true,
+                        status: true,
+                        tenant: {
+                            select: {
+                                user: {
+                                    select: {
+                                        firstName: true,
+                                        lastName: true,
+                                        phone: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    ]);
+
+    const records = payments.map(toPaymentReceiptDTO);
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    return {
+        records,
+        meta: {
+            total,
+            page,
+            limit,
+            totalPages
+        }
+    };
 };
 
 module.exports = {
@@ -528,6 +673,7 @@ module.exports = {
     getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
+    getOfficerPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,
     handleMockPaymentCallback,
