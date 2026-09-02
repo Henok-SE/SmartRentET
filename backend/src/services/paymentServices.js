@@ -5,7 +5,8 @@ const {
     NotFoundError,
     BadRequestError,
     ConflictError,
-    PaymentError
+    PaymentError,
+    ForbiddenError
 } = require('../utils/errors');
 const {
     toPaymentInquiryDTO,
@@ -501,11 +502,178 @@ const handleMockPaymentCallback = async (payload) => {
     return result.payment;
 };
 
+// Retrieve payment records scoped to the officer's or office admin's assigned government office
+const getOfficerPaymentRecords = async ({ userId, role, query = {} }) => {
+    let officeId = null;
+
+    if (role === 'OFFICER') {
+        const officer = await prisma.officer.findUnique({
+            where: { userId },
+            select: { officeId: true }
+        });
+        if (!officer || !officer.officeId) {
+            throw new ForbiddenError('Officer is not assigned to an active government office');
+        }
+        officeId = officer.officeId;
+    } else if (role === 'OFFICE_ADMIN') {
+        const admin = await prisma.officeAdmin.findUnique({
+            where: { userId },
+            select: { officeId: true }
+        });
+        if (!admin || !admin.officeId) {
+            throw new ForbiddenError('Office Admin is not assigned to an active government office');
+        }
+        officeId = admin.officeId;
+    } else {
+        throw new ForbiddenError('Access restricted to Officers and Office Admins only');
+    }
+
+    const page = parseInt(query.page, 10) || 1;
+    const limit = parseInt(query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+
+    const {
+        status,
+        paymentMethod,
+        provider,
+        referenceNumber,
+        search,
+        startDate,
+        endDate
+    } = query;
+
+    // Build Prisma where clause strictly enforcing the user's assigned officeId
+    const where = {
+        agreement: {
+            officeId
+        }
+    };
+
+    if (status) {
+        where.status = status;
+    }
+
+    if (paymentMethod) {
+        where.method = paymentMethod;
+    }
+
+    if (provider) {
+        where.provider = provider;
+    }
+
+    if (referenceNumber) {
+        where.agreement.referenceNumber = {
+            contains: referenceNumber,
+            mode: 'insensitive'
+        };
+    }
+
+    if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) {
+            where.createdAt.gte = new Date(startDate);
+        }
+        if (endDate) {
+            where.createdAt.lte = new Date(endDate);
+        }
+    }
+
+    if (search) {
+        where.OR = [
+            {
+                agreement: {
+                    referenceNumber: {
+                        contains: search,
+                        mode: 'insensitive'
+                    }
+                }
+            },
+            {
+                transactionReference: {
+                    contains: search,
+                    mode: 'insensitive'
+                }
+            },
+            {
+                agreement: {
+                    tenant: {
+                        user: {
+                            OR: [
+                                { firstName: { contains: search, mode: 'insensitive' } },
+                                { lastName: { contains: search, mode: 'insensitive' } },
+                                { phone: { contains: search, mode: 'insensitive' } }
+                            ]
+                        }
+                    }
+                }
+            }
+        ];
+    }
+
+    const [total, payments] = await Promise.all([
+        prisma.payment.count({ where }),
+        prisma.payment.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: {
+                paymentId: true,
+                agreementId: true,
+                amount: true,
+                dueDate: true,
+                paidDate: true,
+                status: true,
+                method: true,
+                provider: true,
+                transactionReference: true,
+                notes: true,
+                createdAt: true,
+                agreement: {
+                    select: {
+                        agreementId: true,
+                        referenceNumber: true,
+                        rentalAmount: true,
+                        status: true,
+                        tenant: {
+                            select: {
+                                user: {
+                                    select: {
+                                        firstName: true,
+                                        lastName: true,
+                                        phone: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    ]);
+
+    const records = payments.map(toPaymentReceiptDTO);
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    return {
+        records,
+        meta: {
+            total,
+            page,
+            limit,
+            totalPages
+        }
+    };
+};
+
 module.exports = {
     createPayment,
     getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
+    getOfficerPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,
     handleMockPaymentCallback,

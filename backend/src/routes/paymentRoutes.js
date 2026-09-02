@@ -9,15 +9,16 @@ const {
     getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
+    getPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,
     handleMockPaymentCallback
 } = require('../controllers/paymentController');
 
-
 const {
     createPaymentSchema,
-    updatePaymentStatusSchema
+    updatePaymentStatusSchema,
+    getPaymentRecordsSchema
 } = require('../validations/paymentValidation');
 
 // Public payment settlement endpoints
@@ -29,7 +30,14 @@ router.get('/:paymentId', getPaymentById);
 router.post('/provider-webhook', handleProviderWebhook);
 router.post('/mock-callback', handleMockPaymentCallback);
 
-// Authenticated ledger and management endpoints
+// Authenticated ledger and management endpoints (strictly scoped to assigned government office)
+router.get(
+    '/',
+    authenticateToken,
+    authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+    validate(getPaymentRecordsSchema, 'query'),
+    getPaymentRecords
+);
 router.get('/agreement/:agreementId', authenticateToken, getPaymentHistory);
 router.patch(
     '/:paymentId/status',

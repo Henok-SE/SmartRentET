@@ -132,11 +132,31 @@ const handleMockPaymentCallback = async (req, res, next) => {
     }
 };
 
+// Retrieve payment records scoped to the authenticated officer's or office admin's government office
+const getPaymentRecords = async (req, res, next) => {
+    try {
+        const result = await paymentService.getOfficerPaymentRecords({
+            userId: req.user.userId,
+            role: req.user.role,
+            query: req.query
+        });
+
+        return ApiResponse.success(res, {
+            data: result.records,
+            meta: result.meta,
+            message: 'Payment records retrieved successfully'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     getPaymentInquiry,
     createPayment,
     getPaymentHistory,
     getPaymentById,
+    getPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,
     handleMockPaymentCallback
