@@ -39,23 +39,6 @@ const getSuperAdmins = async (req, res) => {
 const getContracts = async (req, res) => {
   try {
     const { referenceNumber, status, subCity, landlord, tenant } = req.query;
-    const { role, userId } = req.user;
-    let officeId = null;
-
-    // Apply role-based scoping
-    if (role === 'OFFICE_ADMIN') {
-      const admin = await prisma.officeAdmin.findUnique({
-        where: { userId },
-        select: { officeId: true }
-      });
-      officeId = admin?.officeId;
-    } else if (role === 'OFFICER') {
-      const officer = await prisma.officer.findUnique({
-        where: { userId },
-        select: { officeId: true }
-      });
-      officeId = officer?.officeId;
-    }
 
     const data = await dashboardService.getContracts({
       referenceNumber,
@@ -63,7 +46,7 @@ const getContracts = async (req, res) => {
       subCity,
       landlord,
       tenant,
-      officeId,
+      user: req.user, 
     });
 
     res.status(200).json({
@@ -75,7 +58,6 @@ const getContracts = async (req, res) => {
         subCity,
         landlord,
         tenant,
-        officeId,
       },
       data,
     });
@@ -83,10 +65,11 @@ const getContracts = async (req, res) => {
     console.error('Dashboard contracts error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to retrieve Rental Agreements',
+      message: 'Failed to retrieve rental agreements',
     });
   }
 };
+
 
 const getAuditLogs = async (req, res) => {
   try {
