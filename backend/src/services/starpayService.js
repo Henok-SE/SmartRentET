@@ -26,6 +26,23 @@ starpayClient.interceptors.request.use((config) => {
 });
 
 /**
+ * Normalize Ethiopian phone number to StarPay's expected international E.164 format (+2519... or +2517...)
+ */
+const formatStarPayPhone = (phone) => {
+    if (!phone) return '+251900000000';
+    let cleaned = String(phone).trim().replace(/[\s\-()]/g, '');
+    if (cleaned.startsWith('+251')) return cleaned;
+    if (cleaned.startsWith('251')) return `+${cleaned}`;
+    if (cleaned.startsWith('09') || cleaned.startsWith('07')) {
+        return `+251${cleaned.substring(1)}`;
+    }
+    if (cleaned.startsWith('9') || cleaned.startsWith('7')) {
+        return `+251${cleaned}`;
+    }
+    return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
+};
+
+/**
  * Initiate StarPay Rent Payment Transaction
  */
 const initiatePayment = async ({
@@ -44,7 +61,7 @@ const initiatePayment = async ({
             description: description || `SmartRent Rent Settlement - ${referenceNumber || paymentId}`,
             currency: 'ETB',
             customerName: customerName || 'SmartRent Tenant',
-            customerPhoneNumber: customerPhoneNumber || '+251900000000',
+            customerPhoneNumber: formatStarPayPhone(customerPhoneNumber),
             callbackURL: callbackUrl || getCallbackUrl(),
             redirectUrl: redirectUrl || getReturnUrl(),
             metadata: {
