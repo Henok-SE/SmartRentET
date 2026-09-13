@@ -1,4 +1,5 @@
 const paymentService = require('../services/paymentServices');
+const starpayService = require('../services/starpayService');
 const ApiResponse = require('../utils/apiResponse');
 const { verifyWebhookSignature } = require('../utils/signatureValidator');
 const { UnauthorizedError, ForbiddenError } = require('../utils/errors');
@@ -151,6 +152,50 @@ const getPaymentRecords = async (req, res, next) => {
     }
 };
 
+// Handle StarPay webhook callback
+const handleStarPayWebhook = async (req, res, next) => {
+    try {
+        console.log('[StarPay Webhook] Received callback headers:', req.headers);
+        console.log('[StarPay Webhook] Received callback payload:', req.body);
+
+        const signatureHeader = req.headers['x-starpay-signature'] || 
+                                req.headers['x-signature'] || 
+                                req.headers['x-provider-signature'];
+        const secret = process.env.STARPAY_WEBHOOK_SECRET;
+
+        if (secret && signatureHeader) {
+            const isValid = starpayService.verifyWebhookSignature(req.body, signatureHeader, secret);
+            if (!isValid) {
+                throw new UnauthorizedError('Invalid or forged StarPay webhook signature');
+            }
+        }
+
+        const payload = req.body || {};
+        const transactionReference = payload.order_id || payload.orderId || payload.transactionId || payload.data?.order_id;
+        const paymentId = payload.metadata?.paymentId || payload.paymentId || payload.data?.metadata?.paymentId;
+        const rawStatus = payload.status || payload.order_status || payload.data?.status || 'SUCCESS';
+
+        const isSuccess = ['PAID', 'SUCCESS', 'COMPLETED', 'APPROVED'].includes(String(rawStatus).toUpperCase());
+        const status = isSuccess ? 'SUCCESS' : 'FAILED';
+
+        const result = await paymentService.handleProviderWebhook({
+            paymentId,
+            transactionReference,
+            status,
+            notes: `StarPay webhook confirmed status: ${rawStatus}`,
+            provider: 'STARPAY'
+        });
+
+        return ApiResponse.success(res, {
+            data: result.payment,
+            isDuplicate: result.isDuplicate,
+            message: result.message
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     getPaymentInquiry,
     createPayment,
@@ -159,5 +204,6 @@ module.exports = {
     getPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,
-    handleMockPaymentCallback
+    handleMockPaymentCallback,
+    handleStarPayWebhook
 };

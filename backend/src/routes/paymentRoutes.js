@@ -12,7 +12,8 @@ const {
     getPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,
-    handleMockPaymentCallback
+    handleMockPaymentCallback,
+    handleStarPayWebhook
 } = require('../controllers/paymentController');
 
 const {
@@ -28,6 +29,7 @@ router.get('/:paymentId', getPaymentById);
 
 // Webhook and simulation endpoints
 router.post('/provider-webhook', handleProviderWebhook);
+router.post('/starpay/webhook', handleStarPayWebhook);
 router.post('/mock-callback', handleMockPaymentCallback);
 
 // Authenticated ledger and management endpoints (strictly scoped to assigned government office)

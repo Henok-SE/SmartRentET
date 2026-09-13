@@ -42,7 +42,7 @@ function toPaymentInquiryDTO(agreement, latestPayment = null) {
 }
 
 // Transform payment database record into receipt DTO
-function toPaymentReceiptDTO(payment) {
+function toPaymentReceiptDTO(payment, extraData = {}) {
     if (!payment) return null;
 
     const agreement = payment.agreement || {};
@@ -56,6 +56,8 @@ function toPaymentReceiptDTO(payment) {
         agreementId: payment.agreementId,
         referenceNumber: agreement.referenceNumber || payment.referenceNumber || null,
         transactionReference: payment.transactionReference || null,
+        checkoutUrl: extraData.checkoutUrl || payment.checkoutUrl || null,
+        redirectUrl: extraData.redirectUrl || null,
         amount: Number(payment.amount),
         currency: 'ETB',
         paymentMethod: payment.method,

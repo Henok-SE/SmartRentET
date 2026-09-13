@@ -1,46 +1,109 @@
 const axios = require('axios');
+const crypto = require('crypto');
 
-const STARPAY_API_URL = process.env.STARPAY_API_URL;
-const STARPAY_API_SECRET = process.env.STARPAY_API_SECRET;
+const STARPAY_API_URL = process.env.STARPAY_API_URL || 'https://sandbox-api.starpayethiopia.com/v1/starpay-api';
+const STARPAY_API_KEY = process.env.STARPAY_API_KEY || process.env.STARPAY_API_SECRET;
+const STARPAY_CALLBACK_URL = process.env.STARPAY_CALLBACK_URL || 'http://localhost:5000/api/v1/payments/starpay/webhook';
+const STARPAY_RETURN_URL = process.env.STARPAY_RETURN_URL || 'http://localhost:3000/payments/success';
+const STARPAY_WEBHOOK_SECRET = process.env.STARPAY_WEBHOOK_SECRET;
 
 const starpayClient = axios.create({
     baseURL: STARPAY_API_URL,
     headers: {
-        'Content-type': 'application/json',
-        "x--api-secret": STARPAY_API_SECRET,
+        'Content-Type': 'application/json',
+        'x-api-secret': STARPAY_API_KEY,
     },
+    timeout: 15000,
 });
 
-const createTransaction = async ({
+/**
+ * Initiate StarPay Rent Payment Transaction
+ */
+const initiatePayment = async ({
+    paymentId,
     amount,
-    description,
     customerName,
     customerPhoneNumber,
-    callbackURL,
+    referenceNumber,
+    callbackUrl,
     redirectUrl,
-    metadata,
+    description,
 }) => {
-    const response = await starpayClient.post("/trdp/order", {
-        amount,
-        description,
-        currency: "ETB",
-        customerName,
-        customerPhoneNumber,
-        callbackURL,
-        redirectUrl,
-        metadata,
-        items: [
-           { 
-              item_name: description,
-              quantity: 1,
-              unit_price: amount,
-           },
-        ],
-    });
+    try {
+        const payload = {
+            amount: Number(amount),
+            description: description || `SmartRent Rent Settlement - ${referenceNumber || paymentId}`,
+            currency: 'ETB',
+            customerName: customerName || 'SmartRent Tenant',
+            customerPhoneNumber: customerPhoneNumber || '+251900000000',
+            callbackURL: callbackUrl || STARPAY_CALLBACK_URL,
+            redirectUrl: redirectUrl || STARPAY_RETURN_URL,
+            metadata: {
+                paymentId,
+                referenceNumber: referenceNumber || null,
+            },
+            items: [
+                {
+                    productId: `RENT-${referenceNumber || paymentId}`,
+                    item_name: description || `Rent Settlement ${referenceNumber || ''}`.trim(),
+                    quantity: 1,
+                    unit_price: Number(amount),
+                },
+            ],
+        };
 
-    return response.data
+        console.log(`[StarPay Service] Creating order for paymentId=${paymentId}, amount=${amount} ETB`);
+        const response = await starpayClient.post('/trdp/order', payload);
+
+        if (!response.data || response.data.status !== 'success') {
+            throw new Error(response.data?.message || 'StarPay rejected order creation');
+        }
+
+        const orderData = response.data.data;
+        console.log(`[StarPay Service] Order created: orderId=${orderData.order_id}, paymentUrl=${orderData.payment_url}`);
+
+        return {
+            success: true,
+            provider: 'STARPAY',
+            status: 'PENDING',
+            transactionReference: orderData.order_id,
+            checkoutUrl: orderData.payment_url,
+            redirectUrl: orderData.redirectUrl,
+            expiresAt: orderData.expires_at,
+            message: 'StarPay payment order created successfully',
+            raw: orderData,
+        };
+    } catch (error) {
+        const detail = error.response?.data?.message || error.response?.data?.error?.message || error.message;
+        console.error('[StarPay Service] Initiation error:', detail);
+        throw new Error(`StarPay Gateway Error: ${detail}`);
+    }
 };
 
- module.exports = {
-    createTransaction,
- };
+/**
+ * Verify incoming webhook signature from StarPay
+ */
+const verifyWebhookSignature = (payload, signatureHeader, secret = STARPAY_WEBHOOK_SECRET) => {
+    if (!signatureHeader || !secret) {
+        return true;
+    }
+
+    try {
+        const content = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        const hmac = crypto.createHmac('sha256', secret);
+        hmac.update(content);
+        const digest = hmac.digest('hex');
+
+        // Check raw hex or sha256= prefix
+        const cleanHeader = signatureHeader.replace(/^sha256=/, '').trim();
+        return crypto.timingSafeEqual(Buffer.from(cleanHeader), Buffer.from(digest));
+    } catch {
+        return false;
+    }
+};
+
+module.exports = {
+    initiatePayment,
+    createTransaction: initiatePayment,
+    verifyWebhookSignature,
+};

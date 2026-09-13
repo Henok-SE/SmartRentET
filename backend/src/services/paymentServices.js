@@ -1,6 +1,7 @@
 const prisma = require('../config/db');
 const telebirrService = require('./telebirrService');
 const cbeService = require('./cbeService');
+const starpayService = require('./starpayService');
 const {
     NotFoundError,
     BadRequestError,
@@ -22,6 +23,9 @@ const getPaymentProvider = (paymentMethod) => {
 
         case 'CBE':
             return cbeService;
+
+        case 'STARPAY':
+            return starpayService;
 
         default:
             throw new BadRequestError(`Unsupported payment method: ${paymentMethod}`);
@@ -135,14 +139,16 @@ const createPayment = async ({
     }
 
     const method =
-        paymentMethod === 'TELEBIRR'
+        paymentMethod === 'TELEBIRR' || paymentMethod === 'STARPAY'
             ? 'MOBILE_MONEY'
             : 'BANK_TRANSFER';
 
     const paymentProvider =
         paymentMethod === 'TELEBIRR'
             ? 'TELEBIRR'
-            : 'BANK';
+            : paymentMethod === 'STARPAY'
+                ? 'OTHER'
+                : 'BANK';
 
     // Create pending payment record
     const initialPayment = await prisma.payment.create({
@@ -227,7 +233,10 @@ const createPayment = async ({
         }
     });
 
-    return toPaymentReceiptDTO(updatedPayment);
+    return toPaymentReceiptDTO(updatedPayment, {
+        checkoutUrl: providerResult.checkoutUrl,
+        redirectUrl: providerResult.redirectUrl
+    });
 };
 
 // Process provider webhook with transaction locking and idempotency
@@ -238,48 +247,72 @@ const handleProviderWebhook = async ({
     notes,
     provider
 }) => {
-    if (!paymentId) {
-        throw new BadRequestError('paymentId is required in webhook payload');
-    }
-
-    if (!transactionReference) {
-        throw new BadRequestError('transactionReference is required in webhook payload');
+    if (!paymentId && !transactionReference) {
+        throw new BadRequestError('paymentId or transactionReference is required in webhook payload');
     }
 
     const normalizedStatus = (status || '').toUpperCase();
-    if (normalizedStatus !== 'SUCCESS' && normalizedStatus !== 'FAILED') {
-        throw new BadRequestError('Invalid callback status: must be SUCCESS or FAILED');
+    if (normalizedStatus !== 'SUCCESS' && normalizedStatus !== 'PAID' && normalizedStatus !== 'FAILED') {
+        throw new BadRequestError('Invalid callback status: must be SUCCESS, PAID, or FAILED');
     }
+    const isSuccess = normalizedStatus === 'SUCCESS' || normalizedStatus === 'PAID';
 
     // Execute in transaction to prevent race conditions
     return await prisma.$transaction(async (tx) => {
-        const payment = await tx.payment.findUnique({
-            where: { paymentId },
-            include: {
-                agreement: {
-                    select: {
-                        referenceNumber: true,
-                        tenant: {
-                            select: {
-                                user: {
-                                    firstName: true,
-                                    lastName: true,
-                                    phone: true
+        let payment = null;
+        if (paymentId) {
+            payment = await tx.payment.findUnique({
+                where: { paymentId },
+                include: {
+                    agreement: {
+                        select: {
+                            referenceNumber: true,
+                            tenant: {
+                                select: {
+                                    user: {
+                                        firstName: true,
+                                        lastName: true,
+                                        phone: true
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
+
+        if (!payment && transactionReference) {
+            payment = await tx.payment.findFirst({
+                where: { transactionReference },
+                include: {
+                    agreement: {
+                        select: {
+                            referenceNumber: true,
+                            tenant: {
+                                select: {
+                                    user: {
+                                        firstName: true,
+                                        lastName: true,
+                                        phone: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         if (!payment) {
-            throw new NotFoundError(`Payment record not found for paymentId: ${paymentId}`);
+            throw new NotFoundError(
+                `Payment record not found for paymentId: ${paymentId || 'N/A'}, transactionReference: ${transactionReference || 'N/A'}`
+            );
         }
 
         // Acknowledge idempotent duplicate success
-        if (payment.status === 'PAID' && normalizedStatus === 'SUCCESS') {
-            console.log(`[Provider Webhook] Idempotent duplicate callback acknowledged for paymentId: ${paymentId}`);
+        if (payment.status === 'PAID' && isSuccess) {
+            console.log(`[Provider Webhook] Idempotent duplicate callback acknowledged for paymentId: ${payment.paymentId}`);
             return {
                 payment: toPaymentReceiptDTO(payment),
                 isDuplicate: true,
@@ -288,8 +321,8 @@ const handleProviderWebhook = async ({
         }
 
         // Acknowledge idempotent duplicate failure
-        if (payment.status === 'FAILED' && normalizedStatus === 'FAILED') {
-            console.log(`[Provider Webhook] Idempotent duplicate FAILED callback acknowledged for paymentId: ${paymentId}`);
+        if (payment.status === 'FAILED' && !isSuccess) {
+            console.log(`[Provider Webhook] Idempotent duplicate FAILED callback acknowledged for paymentId: ${payment.paymentId}`);
             return {
                 payment: toPaymentReceiptDTO(payment),
                 isDuplicate: true,
@@ -306,12 +339,12 @@ const handleProviderWebhook = async ({
 
         // Update payment status and record payment date if successful
         const updatedPayment = await tx.payment.update({
-            where: { paymentId },
+            where: { paymentId: payment.paymentId },
             data: {
-                status: normalizedStatus === 'SUCCESS' ? 'PAID' : 'FAILED',
+                status: isSuccess ? 'PAID' : 'FAILED',
                 transactionReference: transactionReference || payment.transactionReference,
-                paidDate: normalizedStatus === 'SUCCESS' ? new Date() : null,
-                notes: notes || (normalizedStatus === 'SUCCESS' ? 'Payment confirmed by provider webhook' : 'Payment marked FAILED by provider webhook')
+                paidDate: isSuccess ? new Date() : null,
+                notes: notes || (isSuccess ? 'Payment confirmed by provider webhook' : 'Payment marked FAILED by provider webhook')
             },
             include: {
                 agreement: {
@@ -331,7 +364,7 @@ const handleProviderWebhook = async ({
             }
         });
 
-        console.log(`[Provider Webhook] Transitioned paymentId=${paymentId} from PENDING -> ${updatedPayment.status}`);
+        console.log(`[Provider Webhook] Transitioned paymentId=${payment.paymentId} from PENDING -> ${updatedPayment.status}`);
 
         return {
             payment: toPaymentReceiptDTO(updatedPayment),
