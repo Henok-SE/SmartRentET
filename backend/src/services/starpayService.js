@@ -4,10 +4,14 @@ const crypto = require('crypto');
 const DEFAULT_SANDBOX_KEY = 'rtwFSXZ3nrv2uqAsuH/zqcnn9WiilF4keCDhXLfMuBYoWmh7Lt/m7JQEv3b/9A92';
 const DEFAULT_WEBHOOK_SECRET = '520954f5b9300abb5cbdd3bb41d50e1e223b59cccf76a8744eea4291820d70ea';
 
+const STARPAY_CALLBACK_URL = process.env.STARPAY_CALLBACK_URL || 'http://localhost:5000/api/payments/starpay/webhook';
+const STARPAY_RETURN_URL = process.env.STARPAY_RETURN_URL || 'https://smartrent-et-miniapp-jade.vercel.app/pay';
+const STARPAY_WEBHOOK_SECRET = process.env.STARPAY_WEBHOOK_SECRET || DEFAULT_WEBHOOK_SECRET;
+
 const getApiKey = () => process.env.STARPAY_API_KEY || process.env.STARPAY_API_SECRET || DEFAULT_SANDBOX_KEY;
 const getApiUrl = () => process.env.STARPAY_API_URL || 'https://sandbox-api.starpayethiopia.com/v1/starpay-api';
-const getCallbackUrl = () => process.env.STARPAY_CALLBACK_URL || 'http://localhost:5000/api/payments/starpay/webhook';
-const getReturnUrl = () => process.env.STARPAY_RETURN_URL || 'http://localhost:3000/payments/success';
+const getCallbackUrl = () => process.env.STARPAY_CALLBACK_URL || STARPAY_CALLBACK_URL;
+const getReturnUrl = () => process.env.STARPAY_RETURN_URL || STARPAY_RETURN_URL;
 const getWebhookSecret = () => process.env.STARPAY_WEBHOOK_SECRET || DEFAULT_WEBHOOK_SECRET;
 
 const starpayClient = axios.create({
@@ -41,8 +45,8 @@ const initiatePayment = async ({
             currency: 'ETB',
             customerName: customerName || 'SmartRent Tenant',
             customerPhoneNumber: customerPhoneNumber || '+251900000000',
-            callbackURL: callbackUrl || STARPAY_CALLBACK_URL,
-            redirectUrl: redirectUrl || STARPAY_RETURN_URL,
+            callbackURL: callbackUrl || getCallbackUrl(),
+            redirectUrl: redirectUrl || getReturnUrl(),
             metadata: {
                 paymentId,
                 referenceNumber: referenceNumber || null,
