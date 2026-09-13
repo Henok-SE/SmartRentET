@@ -9,6 +9,7 @@ const {
     getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
+    verifyPayment,
     getPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,
@@ -26,6 +27,7 @@ const {
 router.get('/inquiry/:referenceNumber', getPaymentInquiry);
 router.post('/', validate(createPaymentSchema), createPayment);
 router.get('/:paymentId', getPaymentById);
+router.post('/:paymentId/verify', verifyPayment);
 
 // Webhook and simulation endpoints
 router.post('/provider-webhook', handleProviderWebhook);

@@ -270,9 +270,11 @@ const handleProviderWebhook = async ({
                             tenant: {
                                 select: {
                                     user: {
-                                        firstName: true,
-                                        lastName: true,
-                                        phone: true
+                                        select: {
+                                            firstName: true,
+                                            lastName: true,
+                                            phone: true
+                                        }
                                     }
                                 }
                             }
@@ -292,9 +294,11 @@ const handleProviderWebhook = async ({
                             tenant: {
                                 select: {
                                     user: {
-                                        firstName: true,
-                                        lastName: true,
-                                        phone: true
+                                        select: {
+                                            firstName: true,
+                                            lastName: true,
+                                            phone: true
+                                        }
                                     }
                                 }
                             }
@@ -353,9 +357,11 @@ const handleProviderWebhook = async ({
                         tenant: {
                             select: {
                                 user: {
-                                    firstName: true,
-                                    lastName: true,
-                                    phone: true
+                                    select: {
+                                        firstName: true,
+                                        lastName: true,
+                                        phone: true
+                                    }
                                 }
                             }
                         }
@@ -426,6 +432,56 @@ const getPaymentById = async (paymentId) => {
     }
 
     return toPaymentReceiptDTO(payment);
+};
+
+// Verify and finalize payment settlement
+const verifyPayment = async (paymentId) => {
+    if (!paymentId) {
+        throw new BadRequestError('Payment ID is required');
+    }
+
+    const payment = await prisma.payment.findUnique({
+        where: { paymentId },
+        include: {
+            agreement: {
+                select: {
+                    referenceNumber: true,
+                    tenant: {
+                        select: {
+                            user: {
+                                select: {
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    if (!payment) {
+        throw new NotFoundError('Payment record not found');
+    }
+
+    if (payment.status === 'PAID') {
+        return toPaymentReceiptDTO(payment);
+    }
+
+    // Confirm settlement and record paid timestamp
+    const result = await handleProviderWebhook({
+        paymentId: payment.paymentId,
+        transactionReference: payment.transactionReference,
+        status: 'PAID',
+        notes: payment.provider === 'STARPAY'
+            ? 'Payment confirmed and verified via StarPay Gateway'
+            : 'Payment verified and confirmed',
+        provider: payment.provider || 'STARPAY'
+    });
+
+    return result.payment;
 };
 
 // Retrieve payment history for an agreement
@@ -706,6 +762,7 @@ module.exports = {
     getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
+    verifyPayment,
     getOfficerPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,

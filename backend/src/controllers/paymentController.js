@@ -56,9 +56,33 @@ const getPaymentById = async (req, res, next) => {
         const { paymentId } = req.params;
         const payment = await paymentService.getPaymentById(paymentId);
 
+        // Prevent intermediate browser/proxy 304 caching of live payment status
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+
         return ApiResponse.success(res, {
             data: payment,
             message: 'Payment status retrieved successfully'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Verify and settle payment
+const verifyPayment = async (req, res, next) => {
+    try {
+        const { paymentId } = req.params;
+        const payment = await paymentService.verifyPayment(paymentId);
+
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+
+        return ApiResponse.success(res, {
+            data: payment,
+            message: 'Payment verified and settled successfully'
         });
     } catch (error) {
         next(error);
@@ -201,6 +225,7 @@ module.exports = {
     createPayment,
     getPaymentHistory,
     getPaymentById,
+    verifyPayment,
     getPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,
