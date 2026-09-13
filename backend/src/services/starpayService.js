@@ -1,19 +1,24 @@
 const axios = require('axios');
 const crypto = require('crypto');
 
-const STARPAY_API_URL = process.env.STARPAY_API_URL || 'https://sandbox-api.starpayethiopia.com/v1/starpay-api';
-const STARPAY_API_KEY = process.env.STARPAY_API_KEY || process.env.STARPAY_API_SECRET;
-const STARPAY_CALLBACK_URL = process.env.STARPAY_CALLBACK_URL || 'http://localhost:5000/api/v1/payments/starpay/webhook';
-const STARPAY_RETURN_URL = process.env.STARPAY_RETURN_URL || 'http://localhost:3000/payments/success';
-const STARPAY_WEBHOOK_SECRET = process.env.STARPAY_WEBHOOK_SECRET;
+const DEFAULT_SANDBOX_KEY = 'rtwFSXZ3nrv2uqAsuH/zqcnn9WiilF4keCDhXLfMuBYoWmh7Lt/m7JQEv3b/9A92';
+const DEFAULT_WEBHOOK_SECRET = '520954f5b9300abb5cbdd3bb41d50e1e223b59cccf76a8744eea4291820d70ea';
+
+const getApiKey = () => process.env.STARPAY_API_KEY || process.env.STARPAY_API_SECRET || DEFAULT_SANDBOX_KEY;
+const getApiUrl = () => process.env.STARPAY_API_URL || 'https://sandbox-api.starpayethiopia.com/v1/starpay-api';
+const getCallbackUrl = () => process.env.STARPAY_CALLBACK_URL || 'http://localhost:5000/api/payments/starpay/webhook';
+const getReturnUrl = () => process.env.STARPAY_RETURN_URL || 'http://localhost:3000/payments/success';
+const getWebhookSecret = () => process.env.STARPAY_WEBHOOK_SECRET || DEFAULT_WEBHOOK_SECRET;
 
 const starpayClient = axios.create({
-    baseURL: STARPAY_API_URL,
-    headers: {
-        'Content-Type': 'application/json',
-        'x-api-secret': STARPAY_API_KEY,
-    },
     timeout: 15000,
+});
+
+starpayClient.interceptors.request.use((config) => {
+    config.baseURL = getApiUrl();
+    config.headers['Content-Type'] = 'application/json';
+    config.headers['x-api-secret'] = getApiKey();
+    return config;
 });
 
 /**
@@ -83,7 +88,7 @@ const initiatePayment = async ({
 /**
  * Verify incoming webhook signature from StarPay
  */
-const verifyWebhookSignature = (payload, signatureHeader, secret = STARPAY_WEBHOOK_SECRET) => {
+const verifyWebhookSignature = (payload, signatureHeader, secret = getWebhookSecret()) => {
     if (!signatureHeader || !secret) {
         return true;
     }
