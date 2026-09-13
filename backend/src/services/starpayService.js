@@ -50,7 +50,7 @@ const getReturnUrl = () => ensureAbsoluteReturnUrl(process.env.STARPAY_RETURN_UR
 const getWebhookSecret = () => process.env.STARPAY_WEBHOOK_SECRET || DEFAULT_WEBHOOK_SECRET;
 
 const starpayClient = axios.create({
-    timeout: 15000,
+    timeout: 30000,
 });
 
 starpayClient.interceptors.request.use((config) => {
@@ -98,7 +98,9 @@ const initiatePayment = async ({
             customerName: customerName || 'SmartRent Tenant',
             customerPhoneNumber: formatStarPayPhone(customerPhoneNumber),
             callbackURL: ensureAbsoluteUrl(callbackUrl || getCallbackUrl()),
-            redirectUrl: ensureAbsoluteReturnUrl(redirectUrl || getReturnUrl()),
+            redirectUrl: ensureAbsoluteReturnUrl(
+                redirectUrl || (paymentId ? `${STARPAY_RETURN_URL}?paymentId=${paymentId}` : getReturnUrl())
+            ),
             metadata: {
                 paymentId,
                 referenceNumber: referenceNumber || null,

@@ -51,12 +51,18 @@ function toPaymentReceiptDTO(payment, extraData = {}) {
         ? `${tenantUser.firstName} ${tenantUser.lastName || ''}`.trim() 
         : (payment.customerName || 'Verified Tenant');
 
+    // Preserve checkoutUrl or reconstruct StarPay hosted payment link if pending
+    let checkoutUrl = extraData.checkoutUrl || payment.checkoutUrl || null;
+    if (!checkoutUrl && (payment.provider === 'STARPAY' || payment.method === 'MOBILE_MONEY') && payment.transactionReference) {
+        checkoutUrl = `https://sandbox-checkout.starpayethiopia.com/en/pay/d/${payment.transactionReference}`;
+    }
+
     return {
         paymentId: payment.paymentId,
         agreementId: payment.agreementId,
         referenceNumber: agreement.referenceNumber || payment.referenceNumber || null,
         transactionReference: payment.transactionReference || null,
-        checkoutUrl: extraData.checkoutUrl || payment.checkoutUrl || null,
+        checkoutUrl,
         redirectUrl: extraData.redirectUrl || null,
         amount: Number(payment.amount),
         currency: 'ETB',
