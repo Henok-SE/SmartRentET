@@ -4,14 +4,49 @@ const crypto = require('crypto');
 const DEFAULT_SANDBOX_KEY = 'rtwFSXZ3nrv2uqAsuH/zqcnn9WiilF4keCDhXLfMuBYoWmh7Lt/m7JQEv3b/9A92';
 const DEFAULT_WEBHOOK_SECRET = '520954f5b9300abb5cbdd3bb41d50e1e223b59cccf76a8744eea4291820d70ea';
 
-const STARPAY_CALLBACK_URL = process.env.STARPAY_CALLBACK_URL || 'http://localhost:5000/api/payments/starpay/webhook';
-const STARPAY_RETURN_URL = process.env.STARPAY_RETURN_URL || 'https://smartrent-et-miniapp-jade.vercel.app/pay';
+const STARPAY_CALLBACK_URL = 'http://localhost:5000/api/payments/starpay/webhook';
+const STARPAY_RETURN_URL = 'https://smartrent-et-miniapp-jade.vercel.app/pay';
 const STARPAY_WEBHOOK_SECRET = process.env.STARPAY_WEBHOOK_SECRET || DEFAULT_WEBHOOK_SECRET;
+
+/**
+ * Ensures a callback URL is a valid absolute URL (http:// or https://)
+ */
+const ensureAbsoluteUrl = (url, defaultUrl = STARPAY_CALLBACK_URL) => {
+    if (!url || typeof url !== 'string' || !url.trim()) {
+        return defaultUrl;
+    }
+    const trimmed = url.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return trimmed;
+    }
+    if (trimmed.startsWith('/')) {
+        const base = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || 'https://smartrent-backend.onrender.com';
+        return `${base.replace(/\/+$/, '')}${trimmed}`;
+    }
+    return `https://${trimmed}`;
+};
+
+/**
+ * Ensures a return/redirect URL is a valid absolute URL
+ */
+const ensureAbsoluteReturnUrl = (url, defaultUrl = STARPAY_RETURN_URL) => {
+    if (!url || typeof url !== 'string' || !url.trim()) {
+        return defaultUrl;
+    }
+    const trimmed = url.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return trimmed;
+    }
+    if (trimmed.startsWith('/')) {
+        return `https://smartrent-et-miniapp-jade.vercel.app${trimmed}`;
+    }
+    return `https://${trimmed}`;
+};
 
 const getApiKey = () => process.env.STARPAY_API_KEY || process.env.STARPAY_API_SECRET || DEFAULT_SANDBOX_KEY;
 const getApiUrl = () => process.env.STARPAY_API_URL || 'https://sandbox-api.starpayethiopia.com/v1/starpay-api';
-const getCallbackUrl = () => process.env.STARPAY_CALLBACK_URL || STARPAY_CALLBACK_URL;
-const getReturnUrl = () => process.env.STARPAY_RETURN_URL || STARPAY_RETURN_URL;
+const getCallbackUrl = () => ensureAbsoluteUrl(process.env.STARPAY_CALLBACK_URL);
+const getReturnUrl = () => ensureAbsoluteReturnUrl(process.env.STARPAY_RETURN_URL);
 const getWebhookSecret = () => process.env.STARPAY_WEBHOOK_SECRET || DEFAULT_WEBHOOK_SECRET;
 
 const starpayClient = axios.create({
@@ -62,8 +97,8 @@ const initiatePayment = async ({
             currency: 'ETB',
             customerName: customerName || 'SmartRent Tenant',
             customerPhoneNumber: formatStarPayPhone(customerPhoneNumber),
-            callbackURL: callbackUrl || getCallbackUrl(),
-            redirectUrl: redirectUrl || getReturnUrl(),
+            callbackURL: ensureAbsoluteUrl(callbackUrl || getCallbackUrl()),
+            redirectUrl: ensureAbsoluteReturnUrl(redirectUrl || getReturnUrl()),
             metadata: {
                 paymentId,
                 referenceNumber: referenceNumber || null,
