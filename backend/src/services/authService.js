@@ -318,9 +318,6 @@ const createOfficeAdmin = async (adminData, creatorUserId) => {
       throw new Error('Username already taken. Please choose another.');
     }
 
-    // ❌ REMOVED: Phone uniqueness check
-    // ❌ REMOVED: Email uniqueness check
-    // ❌ REMOVED: National ID uniqueness check
 
     const plainPassword = generateSecurePassword(14);
     const passwordHash = await bcrypt.hash(plainPassword, 10);
