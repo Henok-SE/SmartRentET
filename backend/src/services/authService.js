@@ -292,8 +292,11 @@ const changePassword = async (userId, currentPassword, newPassword) => {
 const createOfficeAdmin = async (adminData, creatorUserId) => {
   try {
     console.log('=== CREATE OFFICE ADMIN ===');
-    console.log('adminData:', adminData);
-    console.log('creatorUserId:', creatorUserId);
+    console.log('Creating Office Admin:', {
+      username: adminData.username,
+      phone: adminData.phone,
+      officeId: adminData.officeId
+    });
 
     const { firstName, lastName, phone, email, nationalId, employeeId, officeId, username } = adminData;
 
@@ -345,20 +348,27 @@ const createOfficeAdmin = async (adminData, creatorUserId) => {
       }
     });
 
-    await afroSMSService.sendSMS(
-      phone,
-      `SmartRent: Your account has been created.\nUsername: ${username}\nPassword: ${plainPassword}\nPlease login and change your password.`
-    );
+    let smsResult = { success: false, messageId: null };
+    let smsError = null;
 
-    console.log('SMS sent to:', phone);
-    console.log('Username (provided):', username);
-    console.log('Generated password:', plainPassword);
+    try {
+      smsResult = await afroSMSService.sendSMS(
+        phone,
+        `SmartRent: Your account has been created.\nUsername: ${username}\nPassword: ${plainPassword}\nPlease login and change your password.`
+      );
+      console.log('Office Admin credentials SMS accepted by AfroMessage:', smsResult.messageId);
+    } catch (error) {
+      smsError = error.message;
+      console.error('Office Admin credentials SMS failed:', smsError);
+    }
 
     const sanitizedUser = sanitizeUser(user);
     return {
       user: sanitizedUser,
       generatedUsername: username,
-      passwordSent: true
+      passwordSent: smsResult.success,
+      smsMessageId: smsResult.messageId,
+      smsError
     };
 
   } catch (error) {

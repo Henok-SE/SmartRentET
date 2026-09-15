@@ -127,6 +127,23 @@ const verifyCode = async (req, res) => {
   }
 };
 
+const resendVerificationCode = async (req, res) => {
+  try {
+    const { agreementId, party } = req.body;
+    const result = await agreementService.resendAgreementVerificationCode(
+      agreementId,
+      party
+    );
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 // ============================================
 // PROCESS SERVICE FEE PAYMENT
 // ============================================
@@ -247,6 +264,7 @@ const getApprovalHistory = async (req, res) => {
 module.exports = {
   createAgreement,
   verifyCode,
+  resendVerificationCode,
   processServiceFeePayment,
   getAgreement,
   approveAgreement,

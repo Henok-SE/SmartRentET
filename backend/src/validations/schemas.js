@@ -153,6 +153,11 @@ const verifyCodeSchema = Joi.object({
   code: Joi.string().required().length(6).pattern(/^\d{6}$/)
 });
 
+const resendAgreementCodeSchema = Joi.object({
+  agreementId: Joi.string().required().uuid(),
+  party: Joi.string().valid('LANDLORD', 'TENANT').required()
+});
+
 const paymentSchema = Joi.object({
   agreementId: Joi.string().required().uuid(),
   phone: Joi.string().required().pattern(/^(09|07)\d{8}$/),
@@ -278,6 +283,7 @@ module.exports = {
   // Agreement
   createAgreementSchema,
   verifyCodeSchema,
+  resendAgreementCodeSchema,
   paymentSchema,
 
   // Office

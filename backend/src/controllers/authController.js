@@ -140,13 +140,19 @@ const createOfficeAdmin = async (req, res) => {
 
     const result = await authService.createOfficeAdmin(req.body, req.user.userId);
 
+    const message = result.passwordSent
+      ? 'Office Admin created successfully. Password sent via SMS.'
+      : 'Office Admin created successfully, but the credential SMS could not be sent.';
+
     res.status(201).json({
       success: true,
-      message: 'Office Admin created successfully. Password sent via SMS.',
+      message,
       data: {
         user: userDTO(result.user),
         generatedUsername: result.generatedUsername,
-        passwordSent: result.passwordSent
+        passwordSent: result.passwordSent,
+        smsMessageId: result.smsMessageId,
+        smsError: result.smsError
       }
     });
 
