@@ -114,6 +114,7 @@ type CreateAdminResponse = {
     };
     generatedUsername?: string;
     passwordSent?: boolean;
+    smsError?: string | null;
   };
 };
 
@@ -709,9 +710,23 @@ function SuperAdminDashboard() {
       return;
     }
 
+    if (!/^(09|07)\d{8}$/.test(adminForm.phone.trim())) {
+      setError(
+        "Phone number must be 10 digits and start with 09 or 07."
+      );
+      return;
+    }
+
     if (!adminForm.nationalId.trim()) {
       setError(
         "National ID is required."
+      );
+      return;
+    }
+
+    if (!/^\d{16}$/.test(adminForm.nationalId.trim())) {
+      setError(
+        "National ID must contain exactly 16 digits."
       );
       return;
     }
@@ -769,7 +784,7 @@ function SuperAdminDashboard() {
       setSuccess(
         response.data?.passwordSent
           ? `Administrator created successfully. Username: ${username}. The generated password has been sent via SMS.`
-          : `Administrator created successfully. Username: ${username}.`
+          : `Administrator created successfully, but the credential SMS could not be sent. Username: ${username}. ${response.data?.smsError || "Please contact the administrator."}`
       );
 
       await Promise.all([

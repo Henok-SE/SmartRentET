@@ -51,6 +51,7 @@ type CreateAdminResponse = {
     };
     generatedUsername?: string;
     passwordSent?: boolean;
+    smsError?: string | null;
   };
 };
 
@@ -182,8 +183,16 @@ function CreateAdmin() {
       return "Phone number is required.";
     }
 
+    if (!/^(09|07)\d{8}$/.test(form.phone.trim())) {
+      return "Phone number must be 10 digits and start with 09 or 07.";
+    }
+
     if (!form.nationalId.trim()) {
       return "National ID is required.";
+    }
+
+    if (!/^\d{16}$/.test(form.nationalId.trim())) {
+      return "National ID must contain exactly 16 digits.";
     }
 
     if (!form.employeeId.trim()) {
@@ -258,7 +267,7 @@ function CreateAdmin() {
       setSuccess(
         passwordSent
           ? `Administrator created successfully. Username: ${generatedUsername}. A generated password has been sent via SMS.`
-          : `Administrator created successfully. Username: ${generatedUsername}.`
+          : `Administrator created successfully, but the credential SMS could not be sent. Username: ${generatedUsername}. ${response.data?.smsError || "Please contact the administrator."}`
       );
 
       setForm(createEmptyForm());

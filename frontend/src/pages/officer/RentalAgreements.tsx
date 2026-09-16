@@ -1256,6 +1256,68 @@ const RentalAgreements: React.FC =
         }
       };
 
+    const handleResendConsent = async () => {
+      if (!verificationAgreement) {
+        return;
+      }
+
+      const token = getToken();
+
+      if (!token) {
+        handleLogout();
+        return;
+      }
+
+      setVerificationLoading(true);
+      setVerificationError("");
+      setVerificationMessage("");
+
+      try {
+        const response = await fetch(
+          `${API_URL}/agreements/${verificationAgreement.id}/resend-verification`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              agreementId: verificationAgreement.id,
+              party: verificationParty,
+            }),
+          }
+        );
+
+        const result = (await response.json()) as GenericResponse;
+
+        if (response.status === 401) {
+          handleLogout();
+          return;
+        }
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.error ||
+              result.message ||
+              "Failed to resend verification code."
+          );
+        }
+
+        setVerificationCode("");
+        setVerificationMessage(
+          `A new ${verificationParty.toLowerCase()} verification code has been sent.`
+        );
+      } catch (err) {
+        setVerificationError(
+          err instanceof Error
+            ? err.message
+            : "Failed to resend verification code."
+        );
+      } finally {
+        setVerificationLoading(false);
+      }
+    };
+
     /* =====================================================
        OPEN PAYMENT
     ===================================================== */
@@ -3274,6 +3336,15 @@ const RentalAgreements: React.FC =
                         "20px",
                     }}
                   >
+
+                    <button
+                      type="button"
+                      className="agreement-secondary-button"
+                      onClick={handleResendConsent}
+                      disabled={verificationLoading}
+                    >
+                      {verificationLoading ? "Sending..." : "Resend code"}
+                    </button>
 
                     <button
                       type="button"

@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export async function apiRequest<T>(
   endpoint: string,
@@ -31,11 +31,25 @@ export async function apiRequest<T>(
       | {
           error?: string;
           message?: string;
+          errors?: Array<{
+            field?: string;
+            message?: string;
+          }>;
         }
       | null;
 
+    const validationDetails = errorData?.errors
+      ?.map((item) =>
+        item.field && item.message
+          ? `${item.field}: ${item.message}`
+          : item.message
+      )
+      .filter(Boolean)
+      .join("; ");
+
     throw new Error(
-      errorData?.error ||
+      validationDetails ||
+        errorData?.error ||
         errorData?.message ||
         `Request failed with status ${response.status}`
     );
