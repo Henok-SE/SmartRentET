@@ -99,49 +99,57 @@ const getContracts = async ({
   subCity,
   landlord,
   tenant,
+  user,
 } = {}) => {
+  let officeId = null;
+
+  // DETERMINE REQUESTER'S GOVERNMENT OFFICE
+  if (user?.role === 'OFFICER') {
+    const officer = await prisma.officer.findUnique({
+      where: { userId: user.userId },
+      select: { officeId: true },
+    });
+    officeId = officer?.officeId ?? null;
+  }
+
+  if (user?.role === 'OFFICE_ADMIN') {
+    const admin = await prisma.officeAdmin.findUnique({
+      where: { userId: user.userId },
+      select: { officeId: true },
+    });
+    officeId = admin?.officeId ?? null;
+  }
+
+  // AGREEMENT FILTER
+  const where = {
+    ...(officeId ? { officeId } : {}),
+    ...(referenceNumber ? { referenceNumber: { contains: referenceNumber, mode: 'insensitive' } } : {}),
+    ...(status ? { status } : {}),
+    ...(subCity ? { unit: { property: { subCity } } } : {}),
+    ...(landlord ? {
+      landlord: {
+        user: {
+          OR: [
+            { firstName: { contains: landlord, mode: 'insensitive' } },
+            { lastName: { contains: landlord, mode: 'insensitive' } },
+          ],
+        },
+      },
+    } : {}),
+    ...(tenant ? {
+      tenant: {
+        user: {
+          OR: [
+            { firstName: { contains: tenant, mode: 'insensitive' } },
+            { lastName: { contains: tenant, mode: 'insensitive' } },
+          ],
+        },
+      },
+    } : {}),
+  };
+
   return prisma.rentalAgreement.findMany({
-    where: {
-      ...(referenceNumber
-        ? {
-            referenceNumber: {
-              contains: referenceNumber,
-              mode: 'insensitive',
-            },
-          }
-        : {}),
-
-      ...(status ? { status } : {}),
-
-      ...(subCity ? { unit: { property: { subCity } } } : {}),
-
-      ...(landlord
-        ? {
-            landlord: {
-              user: {
-                OR: [
-                  { firstName: { contains: landlord, mode: 'insensitive' } },
-                  { lastName: { contains: landlord, mode: 'insensitive' } },
-                ],
-              },
-            },
-          }
-        : {}),
-
-      ...(tenant
-        ? {
-            tenant: {
-              user: {
-                OR: [
-                  { firstName: { contains: tenant, mode: 'insensitive' } },
-                  { lastName: { contains: tenant, mode: 'insensitive' } },
-                ],
-              },
-            },
-          }
-        : {}),
-    },
-
+    where,
     select: {
       agreementId: true,
       referenceNumber: true,
@@ -152,75 +160,46 @@ const getContracts = async ({
       effectiveDate: true,
       terminationDate: true,
       createdAt: true,
-
       landlord: {
         select: {
           landlordId: true,
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              phone: true,
-            },
-          },
+          user: { select: { firstName: true, lastName: true, phone: true } },
         },
       },
-
       tenant: {
         select: {
           tenantId: true,
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              phone: true,
-            },
-          },
+          user: { select: { firstName: true, lastName: true, phone: true } },
         },
       },
-
       unit: {
         select: {
           unitId: true,
           unitNumber: true,
-          property: {
-            select: {
-              location: true,
-              subCity: true,
-              woreda: true,
-            },
-          },
+          property: { select: { location: true, subCity: true, woreda: true } },
         },
       },
-
       office: {
         select: {
           officeId: true,
           officeCode: true,
           officeName: true,
+          region: true,
+          city: true,
+          subCity: true,
+          woreda: true,
         },
       },
-
       createdByOfficer: {
         select: {
           officerId: true,
           employeeId: true,
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-            },
-          },
+          user: { select: { firstName: true, lastName: true } },
         },
       },
-
       serviceFeePayment: {
-        select: {
-          serviceFeePaymentId: true,
-          status: true,
-        },
+        select: { serviceFeePaymentId: true, status: true },
       },
-
       payments: {
         select: {
           paymentId: true,
@@ -229,16 +208,11 @@ const getContracts = async ({
           dueDate: true,
           paidDate: true,
         },
-        orderBy: {
-          dueDate: 'desc',
-        },
+        orderBy: { dueDate: 'desc' },
         take: 3,
       },
     },
-
-    orderBy: {
-      createdAt: 'desc',
-    },
+    orderBy: { createdAt: 'desc' },
   });
 };
 

@@ -46,6 +46,7 @@ const getContracts = async (req, res) => {
       subCity,
       landlord,
       tenant,
+      user: req.user,
     });
 
     res.status(200).json({
@@ -69,6 +70,7 @@ const getContracts = async (req, res) => {
     });
   }
 };
+
 
 const getAuditLogs = async (req, res) => {
   try {

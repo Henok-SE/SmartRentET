@@ -4,7 +4,7 @@ import type {
   RegisterRequest,
 } from "../types/auth";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export async function login(
   credentials: LoginRequest
@@ -73,6 +73,24 @@ export async function register(
 }
 
   
+export async function refreshSession(token: string) {
+  const response = await fetch(`${API_URL}/auth/refresh-session`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Session refresh failed");
+  }
+
+  return data;
+}
+
 export async function changePassword(
   userId: number,
   currentPassword: string,

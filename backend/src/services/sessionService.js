@@ -1,9 +1,9 @@
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const prisma = require('../config/db');
 const jwt = require('jsonwebtoken');
 
 const createSession = async (userId, userData) => {
-  const sessionId = uuidv4();
+  const sessionId = crypto.randomUUID ? crypto.randomUUID() : require('uuid').v4();
   const secret = process.env.JWT_SECRET || 'smartrent_fallback_secret';
   const expiresIn = process.env.JWT_EXPIRES_IN || '1h';
 

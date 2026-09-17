@@ -191,6 +191,11 @@ const verifyCodeSchema = Joi.object({
   code: otpSchema.required()
 });
 
+const resendAgreementCodeSchema = Joi.object({
+  agreementId: Joi.string().required().uuid(),
+  party: Joi.string().valid('LANDLORD', 'TENANT').required()
+});
+
 const paymentSchema = Joi.object({
   agreementId: Joi.string().required().uuid().messages(baseMessages),
   phone: phoneSchema.required(),
@@ -323,6 +328,7 @@ module.exports = {
   // Agreement
   createAgreementSchema,
   verifyCodeSchema,
+  resendAgreementCodeSchema,
   paymentSchema,
 
   // Office

@@ -1,11 +1,13 @@
 const prisma = require('../config/db');
 const telebirrService = require('./telebirrService');
 const cbeService = require('./cbeService');
+const starpayService = require('./starpayService');
 const {
     NotFoundError,
     BadRequestError,
     ConflictError,
-    PaymentError
+    PaymentError,
+    ForbiddenError
 } = require('../utils/errors');
 const {
     toPaymentInquiryDTO,
@@ -22,15 +24,15 @@ const getPaymentProvider = (paymentMethod) => {
         case 'CBE':
             return cbeService;
 
+        case 'STARPAY':
+            return starpayService;
+
         default:
             throw new BadRequestError(`Unsupported payment method: ${paymentMethod}`);
     }
 };
 
-/**
- * 1. Inquire Rental Agreement payment due information
- * Optimized with targeted Prisma select projections & DTO filtering
- */
+// Inquire rental agreement payment due details
 const getPaymentInquiry = async (referenceNumber) => {
     if (!referenceNumber) {
         throw new BadRequestError('Reference number is required');
@@ -104,10 +106,7 @@ const getPaymentInquiry = async (referenceNumber) => {
     return toPaymentInquiryDTO(agreement, latestPayment);
 };
 
-/**
- * 2. Initiate Payment
- * Creates PENDING record in DB -> Invokes Provider Simulator -> Updates Transaction Reference
- */
+// Initiate a new payment transaction
 const createPayment = async ({
     referenceNumber,
     amount,
@@ -129,7 +128,7 @@ const createPayment = async ({
         throw new BadRequestError('Payment method is required');
     }
 
-    // Step 1: Inquire and validate against real agreement
+    // Validate agreement and amount
     const inquiry = await getPaymentInquiry(referenceNumber);
 
     const paymentAmount = Number(amount);
@@ -140,16 +139,18 @@ const createPayment = async ({
     }
 
     const method =
-        paymentMethod === 'TELEBIRR'
+        paymentMethod === 'TELEBIRR' || paymentMethod === 'STARPAY'
             ? 'MOBILE_MONEY'
             : 'BANK_TRANSFER';
 
     const paymentProvider =
         paymentMethod === 'TELEBIRR'
             ? 'TELEBIRR'
-            : 'BANK';
+            : paymentMethod === 'STARPAY'
+                ? 'OTHER'
+                : 'BANK';
 
-    // Step 2: Create initial Payment record in DB in PENDING status atomically
+    // Create pending payment record
     const initialPayment = await prisma.payment.create({
         data: {
             agreementId: inquiry.agreementId,
@@ -164,7 +165,7 @@ const createPayment = async ({
 
     console.log(`[Payment Service] Created PENDING payment record with paymentId: ${initialPayment.paymentId}`);
 
-    // Step 3: Call Provider Layer / Simulator passing generated paymentId
+    // Request initiation from payment provider
     const provider = getPaymentProvider(paymentMethod);
 
     let providerResult;
@@ -179,7 +180,7 @@ const createPayment = async ({
             delayMs
         });
     } catch (err) {
-        // Mark payment as FAILED if simulator/provider rejected
+        // Update payment record to FAILED on provider error
         await prisma.payment.update({
             where: { paymentId: initialPayment.paymentId },
             data: {
@@ -203,7 +204,7 @@ const createPayment = async ({
         );
     }
 
-    // Step 4: Update Payment record with returned transaction reference
+    // Update payment record with provider transaction reference
     const updatedPayment = await prisma.payment.update({
         where: {
             paymentId: initialPayment.paymentId
@@ -232,14 +233,13 @@ const createPayment = async ({
         }
     });
 
-    return toPaymentReceiptDTO(updatedPayment);
+    return toPaymentReceiptDTO(updatedPayment, {
+        checkoutUrl: providerResult.checkoutUrl,
+        redirectUrl: providerResult.redirectUrl
+    });
 };
 
-/**
- * 3. Handle Provider Webhook
- * The authoritative payment status transition mechanism
- * Atomic execution with Prisma Interactive Transaction & Idempotency support
- */
+// Process provider webhook with transaction locking and idempotency
 const handleProviderWebhook = async ({
     paymentId,
     transactionReference,
@@ -247,50 +247,76 @@ const handleProviderWebhook = async ({
     notes,
     provider
 }) => {
-    if (!paymentId) {
-        throw new BadRequestError('paymentId is required in webhook payload');
-    }
-
-    if (!transactionReference) {
-        throw new BadRequestError('transactionReference is required in webhook payload');
+    if (!paymentId && !transactionReference) {
+        throw new BadRequestError('paymentId or transactionReference is required in webhook payload');
     }
 
     const normalizedStatus = (status || '').toUpperCase();
-    if (normalizedStatus !== 'SUCCESS' && normalizedStatus !== 'FAILED') {
-        throw new BadRequestError('Invalid callback status: must be SUCCESS or FAILED');
+    if (normalizedStatus !== 'SUCCESS' && normalizedStatus !== 'PAID' && normalizedStatus !== 'FAILED') {
+        throw new BadRequestError('Invalid callback status: must be SUCCESS, PAID, or FAILED');
     }
+    const isSuccess = normalizedStatus === 'SUCCESS' || normalizedStatus === 'PAID';
 
-    // Execute atomic transaction for find-and-update to prevent race conditions
+    // Execute in transaction to prevent race conditions
     return await prisma.$transaction(async (tx) => {
-        const payment = await tx.payment.findUnique({
-            where: { paymentId },
-            include: {
-                agreement: {
-                    select: {
-                        referenceNumber: true,
-                        tenant: {
-                            select: {
-                                user: {
-                                    select: {
-                                        firstName: true,
-                                        lastName: true,
-                                        phone: true
+        let payment = null;
+        if (paymentId) {
+            payment = await tx.payment.findUnique({
+                where: { paymentId },
+                include: {
+                    agreement: {
+                        select: {
+                            referenceNumber: true,
+                            tenant: {
+                                select: {
+                                    user: {
+                                        select: {
+                                            firstName: true,
+                                            lastName: true,
+                                            phone: true
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
-        });
-
-        if (!payment) {
-            throw new NotFoundError(`Payment record not found for paymentId: ${paymentId}`);
+            });
         }
 
-        // Idempotency: If already PAID and duplicate SUCCESS arrives
-        if (payment.status === 'PAID' && normalizedStatus === 'SUCCESS') {
-            console.log(`[Provider Webhook] Idempotent duplicate callback acknowledged for paymentId: ${paymentId}`);
+        if (!payment && transactionReference) {
+            payment = await tx.payment.findFirst({
+                where: { transactionReference },
+                include: {
+                    agreement: {
+                        select: {
+                            referenceNumber: true,
+                            tenant: {
+                                select: {
+                                    user: {
+                                        select: {
+                                            firstName: true,
+                                            lastName: true,
+                                            phone: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        if (!payment) {
+            throw new NotFoundError(
+                `Payment record not found for paymentId: ${paymentId || 'N/A'}, transactionReference: ${transactionReference || 'N/A'}`
+            );
+        }
+
+        // Acknowledge idempotent duplicate success
+        if (payment.status === 'PAID' && isSuccess) {
+            console.log(`[Provider Webhook] Idempotent duplicate callback acknowledged for paymentId: ${payment.paymentId}`);
             return {
                 payment: toPaymentReceiptDTO(payment),
                 isDuplicate: true,
@@ -298,9 +324,9 @@ const handleProviderWebhook = async ({
             };
         }
 
-        // Idempotency: If already FAILED and duplicate FAILED arrives
-        if (payment.status === 'FAILED' && normalizedStatus === 'FAILED') {
-            console.log(`[Provider Webhook] Idempotent duplicate FAILED callback acknowledged for paymentId: ${paymentId}`);
+        // Acknowledge idempotent duplicate failure
+        if (payment.status === 'FAILED' && !isSuccess) {
+            console.log(`[Provider Webhook] Idempotent duplicate FAILED callback acknowledged for paymentId: ${payment.paymentId}`);
             return {
                 payment: toPaymentReceiptDTO(payment),
                 isDuplicate: true,
@@ -308,21 +334,21 @@ const handleProviderWebhook = async ({
             };
         }
 
-        // Terminal state check
+        // Reject update if payment is in terminal state
         if (payment.status !== 'PENDING') {
             throw new BadRequestError(
                 `Payment is in terminal status "${payment.status}" and cannot be updated to "${normalizedStatus}"`
             );
         }
 
-        // Update payment state
+        // Update payment status and record payment date if successful
         const updatedPayment = await tx.payment.update({
-            where: { paymentId },
+            where: { paymentId: payment.paymentId },
             data: {
-                status: normalizedStatus === 'SUCCESS' ? 'PAID' : 'FAILED',
+                status: isSuccess ? 'PAID' : 'FAILED',
                 transactionReference: transactionReference || payment.transactionReference,
-                paidDate: normalizedStatus === 'SUCCESS' ? new Date() : null,
-                notes: notes || (normalizedStatus === 'SUCCESS' ? 'Payment confirmed by provider webhook' : 'Payment marked FAILED by provider webhook')
+                paidDate: isSuccess ? new Date() : null,
+                notes: notes || (isSuccess ? 'Payment confirmed by provider webhook' : 'Payment marked FAILED by provider webhook')
             },
             include: {
                 agreement: {
@@ -344,7 +370,7 @@ const handleProviderWebhook = async ({
             }
         });
 
-        console.log(`[Provider Webhook] Transitioned paymentId=${paymentId} from PENDING -> ${updatedPayment.status}`);
+        console.log(`[Provider Webhook] Transitioned paymentId=${payment.paymentId} from PENDING -> ${updatedPayment.status}`);
 
         return {
             payment: toPaymentReceiptDTO(updatedPayment),
@@ -357,9 +383,7 @@ const handleProviderWebhook = async ({
     });
 };
 
-/**
- * 4. Get Single Payment by ID (Optimized DTO)
- */
+// Retrieve single payment record by ID
 const getPaymentById = async (paymentId) => {
     if (!paymentId) {
         throw new BadRequestError('Payment ID is required');
@@ -410,9 +434,57 @@ const getPaymentById = async (paymentId) => {
     return toPaymentReceiptDTO(payment);
 };
 
-/**
- * 5. Get Payment History by Agreement ID
- */
+// Verify and finalize payment settlement
+const verifyPayment = async (paymentId) => {
+    if (!paymentId) {
+        throw new BadRequestError('Payment ID is required');
+    }
+
+    const payment = await prisma.payment.findUnique({
+        where: { paymentId },
+        include: {
+            agreement: {
+                select: {
+                    referenceNumber: true,
+                    tenant: {
+                        select: {
+                            user: {
+                                select: {
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    if (!payment) {
+        throw new NotFoundError('Payment record not found');
+    }
+
+    if (payment.status === 'PAID') {
+        return toPaymentReceiptDTO(payment);
+    }
+
+    // Confirm settlement and record paid timestamp
+    const result = await handleProviderWebhook({
+        paymentId: payment.paymentId,
+        transactionReference: payment.transactionReference,
+        status: 'PAID',
+        notes: payment.provider === 'STARPAY'
+            ? 'Payment confirmed and verified via StarPay Gateway'
+            : 'Payment verified and confirmed',
+        provider: payment.provider || 'STARPAY'
+    });
+
+    return result.payment;
+};
+
+// Retrieve payment history for an agreement
 const getPaymentHistory = async (agreementId) => {
     if (!agreementId) {
         throw new BadRequestError('Agreement ID is required');
@@ -448,9 +520,7 @@ const getPaymentHistory = async (agreementId) => {
     return toPaymentHistoryDTO(payments);
 };
 
-/**
- * 6. Update Payment Status (Admin Manual Adjustment)
- */
+// Update payment status manually
 const updatePaymentStatus = async ({
     paymentId,
     status,
@@ -515,12 +585,176 @@ const updatePaymentStatus = async ({
     return toPaymentReceiptDTO(updatedPayment);
 };
 
-/**
- * Legacy mock payment callback (Development/Testing only)
- */
+// Handle mock payment callback in development or test mode
 const handleMockPaymentCallback = async (payload) => {
     const result = await handleProviderWebhook(payload);
     return result.payment;
+};
+
+// Retrieve payment records scoped to the officer's or office admin's assigned government office
+const getOfficerPaymentRecords = async ({ userId, role, query = {} }) => {
+    let officeId = null;
+
+    if (role === 'OFFICER') {
+        const officer = await prisma.officer.findUnique({
+            where: { userId },
+            select: { officeId: true }
+        });
+        if (!officer || !officer.officeId) {
+            throw new ForbiddenError('Officer is not assigned to an active government office');
+        }
+        officeId = officer.officeId;
+    } else if (role === 'OFFICE_ADMIN') {
+        const admin = await prisma.officeAdmin.findUnique({
+            where: { userId },
+            select: { officeId: true }
+        });
+        if (!admin || !admin.officeId) {
+            throw new ForbiddenError('Office Admin is not assigned to an active government office');
+        }
+        officeId = admin.officeId;
+    } else {
+        throw new ForbiddenError('Access restricted to Officers and Office Admins only');
+    }
+
+    const page = parseInt(query.page, 10) || 1;
+    const limit = parseInt(query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+
+    const {
+        status,
+        paymentMethod,
+        provider,
+        referenceNumber,
+        search,
+        startDate,
+        endDate
+    } = query;
+
+    // Build Prisma where clause strictly enforcing the user's assigned officeId
+    const where = {
+        agreement: {
+            officeId
+        }
+    };
+
+    if (status) {
+        where.status = status;
+    }
+
+    if (paymentMethod) {
+        where.method = paymentMethod;
+    }
+
+    if (provider) {
+        where.provider = provider;
+    }
+
+    if (referenceNumber) {
+        where.agreement.referenceNumber = {
+            contains: referenceNumber,
+            mode: 'insensitive'
+        };
+    }
+
+    if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) {
+            where.createdAt.gte = new Date(startDate);
+        }
+        if (endDate) {
+            where.createdAt.lte = new Date(endDate);
+        }
+    }
+
+    if (search) {
+        where.OR = [
+            {
+                agreement: {
+                    referenceNumber: {
+                        contains: search,
+                        mode: 'insensitive'
+                    }
+                }
+            },
+            {
+                transactionReference: {
+                    contains: search,
+                    mode: 'insensitive'
+                }
+            },
+            {
+                agreement: {
+                    tenant: {
+                        user: {
+                            OR: [
+                                { firstName: { contains: search, mode: 'insensitive' } },
+                                { lastName: { contains: search, mode: 'insensitive' } },
+                                { phone: { contains: search, mode: 'insensitive' } }
+                            ]
+                        }
+                    }
+                }
+            }
+        ];
+    }
+
+    const [total, payments] = await Promise.all([
+        prisma.payment.count({ where }),
+        prisma.payment.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: {
+                paymentId: true,
+                agreementId: true,
+                amount: true,
+                dueDate: true,
+                paidDate: true,
+                status: true,
+                method: true,
+                provider: true,
+                transactionReference: true,
+                notes: true,
+                createdAt: true,
+                agreement: {
+                    select: {
+                        agreementId: true,
+                        referenceNumber: true,
+                        rentalAmount: true,
+                        status: true,
+                        tenant: {
+                            select: {
+                                user: {
+                                    select: {
+                                        firstName: true,
+                                        lastName: true,
+                                        phone: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    ]);
+
+    const records = payments.map(toPaymentReceiptDTO);
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    return {
+        records,
+        meta: {
+            total,
+            page,
+            limit,
+            totalPages
+        }
+    };
 };
 
 module.exports = {
@@ -528,6 +762,8 @@ module.exports = {
     getPaymentInquiry,
     getPaymentHistory,
     getPaymentById,
+    verifyPayment,
+    getOfficerPaymentRecords,
     updatePaymentStatus,
     handleProviderWebhook,
     handleMockPaymentCallback,

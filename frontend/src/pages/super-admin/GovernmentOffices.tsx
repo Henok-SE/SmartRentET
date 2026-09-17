@@ -15,6 +15,11 @@ type GovernmentOffice = {
   address?: string | null;
   status?: "ACTIVE" | "INACTIVE";
   createdAt?: string;
+  stats?: {
+    officers: number;
+    admins: number;
+    agreements: number;
+  };
 };
 
 type OfficeListResponse = {
@@ -24,17 +29,38 @@ type OfficeListResponse = {
 };
 
 type StoredUser = {
-  userId?: number | string;
+  userId?: string;
   username?: string;
   firstName?: string;
   lastName?: string;
   role?: string;
 };
 
+function formatDate(value?: string) {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
 function GovernmentOffices() {
   const navigate = useNavigate();
 
-  const [offices, setOffices] = useState<GovernmentOffice[]>([]);
+  const [offices, setOffices] = useState<GovernmentOffice[]>(
+    []
+  );
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -64,24 +90,28 @@ function GovernmentOffices() {
     year: "numeric",
   }).format(new Date());
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+
+    return token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined;
+  };
+
   const loadOffices = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const token = localStorage.getItem("token");
-
       const response =
         await apiRequest<OfficeListResponse>(
           "/dashboard/offices",
           {
             method: "GET",
             cache: "no-store",
-            headers: token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : undefined,
+            headers: getAuthHeaders(),
           }
         );
 
@@ -103,6 +133,33 @@ function GovernmentOffices() {
     void loadOffices();
   }, []);
 
+  const filteredOffices = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    if (!query) {
+      return offices;
+    }
+
+    return offices.filter((office) =>
+      [
+        office.officeCode,
+        office.officeName,
+        office.region,
+        office.city,
+        office.subCity,
+        office.woreda,
+        office.address,
+        office.status,
+      ]
+        .filter(Boolean)
+        .some((value) =>
+          String(value)
+            .toLowerCase()
+            .includes(query)
+        )
+    );
+  }, [offices, search]);
+
   const activeCount = offices.filter(
     (office) => office.status === "ACTIVE"
   ).length;
@@ -111,32 +168,30 @@ function GovernmentOffices() {
     (office) => office.status === "INACTIVE"
   ).length;
 
-  const filteredOffices = offices.filter((office) => {
-    const query = search.trim().toLowerCase();
+  const totalOfficers = offices.reduce(
+    (total, office) =>
+      total + (office.stats?.officers ?? 0),
+    0
+  );
 
-    if (!query) {
-      return true;
-    }
+  const totalAdmins = offices.reduce(
+    (total, office) =>
+      total + (office.stats?.admins ?? 0),
+    0
+  );
 
-    return [
-      office.officeCode,
-      office.officeName,
-      office.region,
-      office.city,
-      office.subCity,
-      office.woreda,
-      office.address,
-    ]
-      .filter(Boolean)
-      .some((value) =>
-        String(value)
-          .toLowerCase()
-          .includes(query)
-      );
-  });
+  const totalAgreements = offices.reduce(
+    (total, office) =>
+      total + (office.stats?.agreements ?? 0),
+    0
+  );
 
   return (
     <div className="super-admin-page">
+      {/* =====================================================
+          SIDEBAR
+          ===================================================== */}
+
       <aside className="super-admin-sidebar">
         <div className="super-admin-sidebar-brand">
           <img
@@ -160,11 +215,14 @@ function GovernmentOffices() {
           <button
             type="button"
             className="super-admin-nav-item"
-            onClick={() => navigate("/super-admin")}
+            onClick={() =>
+              navigate("/super-admin")
+            }
           >
             <span className="super-admin-nav-icon">
               ▦
             </span>
+
             <span>Dashboard</span>
           </button>
 
@@ -172,12 +230,15 @@ function GovernmentOffices() {
             type="button"
             className="super-admin-nav-item"
             onClick={() =>
-              navigate("/super-admin/administrators")
+              navigate(
+                "/super-admin/administrators"
+              )
             }
           >
             <span className="super-admin-nav-icon">
               ♟
             </span>
+
             <span>Administrators</span>
           </button>
 
@@ -185,12 +246,15 @@ function GovernmentOffices() {
             type="button"
             className="super-admin-nav-item"
             onClick={() =>
-              navigate("/super-admin/officers")
+              navigate(
+                "/super-admin/officers"
+              )
             }
           >
             <span className="super-admin-nav-icon">
               ♟
             </span>
+
             <span>Officers</span>
           </button>
 
@@ -201,32 +265,39 @@ function GovernmentOffices() {
             <span className="super-admin-nav-icon">
               ◎
             </span>
+
             <span>Government Offices</span>
           </button>
-
           <button
-            type="button"
-            className="super-admin-nav-item"
-            onClick={() =>
-              navigate("/super-admin/settings")
-            }
-          >
-            <span className="super-admin-nav-icon">
-              ⚙
-            </span>
-            <span>System Settings</span>
-          </button>
+  type="button"
+  className="super-admin-nav-item"
+  onClick={() =>
+    navigate("/super-admin/agreements")
+  }
+>
+  <span className="super-admin-nav-icon">
+    □
+  </span>
+  <span>Agreements</span>
+</button>
         </nav>
 
         <div className="super-admin-sidebar-bottom">
           <div className="super-admin-profile">
             <div className="super-admin-avatar">
-              {displayName.charAt(0).toUpperCase()}
+              {displayName
+                .charAt(0)
+                .toUpperCase()}
             </div>
 
             <div className="super-admin-profile-info">
-              <strong>{displayName}</strong>
-              <span>Super Administrator</span>
+              <strong>
+                {displayName}
+              </strong>
+
+              <span>
+                Super Administrator
+              </span>
             </div>
           </div>
 
@@ -235,6 +306,10 @@ function GovernmentOffices() {
           </div>
         </div>
       </aside>
+
+      {/* =====================================================
+          MAIN
+          ===================================================== */}
 
       <div className="super-admin-main">
         <header className="super-admin-topbar">
@@ -247,7 +322,9 @@ function GovernmentOffices() {
               type="text"
               value={search}
               onChange={(event) =>
-                setSearch(event.target.value)
+                setSearch(
+                  event.target.value
+                )
               }
               placeholder="Search government offices..."
               aria-label="Search government offices"
@@ -257,6 +334,10 @@ function GovernmentOffices() {
           <div className="super-admin-topbar-user">
             <span className="super-admin-user-status" />
 
+            <span className="super-admin-role-badge">
+              SUPER ADMIN
+            </span>
+
             <span className="super-admin-topbar-name">
               {displayName}
             </span>
@@ -264,28 +345,72 @@ function GovernmentOffices() {
         </header>
 
         <main className="super-admin-content">
+          {/* =================================================
+              PAGE HEADER
+              ================================================= */}
+
           <section className="super-admin-page-heading">
             <div>
               <span className="super-admin-eyebrow">
                 OFFICE MANAGEMENT
               </span>
 
-              <h1>Government Offices</h1>
+              <h1>
+                Government Offices
+              </h1>
 
               <p>
-                Manage government offices available in
-                SmartRent ET.
+                View government offices registered
+                in SmartRent ET.
               </p>
             </div>
 
-            <button
-              type="button"
-              className="super-admin-outline-button"
-              onClick={() => navigate("/super-admin")}
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                flexWrap: "wrap",
+              }}
             >
-              Back to Dashboard
-            </button>
+              <button
+                type="button"
+                className="super-admin-outline-button"
+                onClick={() =>
+                  navigate(
+                    "/super-admin"
+                  )
+                }
+              >
+                Back to Dashboard
+              </button>
+
+              <button
+                type="button"
+                className="super-admin-outline-button"
+                onClick={() =>
+                  void loadOffices()
+                }
+                disabled={loading}
+              >
+                {loading
+                  ? "Refreshing..."
+                  : "Refresh"}
+              </button>
+            </div>
           </section>
+
+          {error && (
+            <div
+              className="super-admin-form-error"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
+          {/* =================================================
+              STATISTICS
+              ================================================= */}
 
           <section className="super-admin-stat-grid">
             <article className="super-admin-stat-card">
@@ -295,8 +420,14 @@ function GovernmentOffices() {
 
               <div className="super-admin-stat-content">
                 <span>Total Offices</span>
-                <strong>{offices.length}</strong>
-                <small>Registered offices</small>
+
+                <strong>
+                  {offices.length}
+                </strong>
+
+                <small>
+                  Registered offices
+                </small>
               </div>
             </article>
 
@@ -307,8 +438,14 @@ function GovernmentOffices() {
 
               <div className="super-admin-stat-content">
                 <span>Active Offices</span>
-                <strong>{activeCount}</strong>
-                <small>Currently active</small>
+
+                <strong>
+                  {activeCount}
+                </strong>
+
+                <small>
+                  Currently active
+                </small>
               </div>
             </article>
 
@@ -318,12 +455,90 @@ function GovernmentOffices() {
               </div>
 
               <div className="super-admin-stat-content">
-                <span>Inactive Offices</span>
-                <strong>{inactiveCount}</strong>
-                <small>Currently inactive</small>
+                <span>
+                  Inactive Offices
+                </span>
+
+                <strong>
+                  {inactiveCount}
+                </strong>
+
+                <small>
+                  Currently inactive
+                </small>
               </div>
             </article>
           </section>
+
+          {/* =================================================
+              OFFICE RESOURCE SUMMARY
+              ================================================= */}
+
+          <section className="super-admin-stat-grid">
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                ♟
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>
+                  Officers
+                </span>
+
+                <strong>
+                  {totalOfficers}
+                </strong>
+
+                <small>
+                  Across all offices
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                A
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>
+                  Administrators
+                </span>
+
+                <strong>
+                  {totalAdmins}
+                </strong>
+
+                <small>
+                  Office administrators
+                </small>
+              </div>
+            </article>
+
+            <article className="super-admin-stat-card">
+              <div className="super-admin-stat-icon">
+                □
+              </div>
+
+              <div className="super-admin-stat-content">
+                <span>
+                  Agreements
+                </span>
+
+                <strong>
+                  {totalAgreements}
+                </strong>
+
+                <small>
+                  Registered agreements
+                </small>
+              </div>
+            </article>
+          </section>
+
+          {/* =================================================
+              TABLE
+              ================================================= */}
 
           <section className="super-admin-management-card">
             <div className="super-admin-management-header">
@@ -332,32 +547,16 @@ function GovernmentOffices() {
                   GOVERNMENT OFFICES
                 </span>
 
-                <h2>All Government Offices</h2>
+                <h2>
+                  All Government Offices
+                </h2>
 
                 <p>
                   Government offices registered in
                   SmartRent ET.
                 </p>
               </div>
-
-              <button
-                type="button"
-                className="super-admin-outline-button"
-                onClick={() => void loadOffices()}
-                disabled={loading}
-              >
-                {loading ? "Refreshing..." : "Refresh"}
-              </button>
             </div>
-
-            {error && (
-              <div
-                className="super-admin-form-error"
-                role="alert"
-              >
-                {error}
-              </div>
-            )}
 
             {loading ? (
               <div className="super-admin-empty-state">
@@ -365,11 +564,13 @@ function GovernmentOffices() {
                   ⏳
                 </div>
 
-                <h3>Loading government offices...</h3>
+                <h3>
+                  Loading government offices...
+                </h3>
 
                 <p>
-                  Retrieving registered government
-                  offices.
+                  Retrieving registered
+                  government offices.
                 </p>
               </div>
             ) : filteredOffices.length === 0 ? (
@@ -394,26 +595,33 @@ function GovernmentOffices() {
               <div
                 style={{
                   overflowX: "auto",
-                  padding: "20px 28px 28px",
+                  padding:
+                    "20px 28px 28px",
                 }}
               >
                 <table
                   style={{
                     width: "100%",
-                    borderCollapse: "collapse",
-                    minWidth: "950px",
+                    borderCollapse:
+                      "collapse",
+                    minWidth:
+                      "1100px",
                   }}
                 >
                   <thead>
                     <tr>
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Office
@@ -421,12 +629,16 @@ function GovernmentOffices() {
 
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Location
@@ -434,12 +646,16 @@ function GovernmentOffices() {
 
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Woreda
@@ -447,128 +663,267 @@ function GovernmentOffices() {
 
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
-                        Address
+                        Officers
                       </th>
 
                       <th
                         style={{
-                          padding: "14px 12px",
-                          textAlign: "left",
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
                           borderBottom:
                             "1px solid #e8edeb",
-                          color: "#5f707a",
-                          fontSize: "13px",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
+                        }}
+                      >
+                        Admins
+                      </th>
+
+                      <th
+                        style={{
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
+                          borderBottom:
+                            "1px solid #e8edeb",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
+                        }}
+                      >
+                        Agreements
+                      </th>
+
+                      <th
+                        style={{
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
+                          borderBottom:
+                            "1px solid #e8edeb",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
                         }}
                       >
                         Status
+                      </th>
+
+                      <th
+                        style={{
+                          padding:
+                            "14px 12px",
+                          textAlign:
+                            "left",
+                          borderBottom:
+                            "1px solid #e8edeb",
+                          color:
+                            "#5f707a",
+                          fontSize:
+                            "13px",
+                        }}
+                      >
+                        Created
                       </th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {filteredOffices.map((office) => (
-                      <tr key={office.officeId}>
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                          }}
+                    {filteredOffices.map(
+                      (office) => (
+                        <tr
+                          key={
+                            office.officeId
+                          }
                         >
-                          <strong>
-                            {office.officeCode}
-                          </strong>
-
-                          <div
+                          <td
                             style={{
-                              marginTop: "4px",
-                              color: "#788991",
-                              fontSize: "12px",
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
                             }}
                           >
-                            {office.officeName}
-                          </div>
-                        </td>
+                            <strong>
+                              {
+                                office.officeCode
+                              }
+                            </strong>
 
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                            color: "#53636c",
-                          }}
-                        >
-                          {[
-                            office.city,
-                            office.subCity,
-                            office.region,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ") || "—"}
-                        </td>
+                            <div
+                              style={{
+                                marginTop:
+                                  "4px",
+                                color:
+                                  "#788991",
+                                fontSize:
+                                  "12px",
+                              }}
+                            >
+                              {
+                                office.officeName
+                              }
+                            </div>
+                          </td>
 
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                            color: "#53636c",
-                          }}
-                        >
-                          {office.woreda || "—"}
-                        </td>
-
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                            color: "#53636c",
-                          }}
-                        >
-                          {office.address || "—"}
-                        </td>
-
-                        <td
-                          style={{
-                            padding: "16px 12px",
-                            borderBottom:
-                              "1px solid #eef2f0",
-                          }}
-                        >
-                          <span
+                          <td
                             style={{
-                              display: "inline-block",
-                              padding: "6px 10px",
-                              borderRadius: "999px",
-                              background:
-                                office.status ===
-                                "ACTIVE"
-                                  ? "#e6f7f3"
-                                  : "#f3f4f6",
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
                               color:
-                                office.status ===
-                                "ACTIVE"
-                                  ? "#008f78"
-                                  : "#6b7280",
-                              fontSize: "12px",
-                              fontWeight: 700,
+                                "#53636c",
                             }}
                           >
-                            {office.status ||
-                              "Unknown"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                            {[
+                              office.city,
+                              office.subCity,
+                              office.region,
+                            ]
+                              .filter(
+                                Boolean
+                              )
+                              .join(
+                                " · "
+                              ) || "—"}
+                          </td>
+
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                              color:
+                                "#53636c",
+                            }}
+                          >
+                            {
+                              office.woreda ||
+                              "—"
+                            }
+                          </td>
+
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                              color:
+                                "#53636c",
+                            }}
+                          >
+                            {office.stats
+                              ?.officers ??
+                              0}
+                          </td>
+
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                              color:
+                                "#53636c",
+                            }}
+                          >
+                            {office.stats
+                              ?.admins ??
+                              0}
+                          </td>
+
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                              color:
+                                "#53636c",
+                            }}
+                          >
+                            {office.stats
+                              ?.agreements ??
+                              0}
+                          </td>
+
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display:
+                                  "inline-block",
+                                padding:
+                                  "6px 10px",
+                                borderRadius:
+                                  "999px",
+                                background:
+                                  office.status ===
+                                  "ACTIVE"
+                                    ? "#e6f7f3"
+                                    : "#f3f4f6",
+                                color:
+                                  office.status ===
+                                  "ACTIVE"
+                                    ? "#008f78"
+                                    : "#6b7280",
+                                fontSize:
+                                  "12px",
+                                fontWeight:
+                                  700,
+                              }}
+                            >
+                              {office.status ||
+                                "Unknown"}
+                            </span>
+                          </td>
+
+                          <td
+                            style={{
+                              padding:
+                                "16px 12px",
+                              borderBottom:
+                                "1px solid #eef2f0",
+                              color:
+                                "#53636c",
+                            }}
+                          >
+                            {formatDate(
+                              office.createdAt
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    )}
                   </tbody>
                 </table>
               </div>

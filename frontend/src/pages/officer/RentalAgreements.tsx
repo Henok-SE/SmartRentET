@@ -1,664 +1,3731 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import {
   ArrowLeft,
   Building2,
   CheckCircle2,
   Clock3,
+  CreditCard,
   Eye,
   FileText,
   LogOut,
   Menu,
+  RefreshCw,
   Search,
+  ShieldCheck,
   User,
   X,
   XCircle,
 } from "lucide-react";
+
 import CreateAgreement from "./CreateAgreement";
-
-
 
 /* =========================================================
    TYPES
 ========================================================= */
 
-type AgreementStatus = "Approved" | "Pending" | "Draft" | "Rejected";
+type AgreementStatus =
+  | "Approved"
+  | "Pending"
+  | "Draft"
+  | "Rejected"
+  | "Active";
 
-interface RentalAgreement {
+type BackendAgreement = {
+  agreementId: string;
+  referenceNumber: string;
+  status: string;
+
+  durationValue?: number;
+  durationUnit?: string;
+
+  rentalAmount?: number | string | null;
+
+  effectiveDate?: string | null;
+  terminationDate?: string | null;
+  createdAt?: string;
+
+  landlord?: {
+    landlordId?: string;
+
+    user?: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string | null;
+    };
+  };
+
+  tenant?: {
+    tenantId?: string;
+
+    user?: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string | null;
+    };
+  };
+
+  unit?: {
+    unitId?: string;
+    unitNumber?: string;
+
+    property?: {
+      location?: string | null;
+      subCity?: string | null;
+      woreda?: string | null;
+    };
+  };
+
+  office?: {
+    officeId?: string;
+    officeCode?: string;
+    officeName?: string;
+  };
+
+  createdByOfficer?: {
+    officerId?: string;
+    employeeId?: string;
+
+    user?: {
+      firstName?: string;
+      lastName?: string;
+    };
+  };
+
+  serviceFeePayment?: {
+    serviceFeePaymentId?: string;
+    status?: string;
+    amount?: number | string | null;
+    paidAt?: string | null;
+  };
+
+  payments?: Array<{
+    paymentId?: string;
+    amount?: number | string | null;
+    status?: string;
+    dueDate?: string | null;
+    paidDate?: string | null;
+  }>;
+
+  verifications?: Array<{
+    verificationId?: string;
+    party?: string;
+    phoneNumber?: string;
+    status?: string;
+    verifiedAt?: string | null;
+  }>;
+};
+
+type ContractsResponse = {
+  success: boolean;
+  message?: string;
+  filters?: Record<string, unknown>;
+  data: BackendAgreement[];
+};
+
+type GenericResponse = {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  data?: unknown;
+};
+
+type RentalAgreement = {
   id: string;
   referenceNumber: string;
+
   landlord: string;
   tenant: string;
+
   property: string;
   location: string;
+
   monthlyRent: number;
+
   status: AgreementStatus;
+  backendStatus: string;
+
   startDate?: string;
   endDate?: string;
-  paymentMethod?: string;
-  landlordNationalId?: string;
+  createdAt?: string;
+
   landlordPhone?: string;
-  tenantNationalId?: string;
   tenantPhone?: string;
-  notes?: string;
-}
 
+  serviceFeeStatus?: string;
+  serviceFeePaymentId?: string;
+  serviceFeeAmount?: number;
+
+  durationValue?: number;
+  durationUnit?: string;
+
+  verifications?: {
+    landlord?: {
+      status?: string;
+      phoneNumber?: string;
+      verifiedAt?: string | null;
+    };
+
+    tenant?: {
+      status?: string;
+      phoneNumber?: string;
+      verifiedAt?: string | null;
+    };
+  };
+
+  createdByOfficerName?: string;
+  createdByOfficerEmployeeId?: string;
+};
 
 /* =========================================================
-   INITIAL FORM
+   HELPERS
 ========================================================= */
 
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000/api";
 
+const getToken = () =>
+  localStorage.getItem("token") ||
+  localStorage.getItem("accessToken") ||
+  sessionStorage.getItem("token") ||
+  sessionStorage.getItem("accessToken") ||
+  "";
 
-/* =========================================================
-   RENTAL AGREEMENTS PAGE
-========================================================= */
+const formatDate = (
+  value?: string | null
+) => {
+  if (!value) {
+    return "—";
+  }
 
-const RentalAgreements: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const date = new Date(value);
 
-  const [isCreateModalOpen, setIsCreateModalOpen] =
-    useState(false);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
 
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const [isMobileMenuOpen, setIsMobileMenuOpen] =
-    useState(false);
-
-  const [selectedAgreement, setSelectedAgreement] =
-    useState<RentalAgreement | null>(null);
-
-  /*
-   * This starts empty intentionally.
-   *
-   * Later this should be replaced with data from your
-   * rental agreements API.
-   */
-  const [agreements] = useState<
-    RentalAgreement[]
-  >([]);
-
-  /* =======================================================
-     OPEN CREATE MODAL FROM OFFICER DASHBOARD
-  ======================================================= */
-
-  useEffect(() => {
-    const state = location.state as
-      | { openCreateAgreement?: boolean }
-      | null;
-
-    if (state?.openCreateAgreement) {
-      setIsCreateModalOpen(true);
-
-      /*
-       * Clear navigation state so refreshing the page
-       * does not repeatedly open the modal.
-       */
-      navigate(location.pathname, {
-        replace: true,
-        state: {},
-      });
+  return date.toLocaleDateString(
+    "en-US",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     }
-  }, [
-    location.state,
-    location.pathname,
-    navigate,
-  ]);
+  );
+};
 
-  /* =======================================================
-     SEARCH
-  ======================================================= */
+const formatDateTime = (
+  value?: string | null
+) => {
+  if (!value) {
+    return "—";
+  }
 
-  const filteredAgreements = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+  const date = new Date(value);
 
-    if (!query) {
-      return agreements;
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString(
+    "en-US",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
     }
+  );
+};
 
-    return agreements.filter((agreement) =>
-      agreement.referenceNumber
-        .toLowerCase()
-        .includes(query)
+const formatMoney = (
+  value?: number | string | null
+) => {
+  const amount = Number(
+    value ?? 0
+  );
+
+  if (Number.isNaN(amount)) {
+    return "0";
+  }
+
+  return amount.toLocaleString(
+    "en-US",
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }
+  );
+};
+
+const getDisplayStatus = (
+  status: string
+): AgreementStatus => {
+  switch (status) {
+    case "ACTIVE":
+      return "Active";
+
+    case "APPROVED":
+      return "Approved";
+
+    case "PENDING_VERIFICATION":
+    case "PENDING_SERVICE_FEE":
+      return "Pending";
+
+    case "DRAFT":
+      return "Draft";
+
+    case "REJECTED":
+    case "TERMINATED":
+    case "EXPIRED":
+      return "Rejected";
+
+    default:
+      return "Pending";
+  }
+};
+
+const getPersonName = (
+  firstName?: string,
+  lastName?: string
+) => {
+  const name =
+    `${firstName ?? ""} ${
+      lastName ?? ""
+    }`.trim();
+
+  return name || "—";
+};
+
+const getStatusClass = (
+  status: AgreementStatus
+) => {
+  switch (status) {
+    case "Active":
+    case "Approved":
+      return "agreement-status-approved";
+
+    case "Rejected":
+      return "agreement-status-rejected";
+
+    case "Pending":
+      return "agreement-status-pending";
+
+    case "Draft":
+    default:
+      return "agreement-status-draft";
+  }
+};
+
+const mapBackendAgreement = (
+  agreement: BackendAgreement
+): RentalAgreement => {
+  const propertyLocation =
+    agreement.unit?.property?.location ||
+    "—";
+
+  const subCity =
+    agreement.unit?.property?.subCity;
+
+  const woreda =
+    agreement.unit?.property?.woreda;
+
+  const locationParts = [
+    propertyLocation,
+    subCity,
+    woreda
+      ? `Woreda ${woreda}`
+      : "",
+  ].filter(Boolean);
+
+  const landlordVerification =
+    agreement.verifications?.find(
+      (verification) =>
+        String(
+          verification.party
+        ).toUpperCase() ===
+        "LANDLORD"
     );
-  }, [agreements, searchQuery]);
 
-  /* =======================================================
-     CREATE AGREEMENT
-  ======================================================= */
+  const tenantVerification =
+    agreement.verifications?.find(
+      (verification) =>
+        String(
+          verification.party
+        ).toUpperCase() ===
+        "TENANT"
+    );
 
+  const officerName =
+    getPersonName(
+      agreement.createdByOfficer?.user
+        ?.firstName,
+      agreement.createdByOfficer?.user
+        ?.lastName
+    );
 
-  /* =======================================================
-     STATUS ICON
-  ======================================================= */
+  return {
+    id: agreement.agreementId,
 
-  const getStatusIcon = (status: AgreementStatus) => {
-    switch (status) {
-      case "Approved":
-        return <CheckCircle2 size={14} />;
+    referenceNumber:
+      agreement.referenceNumber ||
+      "—",
 
-      case "Pending":
-        return <Clock3 size={14} />;
+    landlord:
+      getPersonName(
+        agreement.landlord?.user?.firstName,
+        agreement.landlord?.user?.lastName
+      ),
 
-      case "Rejected":
-        return <XCircle size={14} />;
+    tenant:
+      getPersonName(
+        agreement.tenant?.user?.firstName,
+        agreement.tenant?.user?.lastName
+      ),
 
-      case "Draft":
-      default:
-        return <FileText size={14} />;
-    }
-  };
+    property:
+      agreement.unit?.unitNumber
+        ? `Unit ${agreement.unit.unitNumber}`
+        : "Rental Property",
 
-  /* =======================================================
-     LOGOUT
-  ======================================================= */
+    location:
+      locationParts.join(", ") ||
+      "—",
 
-  const handleLogout = () => {
-    /*
-     * Add your existing authentication logout logic here.
-     *
-     * Example:
-     * localStorage.removeItem("token");
-     */
+    monthlyRent: Number(
+      agreement.rentalAmount ?? 0
+    ),
 
-    navigate("/officer-login");
-  };
+    status:
+      getDisplayStatus(
+        agreement.status
+      ),
 
-  return (
-    <div className="officer-layout">
-      {/* =====================================================
-          SIDEBAR
-      ===================================================== */}
+    backendStatus:
+      agreement.status,
 
-      <aside
-        className={`officer-sidebar ${
-          isMobileMenuOpen
-            ? "officer-sidebar-open"
-            : ""
-        }`}
-      >
-        <div className="officer-sidebar-brand">
-          <img
-            src= "/smartrent-logo.png"
-            alt="SmartRent ET"
-            className="officer-brand-logo"
-          />
+    startDate:
+      agreement.effectiveDate
+        ? formatDate(
+            agreement.effectiveDate
+          )
+        : undefined,
 
-          <div>
-            <h2>SmartRent ET</h2>
-            <span>RENTAL MONITORING</span>
-          </div>
-        </div>
+    endDate:
+      agreement.terminationDate
+        ? formatDate(
+            agreement.terminationDate
+          )
+        : undefined,
 
-        <nav className="officer-sidebar-navigation">
-          <button
-            type="button"
-            className="officer-nav-item"
-            onClick={() =>
-              navigate("/officer/dashboard")
+    createdAt:
+      agreement.createdAt,
+
+    landlordPhone:
+      agreement.landlord?.user?.phone ??
+      undefined,
+
+    tenantPhone:
+      agreement.tenant?.user?.phone ??
+      undefined,
+
+    serviceFeeStatus:
+      agreement.serviceFeePayment
+        ?.status,
+
+    serviceFeePaymentId:
+      agreement.serviceFeePayment
+        ?.serviceFeePaymentId,
+
+    serviceFeeAmount:
+      Number(
+        agreement.serviceFeePayment
+          ?.amount ??
+          50
+      ),
+
+    durationValue:
+      agreement.durationValue,
+
+    durationUnit:
+      agreement.durationUnit,
+
+    verifications: {
+      landlord:
+        landlordVerification
+          ? {
+              status:
+                landlordVerification.status,
+              phoneNumber:
+                landlordVerification.phoneNumber,
+              verifiedAt:
+                landlordVerification.verifiedAt,
             }
-          >
-            <Building2 size={19} />
-            <span>Dashboard</span>
-          </button>
+          : undefined,
 
-          <button
-            type="button"
-            className="officer-nav-item officer-nav-item-active"
-            onClick={() =>
-              navigate("/officer/rental-agreements")
+      tenant:
+        tenantVerification
+          ? {
+              status:
+                tenantVerification.status,
+              phoneNumber:
+                tenantVerification.phoneNumber,
+              verifiedAt:
+                tenantVerification.verifiedAt,
             }
-          >
-            <FileText size={19} />
-            <span>Rental Agreements</span>
-          </button>
-        </nav>
+          : undefined,
+    },
 
-        <div className="officer-sidebar-bottom">
-          <div className="officer-profile-card">
-            <div className="officer-avatar">
-              <User size={18} />
-            </div>
+    createdByOfficerName:
+      officerName !== "—"
+        ? officerName
+        : undefined,
 
-            <div className="officer-profile-details">
-              <strong>Officer</strong>
-              <span>Rental Monitoring Officer</span>
-            </div>
-          </div>
+    createdByOfficerEmployeeId:
+      agreement.createdByOfficer
+        ?.employeeId,
+  };
+};
 
-          <button
-            type="button"
-            className="officer-logout-button"
-            onClick={handleLogout}
-          >
-            <LogOut size={18} />
-            <span>Logout</span>
-          </button>
-        </div>
-      </aside>
+/* =========================================================
+   COMPONENT
+========================================================= */
 
-      {/* =====================================================
-          MOBILE OVERLAY
-      ===================================================== */}
+const RentalAgreements: React.FC =
+  () => {
+    const navigate =
+      useNavigate();
 
-      {isMobileMenuOpen && (
-        <div
-          className="officer-mobile-overlay"
-          onClick={() =>
-            setIsMobileMenuOpen(false)
+    const location =
+      useLocation();
+
+    /* =====================================================
+       CREATE
+    ===================================================== */
+
+    const [
+      isCreateModalOpen,
+      setIsCreateModalOpen,
+    ] = useState(false);
+
+    /* =====================================================
+       SEARCH
+    ===================================================== */
+
+    const [
+      searchQuery,
+      setSearchQuery,
+    ] = useState("");
+
+    /* =====================================================
+       MOBILE
+    ===================================================== */
+
+    const [
+      isMobileMenuOpen,
+      setIsMobileMenuOpen,
+    ] = useState(false);
+
+    /* =====================================================
+       DATA
+    ===================================================== */
+
+    const [
+      agreements,
+      setAgreements,
+    ] = useState<RentalAgreement[]>(
+      []
+    );
+
+    /* =====================================================
+       SELECTED AGREEMENT
+    ===================================================== */
+
+    const [
+      selectedAgreement,
+      setSelectedAgreement,
+    ] =
+      useState<RentalAgreement | null>(
+        null
+      );
+
+    /* =====================================================
+       LOADING
+    ===================================================== */
+
+    const [
+      loading,
+      setLoading,
+    ] = useState(true);
+
+    const [
+      refreshing,
+      setRefreshing,
+    ] = useState(false);
+
+    const [
+      error,
+      setError,
+    ] = useState("");
+
+    /* =====================================================
+       VERIFICATION MODAL
+    ===================================================== */
+
+    const [
+      verificationModalOpen,
+      setVerificationModalOpen,
+    ] = useState(false);
+
+    const [
+      verificationAgreement,
+      setVerificationAgreement,
+    ] =
+      useState<RentalAgreement | null>(
+        null
+      );
+
+    const [
+      verificationParty,
+      setVerificationParty,
+    ] = useState<
+      "LANDLORD" | "TENANT"
+    >("LANDLORD");
+
+    const [
+      verificationCode,
+      setVerificationCode,
+    ] = useState("");
+
+    const [
+      verificationLoading,
+      setVerificationLoading,
+    ] = useState(false);
+
+    const [
+      verificationError,
+      setVerificationError,
+    ] = useState("");
+
+    const [
+      verificationMessage,
+      setVerificationMessage,
+    ] = useState("");
+
+    /* =====================================================
+       PAYMENT MODAL
+    ===================================================== */
+
+    const [
+      paymentModalOpen,
+      setPaymentModalOpen,
+    ] = useState(false);
+
+    const [
+      paymentAgreement,
+      setPaymentAgreement,
+    ] =
+      useState<RentalAgreement | null>(
+        null
+      );
+
+    const [
+      paymentPin,
+      setPaymentPin,
+    ] = useState("");
+
+    const [
+      paymentLoading,
+      setPaymentLoading,
+    ] = useState(false);
+
+    const [
+      paymentError,
+      setPaymentError,
+    ] = useState("");
+
+    const [
+      paymentMessage,
+      setPaymentMessage,
+    ] = useState("");
+
+    
+
+    /* =====================================================
+       CLOCK
+    ===================================================== */
+
+    const [
+      currentDateTime,
+      setCurrentDateTime,
+    ] = useState(
+      new Date()
+    );
+/* =====================================================
+       USER
+    ===================================================== */
+
+    const currentUser =
+      useMemo(() => {
+        try {
+          const stored =
+            localStorage.getItem(
+              "user"
+            );
+
+          if (!stored) {
+            return {
+              firstName: "",
+              lastName: "",
+              username:
+                "Officer",
+            };
           }
-        />
-      )}
 
-      {/* =====================================================
-          MAIN AREA
-      ===================================================== */}
+          return JSON.parse(
+            stored
+          ) as {
+            firstName?: string;
+            lastName?: string;
+            username?: string;
+          };
+        } catch {
+          return {
+            firstName: "",
+            lastName: "",
+            username:
+              "Officer",
+          };
+        }
+      }, []);
 
-      <div className="officer-main">
-        {/* TOP BAR */}
-        <header className="officer-topbar">
-          <div className="officer-topbar-left">
+    const displayName =
+      `${currentUser.firstName ?? ""} ${
+        currentUser.lastName ?? ""
+      }`.trim() ||
+      currentUser.username ||
+      "Officer";
+
+    const initials =
+      currentUser.firstName &&
+      currentUser.lastName
+        ? `${currentUser.firstName.charAt(
+            0
+          )}${currentUser.lastName.charAt(
+            0
+          )}`.toUpperCase()
+        : displayName
+            .slice(0, 2)
+            .toUpperCase();
+
+    /* =====================================================
+       LIVE CLOCK
+    ===================================================== */
+
+    useEffect(() => {
+      const timer =
+        window.setInterval(
+          () => {
+            setCurrentDateTime(
+              new Date()
+            );
+          },
+          1000
+        );
+
+      return () =>
+        window.clearInterval(
+          timer
+        );
+    }, []);
+
+    const formattedDate =
+      currentDateTime.toLocaleDateString(
+        "en-US",
+        {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }
+      );
+
+    const formattedTime =
+      currentDateTime.toLocaleTimeString(
+        "en-US",
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }
+      );
+
+
+    /* =====================================================
+       AUTH
+    ===================================================== */
+
+    const handleLogout =
+      useCallback(() => {
+        localStorage.removeItem(
+          "token"
+        );
+
+        localStorage.removeItem(
+          "accessToken"
+        );
+
+        localStorage.removeItem(
+          "user"
+        );
+
+        sessionStorage.removeItem(
+          "token"
+        );
+
+        sessionStorage.removeItem(
+          "accessToken"
+        );
+
+        navigate(
+          "/login",
+          {
+            replace: true,
+          }
+        );
+      }, [navigate]);
+
+    /* =====================================================
+       LOAD AGREEMENTS
+    ===================================================== */
+
+    const loadAgreements =
+      useCallback(
+        async (
+          showLoader = true
+        ) => {
+          const token =
+            getToken();
+
+          if (!token) {
+            handleLogout();
+            return;
+          }
+
+          if (showLoader) {
+            setLoading(true);
+          }
+
+          setRefreshing(true);
+          setError("");
+
+          try {
+            const response =
+              await fetch(
+                `${API_URL}/dashboard/contracts`,
+                {
+                  method: "GET",
+                  headers: {
+                    Authorization:
+                      `Bearer ${token}`,
+                  },
+                  cache:
+                    "no-store",
+                }
+              );
+
+            const result =
+              (await response.json()) as ContractsResponse & {
+                error?: string;
+              };
+
+            if (
+              response.status ===
+              401
+            ) {
+              handleLogout();
+              return;
+            }
+
+            if (
+              !response.ok ||
+              !result.success
+            ) {
+              throw new Error(
+                result.error ||
+                  result.message ||
+                  "Failed to load rental agreements."
+              );
+            }
+
+            const mapped =
+              (
+                result.data ??
+                []
+              ).map(
+                mapBackendAgreement
+              );
+
+            setAgreements(
+              mapped
+            );
+          } catch (err) {
+            console.error(
+              "Failed to load agreements:",
+              err
+            );
+
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Failed to load rental agreements."
+            );
+          } finally {
+            setLoading(false);
+            setRefreshing(false);
+          }
+        },
+        [handleLogout]
+      );
+
+    /* =====================================================
+       INITIAL LOAD
+    ===================================================== */
+
+    useEffect(() => {
+      void loadAgreements(true);
+    }, [loadAgreements]);
+
+    /* =====================================================
+       OPEN CREATE FROM DASHBOARD
+    ===================================================== */
+
+    useEffect(() => {
+      const state =
+        location.state as
+          | {
+              openCreateAgreement?: boolean;
+            }
+          | null;
+
+      if (
+        state?.openCreateAgreement
+      ) {
+        setIsCreateModalOpen(
+          true
+        );
+
+        navigate(
+          location.pathname,
+          {
+            replace: true,
+            state: {},
+          }
+        );
+      }
+    }, [
+      location.state,
+      location.pathname,
+      navigate,
+    ]);
+
+    /* =====================================================
+       CLOSE CREATE + REFRESH
+    ===================================================== */
+
+    const handleCreateClose =
+      useCallback(() => {
+        setIsCreateModalOpen(
+          false
+        );
+
+        void loadAgreements(
+          false
+        );
+      }, [loadAgreements]);
+
+    /* =====================================================
+       SEARCH
+    ===================================================== */
+
+    const filteredAgreements =
+      useMemo(() => {
+        const query =
+          searchQuery
+            .trim()
+            .toLowerCase();
+
+        if (!query) {
+          return agreements;
+        }
+
+        return agreements.filter(
+          (agreement) =>
+            agreement.referenceNumber
+              .toLowerCase()
+              .includes(query) ||
+            agreement.landlord
+              .toLowerCase()
+              .includes(query) ||
+            agreement.tenant
+              .toLowerCase()
+              .includes(query) ||
+            agreement.property
+              .toLowerCase()
+              .includes(query) ||
+            agreement.location
+              .toLowerCase()
+              .includes(query) ||
+            agreement.backendStatus
+              .toLowerCase()
+              .includes(query)
+        );
+      }, [
+        agreements,
+        searchQuery,
+      ]);
+
+    /* =====================================================
+       STATUS ICON
+    ===================================================== */
+
+    const getStatusIcon = (
+      status: AgreementStatus
+    ) => {
+      switch (status) {
+        case "Active":
+        case "Approved":
+          return (
+            <CheckCircle2
+              size={14}
+            />
+          );
+
+        case "Pending":
+          return (
+            <Clock3
+              size={14}
+            />
+          );
+
+        case "Rejected":
+          return (
+            <XCircle
+              size={14}
+            />
+          );
+
+        default:
+          return (
+            <FileText
+              size={14}
+            />
+          );
+      }
+    };
+
+    /* =====================================================
+       OPEN VERIFICATION
+    ===================================================== */
+
+    const openVerificationModal =
+      (
+        agreement: RentalAgreement,
+        party:
+          | "LANDLORD"
+          | "TENANT"
+      ) => {
+        setVerificationAgreement(
+          agreement
+        );
+
+        setVerificationParty(
+          party
+        );
+
+        setVerificationCode(
+          ""
+        );
+
+        setVerificationError(
+          ""
+        );
+
+        setVerificationMessage(
+          ""
+        );
+
+        setVerificationModalOpen(
+          true
+        );
+      };
+
+    /* =====================================================
+       VERIFY USSD
+    ===================================================== */
+
+    const handleVerifyConsent =
+      async (
+        event: React.FormEvent
+      ) => {
+        event.preventDefault();
+
+        if (
+          !verificationAgreement
+        ) {
+          return;
+        }
+
+        const phone =
+          verificationParty ===
+          "LANDLORD"
+            ? verificationAgreement.landlordPhone
+            : verificationAgreement.tenantPhone;
+
+        if (!phone) {
+          setVerificationError(
+            `The ${verificationParty.toLowerCase()} phone number is not available.`
+          );
+
+          return;
+        }
+
+        const code =
+          verificationCode
+            .replace(
+              /\D/g,
+              ""
+            )
+            .slice(
+              0,
+              6
+            );
+
+        if (
+          code.length !== 6
+        ) {
+          setVerificationError(
+            "Please enter the 6-digit USSD verification code."
+          );
+
+          return;
+        }
+
+        const token =
+          getToken();
+
+        if (!token) {
+          handleLogout();
+          return;
+        }
+
+        setVerificationLoading(
+          true
+        );
+
+        setVerificationError(
+          ""
+        );
+
+        setVerificationMessage(
+          ""
+        );
+
+        try {
+          const response =
+            await fetch(
+              `${API_URL}/agreements/${verificationAgreement.id}/verify`,
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json",
+
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+
+                /*
+                 * Your controller reads these
+                 * values from req.body.
+                 */
+                body: JSON.stringify({
+                  agreementId:
+                    verificationAgreement.id,
+                  phone,
+                  code,
+                }),
+              }
+            );
+
+          const result =
+            (await response.json()) as GenericResponse;
+
+          if (
+            response.status ===
+            401
+          ) {
+            handleLogout();
+            return;
+          }
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.error ||
+                result.message ||
+                "USSD verification failed."
+            );
+          }
+
+          const responseData =
+            result.data;
+
+          const backendMessage =
+            responseData &&
+            typeof responseData ===
+              "object" &&
+            "message" in
+              responseData
+              ? String(
+                  (
+                    responseData as {
+                      message?: unknown;
+                    }
+                  ).message ??
+                    ""
+                )
+              : result.message ||
+                "";
+
+          setVerificationMessage(
+            backendMessage ||
+              "USSD verification completed successfully."
+          );
+
+          setVerificationCode(
+            ""
+          );
+
+          await loadAgreements(
+            false
+          );
+
+          window.setTimeout(
+            () => {
+              setVerificationModalOpen(
+                false
+              );
+
+              setVerificationAgreement(
+                null
+              );
+            },
+            900
+          );
+        } catch (err) {
+          console.error(
+            "USSD verification error:",
+            err
+          );
+
+          setVerificationError(
+            err instanceof Error
+              ? err.message
+              : "USSD verification failed."
+          );
+        } finally {
+          setVerificationLoading(
+            false
+          );
+        }
+      };
+
+    const handleResendConsent = async () => {
+      if (!verificationAgreement) {
+        return;
+      }
+
+      const token = getToken();
+
+      if (!token) {
+        handleLogout();
+        return;
+      }
+
+      setVerificationLoading(true);
+      setVerificationError("");
+      setVerificationMessage("");
+
+      try {
+        const response = await fetch(
+          `${API_URL}/agreements/${verificationAgreement.id}/resend-verification`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              agreementId: verificationAgreement.id,
+              party: verificationParty,
+            }),
+          }
+        );
+
+        const result = (await response.json()) as GenericResponse;
+
+        if (response.status === 401) {
+          handleLogout();
+          return;
+        }
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.error ||
+              result.message ||
+              "Failed to resend verification code."
+          );
+        }
+
+        setVerificationCode("");
+        setVerificationMessage(
+          `A new ${verificationParty.toLowerCase()} verification code has been sent.`
+        );
+      } catch (err) {
+        setVerificationError(
+          err instanceof Error
+            ? err.message
+            : "Failed to resend verification code."
+        );
+      } finally {
+        setVerificationLoading(false);
+      }
+    };
+
+    /* =====================================================
+       OPEN PAYMENT
+    ===================================================== */
+
+    const openPaymentModal =
+      (
+        agreement: RentalAgreement
+      ) => {
+        setPaymentAgreement(
+          agreement
+        );
+
+        setPaymentPin(
+          ""
+        );
+
+        setPaymentError(
+          ""
+        );
+
+        setPaymentMessage(
+          ""
+        );
+
+        setPaymentModalOpen(
+          true
+        );
+      };
+
+    /* =====================================================
+       PAY SERVICE FEE
+    ===================================================== */
+
+    const handlePayServiceFee =
+      async (
+        event: React.FormEvent
+      ) => {
+        event.preventDefault();
+
+        if (
+          !paymentAgreement
+        ) {
+          return;
+        }
+
+        const token =
+          getToken();
+
+        if (!token) {
+          handleLogout();
+          return;
+        }
+
+        const pin =
+          paymentPin
+            .replace(
+              /\D/g,
+              ""
+            );
+
+        if (!pin) {
+          setPaymentError(
+            "Please enter the payment PIN."
+          );
+
+          return;
+        }
+
+        if (
+          !paymentAgreement
+            .tenantPhone
+        ) {
+          setPaymentError(
+            "The tenant phone number is not available."
+          );
+
+          return;
+        }
+
+        setPaymentLoading(
+          true
+        );
+
+        setPaymentError(
+          ""
+        );
+
+        setPaymentMessage(
+          ""
+        );
+
+        try {
+          const response =
+            await fetch(
+              `${API_URL}/agreements/${paymentAgreement.id}/pay-service-fee`,
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json",
+
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+
+                /*
+                 * Your controller expects:
+                 * agreementId, phone, pin
+                 */
+                body: JSON.stringify({
+                  agreementId:
+                    paymentAgreement.id,
+
+                  phone:
+                    paymentAgreement.tenantPhone,
+
+                  pin,
+                }),
+              }
+            );
+
+          const result =
+            (await response.json()) as GenericResponse;
+
+          if (
+            response.status ===
+            401
+          ) {
+            handleLogout();
+            return;
+          }
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.error ||
+                result.message ||
+                "Service fee payment failed."
+            );
+          }
+
+          const responseData =
+            result.data;
+
+          const backendMessage =
+            responseData &&
+            typeof responseData ===
+              "object" &&
+            "message" in
+              responseData
+              ? String(
+                  (
+                    responseData as {
+                      message?: unknown;
+                    }
+                  ).message ??
+                    ""
+                )
+              : result.message ||
+                "";
+
+          setPaymentMessage(
+            backendMessage ||
+              "50 ETB service fee paid successfully."
+          );
+
+          setPaymentPin(
+            ""
+          );
+
+          await loadAgreements(
+            false
+          );
+
+          window.setTimeout(
+            () => {
+              setPaymentModalOpen(
+                false
+              );
+
+              setPaymentAgreement(
+                null
+              );
+            },
+            1100
+          );
+        } catch (err) {
+          console.error(
+            "Service fee payment error:",
+            err
+          );
+
+          setPaymentError(
+            err instanceof Error
+              ? err.message
+              : "Service fee payment failed."
+          );
+        } finally {
+          setPaymentLoading(
+            false
+          );
+        }
+      };
+
+    /* =====================================================
+       CLOSE MODALS
+    ===================================================== */
+
+    const closeVerificationModal =
+      () => {
+        if (
+          verificationLoading
+        ) {
+          return;
+        }
+
+        setVerificationModalOpen(
+          false
+        );
+
+        setVerificationAgreement(
+          null
+        );
+      };
+
+    const closePaymentModal =
+      () => {
+        if (
+          paymentLoading
+        ) {
+          return;
+        }
+
+        setPaymentModalOpen(
+          false
+        );
+
+        setPaymentAgreement(
+          null
+        );
+      };
+
+    /* =====================================================
+       RENDER
+    ===================================================== */
+
+    return (
+      <div className="officer-layout">
+
+        {/* =================================================
+            SIDEBAR
+        ================================================= */}
+
+        <aside
+          className={`officer-sidebar ${
+            isMobileMenuOpen
+              ? "officer-sidebar-open"
+              : ""
+          }`}
+        >
+
+          <div className="officer-sidebar-brand">
+
+            <img
+              src="/smartrent-logo.png"
+              alt="SmartRent ET"
+              className="officer-brand-logo"
+            />
+
+            <div>
+              <h2>
+                SmartRent ET
+              </h2>
+
+              <span>
+                RENTAL MONITORING
+              </span>
+            </div>
+
+          </div>
+          <nav className="officer-sidebar-navigation">
+
+            {/* DASHBOARD */}
+
             <button
               type="button"
-              className="officer-mobile-menu-button"
-              onClick={() =>
-                setIsMobileMenuOpen(true)
-              }
-              aria-label="Open menu"
+              className="officer-nav-item"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigate("/officer/dashboard");
+              }}
             >
-              <Menu size={21} />
+              <Building2 size={19} />
+
+              <span>
+                Dashboard
+              </span>
             </button>
 
-            <div className="officer-search">
-              <Search size={18} />
+            {/* RENTAL AGREEMENTS */}
 
-              <input
-                type="search"
-                placeholder="Search by reference number..."
-                value={searchQuery}
-                onChange={(event) =>
-                  setSearchQuery(event.target.value)
+            <button
+              type="button"
+              className="officer-nav-item officer-nav-item-active"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigate("/officer/rental-agreements");
+              }}
+            >
+              <FileText size={19} />
+
+              <span>
+                Rental Agreements
+              </span>
+            </button>
+
+            {/* PAYMENT RECORDS */}
+
+            <button
+              type="button"
+              className="officer-nav-item"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigate("/officer/payment-records");
+              }}
+            >
+              <CreditCard size={19} />
+
+              <span>
+                Payment Records
+              </span>
+            </button>
+
+          </nav>
+
+
+          <div className="officer-sidebar-bottom">
+
+            <div className="officer-profile-card">
+
+              <div className="officer-avatar">
+                <User
+                  size={
+                    18
+                  }
+                />
+              </div>
+
+              <div className="officer-profile-details">
+
+                <strong>
+                  {displayName}
+                </strong>
+
+                <span>
+                  Rental Monitoring Officer
+                </span>
+
+              </div>
+
+            </div>
+
+            <button
+              type="button"
+              className="officer-logout-button"
+              onClick={
+                handleLogout
+              }
+            >
+              <LogOut
+                size={
+                  18
                 }
               />
-            </div>
+
+              <span>
+                Logout
+              </span>
+            </button>
+
           </div>
 
-          <div className="officer-account">
-            <div className="officer-account-avatar">
-              <User size={18} />
+        </aside>
+
+        {/* =================================================
+            MOBILE OVERLAY
+        ================================================= */}
+
+        {isMobileMenuOpen && (
+          <div
+            className="officer-mobile-overlay"
+            onClick={() =>
+              setIsMobileMenuOpen(
+                false
+              )
+            }
+          />
+        )}
+
+        {/* =================================================
+            MAIN
+        ================================================= */}
+
+        <div className="officer-main">
+
+          {/* TOP BAR */}
+
+          <header className="officer-topbar">
+
+            <div className="officer-topbar-left">
+
+              <button
+                type="button"
+                className="officer-mobile-menu-button"
+                onClick={() =>
+                  setIsMobileMenuOpen(
+                    true
+                  )
+                }
+                aria-label="Open menu"
+              >
+                <Menu
+                  size={
+                    21
+                  }
+                />
+              </button>
+
+              <div className="officer-search">
+
+                <Search
+                  size={
+                    18
+                  }
+                />
+
+                <input
+                  type="search"
+                  placeholder="Search agreements..."
+                  value={
+                    searchQuery
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setSearchQuery(
+                      event.target.value
+                    )
+                  }
+                />
+
+              </div>
+
+            </div>
+             <div className="officer-dashboard-user">
+
+            <div className="officer-dashboard-user-avatar">
+              {initials}
             </div>
 
             <div>
-              <strong>Officer</strong>
-              <span>Rental Officer</span>
-            </div>
-          </div>
-        </header>
 
-        {/* PAGE CONTENT */}
-        <main className="officer-page-content">
-          {/* PAGE HEADER */}
-          <div className="agreements-page-header">
-            <div className="agreements-page-title">
-              <button
-                type="button"
-                className="agreements-back-button"
-                onClick={() =>
-                  navigate("/officer/dashboard")
-                }
-                aria-label="Back to dashboard"
+              <strong>
+                {displayName}
+              </strong>
+
+              <span>
+                {formattedDate}
+              </span>
+
+              <small
+                style={{
+                  display:
+                    "block",
+                  marginTop:
+                    "2px",
+                  color:
+                    "#6b7280",
+                }}
               >
-                <ArrowLeft size={18} />
-              </button>
+                {formattedTime}
+              </small>
 
-              <div>
-                <span className="officer-eyebrow">
-                  RENTAL MANAGEMENT
-                </span>
-
-                <h1>Rental Agreements</h1>
-
-                <p>
-                  View, manage, and create rental
-                  agreements registered within the
-                  SmartRent ET system.
-                </p>
-              </div>
             </div>
 
-            <button
-              type="button"
-              className="agreement-primary-button agreements-create-button"
-              onClick={() =>
-                setIsCreateModalOpen(true)
-              }
-            >
-              <FileText size={17} />
-              Create Agreement
-            </button>
           </div>
 
-          {/* TABLE CARD */}
-          <section className="agreements-table-card">
-            <div className="agreements-table-header">
-              <div>
-                <h2>All Rental Agreements</h2>
+          </header>
 
-                <p>
-                  Search and review rental agreement
-                  records using their reference number.
-                </p>
+          {/* CONTENT */}
+
+          <main className="officer-page-content">
+
+            {/* PAGE HEADER */}
+
+            <div className="agreements-page-header">
+
+              <div className="agreements-page-title">
+
+                <button
+                  type="button"
+                  className="agreements-back-button"
+                  onClick={() =>
+                    navigate(
+                      "/officer/dashboard"
+                    )
+                  }
+                  aria-label="Back to dashboard"
+                >
+                  <ArrowLeft
+                    size={
+                      18
+                    }
+                  />
+                </button>
+
+                <div>
+
+                  <span className="officer-eyebrow">
+                    RENTAL MANAGEMENT
+                  </span>
+
+                  <h1>
+                    Rental Agreements
+                  </h1>
+
+                  <p>
+                    View and manage rental
+                    agreements registered in
+                    SmartRent ET.
+                  </p>
+
+                </div>
+
               </div>
 
-              <div className="agreements-count">
-                {filteredAgreements.length}{" "}
-                {filteredAgreements.length === 1
-                  ? "Agreement"
-                  : "Agreements"}
+              <div className="agreements-header-actions">
+
+                <button
+                  type="button"
+                  className="agreement-secondary-button"
+                  onClick={() =>
+                    void loadAgreements(
+                      true
+                    )
+                  }
+                  disabled={
+                    refreshing
+                  }
+                >
+                  <RefreshCw
+                    size={
+                      16
+                    }
+                    className={
+                      refreshing
+                        ? "refresh-spinning"
+                        : ""
+                    }
+                  />
+
+                  Refresh
+                </button>
+
+                <button
+                  type="button"
+                  className="agreement-primary-button agreements-create-button"
+                  onClick={() =>
+                    setIsCreateModalOpen(
+                      true
+                    )
+                  }
+                >
+                  <FileText
+                    size={
+                      17
+                    }
+                  />
+
+                  Create Agreement
+                </button>
+
               </div>
+
             </div>
+
+            {/* ERROR */}
+
+            {error && (
+              <div
+                className="alert alert-error"
+                role="alert"
+              >
+                {error}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void loadAgreements(
+                      true
+                    )
+                  }
+                  style={{
+                    marginLeft:
+                      "12px",
+                  }}
+                >
+                  Try again
+                </button>
+              </div>
+            )}
 
             {/* TABLE */}
-            <div className="agreements-table-wrapper">
-              <table className="agreements-table">
-                <thead>
-                  <tr>
-                    <th>Reference Number</th>
-                    <th>Landlord</th>
-                    <th>Tenant</th>
-                    <th>Property</th>
-                    <th>Location</th>
-                    <th>Monthly Rent</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
 
-                <tbody>
-                  {filteredAgreements.length > 0 ? (
-                    filteredAgreements.map(
-                      (agreement) => (
-                        <tr key={agreement.id}>
-                          <td>
-                            <span className="agreement-reference">
-                              {
-                                agreement.referenceNumber
-                              }
-                            </span>
-                          </td>
+            <section className="agreements-table-card">
 
-                          <td>
-                            <span className="agreement-person-name">
-                              {agreement.landlord}
-                            </span>
-                          </td>
+              <div className="agreements-table-header">
 
-                          <td>
-                            <span className="agreement-person-name">
-                              {agreement.tenant}
-                            </span>
-                          </td>
+                <div>
 
-                          <td>
-                            {agreement.property}
-                          </td>
+                  <h2>
+                    All Rental Agreements
+                  </h2>
 
-                          <td>
-                            {agreement.location}
-                          </td>
+                  <p>
+                    Review agreement details and
+                    continue the verification and
+                    service-fee process.
+                  </p>
 
-                          <td>
-                            <span className="agreement-rent">
-                              {agreement.monthlyRent.toLocaleString()}{" "}
-                              ETB
-                            </span>
-                          </td>
+                </div>
 
-                          <td>
-                            <span
-                              className={`agreement-status-badge agreement-status-${agreement.status.toLowerCase()}`}
-                            >
-                              {getStatusIcon(
-                                agreement.status
-                              )}
+                <div className="agreements-count">
 
-                              {agreement.status}
-                            </span>
-                          </td>
+                  {loading
+                    ? "Loading..."
+                    : `${filteredAgreements.length} ${
+                        filteredAgreements.length ===
+                        1
+                          ? "Agreement"
+                          : "Agreements"
+                      }`}
 
-                          <td>
-                            <button
-                              type="button"
-                              className="agreement-view-button"
-                              onClick={() =>
-                                setSelectedAgreement(
-                                  agreement
-                                )
-                              }
-                              title="View agreement"
-                            >
-                              <Eye size={16} />
-                              <span>View</span>
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    )
-                  ) : (
+                </div>
+
+              </div>
+
+              <div className="agreements-table-wrapper">
+
+                <table className="agreements-table">
+
+                  <thead>
+
                     <tr>
-                      <td
-                        colSpan={8}
-                        className="agreements-empty-cell"
-                      >
-                        <div className="agreements-empty-state">
-                          <div className="agreements-empty-icon">
-                            <FileText size={27} />
+
+                      <th>
+                        Reference
+                      </th>
+
+                      <th>
+                        Landlord
+                      </th>
+
+                      <th>
+                        Tenant
+                      </th>
+
+                      <th>
+                        Property
+                      </th>
+
+                      <th>
+                        Location
+                      </th>
+
+                      <th>
+                        Rent
+                      </th>
+
+                      <th>
+                        Status
+                      </th>
+
+                      <th>
+                        Action
+                      </th>
+
+                    </tr>
+
+                  </thead>
+
+                  <tbody>
+
+                    {loading ? (
+
+                      <tr>
+
+                        <td
+                          colSpan={
+                            8
+                          }
+                          className="agreements-empty-cell"
+                        >
+
+                          <div className="agreements-empty-state">
+
+                            <div className="agreements-empty-icon">
+
+                              <RefreshCw
+                                size={
+                                  27
+                                }
+                                className="refresh-spinning"
+                              />
+
+                            </div>
+
+                            <h3>
+                              Loading rental agreements
+                            </h3>
+
+                            <p>
+                              Retrieving the latest
+                              agreement records.
+                            </p>
+
                           </div>
 
-                          <h3>
-                            {searchQuery
-                              ? "No agreements found"
-                              : "No rental agreements yet"}
-                          </h3>
+                        </td>
 
-                          <p>
-                            {searchQuery
-                              ? `No agreement matches "${searchQuery}". Try another reference number.`
-                              : "Create your first rental agreement to start managing rental records."}
-                          </p>
+                      </tr>
 
-                          {!searchQuery && (
-                            <button
-                              type="button"
-                              className="agreement-primary-button"
-                              onClick={() =>
-                                setIsCreateModalOpen(
-                                  true
-                                )
+                    ) : filteredAgreements.length >
+                      0 ? (
+
+                      filteredAgreements.map(
+                        (
+                          agreement
+                        ) => (
+
+                          <tr
+                            key={
+                              agreement.id
+                            }
+                          >
+
+                            {/* REFERENCE */}
+
+                            <td>
+
+                              <span className="agreement-reference">
+                                {
+                                  agreement.referenceNumber
+                                }
+                              </span>
+
+                              {agreement.createdAt && (
+                                <small
+                                  style={{
+                                    display:
+                                      "block",
+                                    marginTop:
+                                      "5px",
+                                    color:
+                                      "#7b8a91",
+                                  }}
+                                >
+                                  Created{" "}
+                                  {formatDate(
+                                    agreement.createdAt
+                                  )}
+                                </small>
+                              )}
+
+                            </td>
+
+                            {/* LANDLORD */}
+
+                            <td>
+                              {
+                                agreement.landlord
                               }
-                            >
-                              <FileText size={17} />
-                              Create Agreement
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </main>
-      </div>
 
-      {/* =====================================================
-          CREATE AGREEMENT MODAL
-      ===================================================== */}
+                              {agreement.landlordPhone && (
+                                <small
+                                  style={{
+                                    display:
+                                      "block",
+                                    marginTop:
+                                      "4px",
+                                    color:
+                                      "#7b8a91",
+                                  }}
+                                >
+                                  {
+                                    agreement.landlordPhone
+                                  }
+                                </small>
+                              )}
+                            </td>
 
-      {isCreateModalOpen && (
-        <CreateAgreement
-          onClose={() =>
-            setIsCreateModalOpen(false)
-          }
-        />
-      )}
+                            {/* TENANT */}
 
-      {/* =====================================================
-          VIEW AGREEMENT MODAL
-      ===================================================== */}
+                            <td>
+                              {
+                                agreement.tenant
+                              }
 
-      {selectedAgreement && (
-        <div
-          className="agreement-modal-overlay"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="agreement-view-modal">
-            <div className="agreement-modal-header">
-              <div>
-                <span className="agreement-modal-eyebrow">
-                  AGREEMENT DETAILS
-                </span>
+                              {agreement.tenantPhone && (
+                                <small
+                                  style={{
+                                    display:
+                                      "block",
+                                    marginTop:
+                                      "4px",
+                                    color:
+                                      "#7b8a91",
+                                  }}
+                                >
+                                  {
+                                    agreement.tenantPhone
+                                  }
+                                </small>
+                              )}
+                            </td>
 
-                <h2>Rental Agreement</h2>
+                            {/* PROPERTY */}
 
-                <p>
-                  {
-                    selectedAgreement.referenceNumber
-                  }
-                </p>
+                            <td>
+                              {
+                                agreement.property
+                              }
+                            </td>
+
+                            {/* LOCATION */}
+
+                            <td>
+                              {
+                                agreement.location
+                              }
+                            </td>
+
+                            {/* RENT */}
+
+                            <td>
+
+                              <span className="agreement-rent">
+                                {formatMoney(
+                                  agreement.monthlyRent
+                                )}{" "}
+                                ETB
+                              </span>
+
+                            </td>
+
+                            {/* STATUS */}
+
+                            <td>
+
+                              <span
+                                className={`agreement-status-badge ${getStatusClass(
+                                  agreement.status
+                                )}`}
+                              >
+                                {getStatusIcon(
+                                  agreement.status
+                                )}
+
+                                {
+                                  agreement.status
+                                }
+                              </span>
+
+                              <small
+                                style={{
+                                  display:
+                                    "block",
+                                  marginTop:
+                                    "5px",
+                                  color:
+                                    "#7b8a91",
+                                  fontSize:
+                                    "11px",
+                                  maxWidth:
+                                    "190px",
+                                }}
+                              >
+                                {
+                                  agreement.backendStatus
+                                }
+                              </small>
+
+                            </td>
+
+                            {/* ACTIONS */}
+
+                            <td>
+
+                              <div
+                                style={{
+                                  display:
+                                    "flex",
+                                  flexDirection:
+                                    "column",
+                                  gap:
+                                    "7px",
+                                }}
+                              >
+
+                                <button
+                                  type="button"
+                                  className="agreement-view-button"
+                                  onClick={() =>
+                                    setSelectedAgreement(
+                                      agreement
+                                    )
+                                  }
+                                >
+                                  <Eye
+                                    size={
+                                      16
+                                    }
+                                  />
+
+                                  View
+                                </button>
+
+                                {agreement.backendStatus ===
+                                  "PENDING_VERIFICATION" && (
+
+                                  <button
+                                    type="button"
+                                    className="agreement-secondary-button"
+                                    style={{
+                                      height:
+                                        "36px",
+                                      padding:
+                                        "0 10px",
+                                    }}
+                                    onClick={() =>
+                                      openVerificationModal(
+                                        agreement,
+                                        "LANDLORD"
+                                      )
+                                    }
+                                  >
+                                    <ShieldCheck
+                                      size={
+                                        15
+                                      }
+                                    />
+
+                                    USSD Verify
+                                  </button>
+
+                                )}
+
+                                {agreement.backendStatus ===
+                                  "PENDING_SERVICE_FEE" && (
+
+                                  <button
+                                    type="button"
+                                    className="agreement-primary-button"
+                                    style={{
+                                      height:
+                                        "36px",
+                                      padding:
+                                        "0 10px",
+                                    }}
+                                    onClick={() =>
+                                      openPaymentModal(
+                                        agreement
+                                      )
+                                    }
+                                  >
+                                    <CreditCard
+                                      size={
+                                        15
+                                      }
+                                    />
+
+                                    50 ETB Fee
+                                  </button>
+
+                                )}
+
+
+                              </div>
+
+                            </td>
+
+                          </tr>
+
+                        )
+                      )
+
+                    ) : (
+
+                      <tr>
+
+                        <td
+                          colSpan={
+                            8
+                          }
+                          className="agreements-empty-cell"
+                        >
+
+                          <div className="agreements-empty-state">
+
+                            <div className="agreements-empty-icon">
+
+                              <FileText
+                                size={
+                                  27
+                                }
+                              />
+
+                            </div>
+
+                            <h3>
+
+                              {searchQuery
+                                ? "No agreements found"
+                                : "No rental agreements yet"}
+
+                            </h3>
+
+                            <p>
+
+                              {searchQuery
+                                ? `No agreement matches "${searchQuery}".`
+                                : "Create your first rental agreement to start managing rental records."}
+
+                            </p>
+
+                            {!searchQuery && (
+
+                              <button
+                                type="button"
+                                className="agreement-primary-button"
+                                onClick={() =>
+                                  setIsCreateModalOpen(
+                                    true
+                                  )
+                                }
+                              >
+                                <FileText
+                                  size={
+                                    17
+                                  }
+                                />
+
+                                Create Agreement
+                              </button>
+
+                            )}
+
+                          </div>
+
+                        </td>
+
+                      </tr>
+
+                    )}
+
+                  </tbody>
+
+                </table>
+
               </div>
 
-              <button
-                type="button"
-                className="modal-close-button"
-                onClick={() =>
-                  setSelectedAgreement(null)
-                }
-                aria-label="Close agreement details"
-              >
-                <X size={21} />
-              </button>
-            </div>
+            </section>
 
-            <div className="agreement-view-body">
-              <div className="agreement-view-status-row">
-                <span>Status</span>
+          </main>
 
-                <span
-                  className={`agreement-status-badge agreement-status-${selectedAgreement.status.toLowerCase()}`}
-                >
-                  {getStatusIcon(
-                    selectedAgreement.status
-                  )}
+        </div>
 
-                  {selectedAgreement.status}
-                </span>
-              </div>
+        {/* =================================================
+            CREATE AGREEMENT
+        ================================================= */}
 
-              <div className="agreement-detail-grid">
+        {isCreateModalOpen && (
+          <CreateAgreement
+            onClose={
+              handleCreateClose
+            }
+          />
+        )}
+
+        {/* =================================================
+            VIEW AGREEMENT
+        ================================================= */}
+
+        {selectedAgreement && (
+
+          <div
+            className="agreement-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+          >
+
+            <div className="agreement-view-modal">
+
+              <div className="agreement-modal-header">
+
                 <div>
-                  <span>Reference Number</span>
-                  <strong>
+
+                  <span className="agreement-modal-eyebrow">
+                    AGREEMENT DETAILS
+                  </span>
+
+                  <h2>
+                    Rental Agreement
+                  </h2>
+
+                  <p>
                     {
                       selectedAgreement.referenceNumber
                     }
-                  </strong>
+                  </p>
+
                 </div>
 
-                <div>
-                  <span>Monthly Rent</span>
-                  <strong>
-                    {selectedAgreement.monthlyRent.toLocaleString()}{" "}
-                    ETB
-                  </strong>
-                </div>
+                <button
+                  type="button"
+                  className="modal-close-button"
+                  onClick={() =>
+                    setSelectedAgreement(
+                      null
+                    )
+                  }
+                  aria-label="Close"
+                >
+                  <X
+                    size={
+                      21
+                    }
+                  />
+                </button>
 
-                <div>
-                  <span>Landlord</span>
-                  <strong>
-                    {selectedAgreement.landlord}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Tenant</span>
-                  <strong>
-                    {selectedAgreement.tenant}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Property</span>
-                  <strong>
-                    {selectedAgreement.property}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Location</span>
-                  <strong>
-                    {selectedAgreement.location}
-                  </strong>
-                </div>
-
-                {selectedAgreement.startDate && (
-                  <div>
-                    <span>Start Date</span>
-                    <strong>
-                      {selectedAgreement.startDate}
-                    </strong>
-                  </div>
-                )}
-
-                {selectedAgreement.endDate && (
-                  <div>
-                    <span>End Date</span>
-                    <strong>
-                      {selectedAgreement.endDate}
-                    </strong>
-                  </div>
-                )}
-
-                {selectedAgreement.paymentMethod && (
-                  <div>
-                    <span>Payment Method</span>
-                    <strong>
-                      {
-                        selectedAgreement.paymentMethod
-                      }
-                    </strong>
-                  </div>
-                )}
               </div>
 
-              {selectedAgreement.notes && (
-                <div className="agreement-detail-notes">
-                  <span>Additional Notes</span>
-                  <p>{selectedAgreement.notes}</p>
+              <div className="agreement-view-body">
+
+                {/* STATUS */}
+
+                <div className="agreement-view-status-row">
+
+                  <span>
+                    Agreement Status
+                  </span>
+
+                  <span
+                    className={`agreement-status-badge ${getStatusClass(
+                      selectedAgreement.status
+                    )}`}
+                  >
+                    {getStatusIcon(
+                      selectedAgreement.status
+                    )}
+
+                    {
+                      selectedAgreement.status
+                    }
+                  </span>
+
                 </div>
-              )}
+
+                {/* WORKFLOW */}
+
+                <div
+                  style={{
+                    marginBottom:
+                      "20px",
+                    padding:
+                      "15px 16px",
+                    background:
+                      "#f8fcfb",
+                    border:
+                      "1px solid #dceae6",
+                    borderRadius:
+                      "10px",
+                  }}
+                >
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      fontSize:
+                        "11px",
+                      fontWeight:
+                        700,
+                      color:
+                        "#788991",
+                      letterSpacing:
+                        "0.06em",
+                    }}
+                  >
+                    WORKFLOW
+                  </span>
+
+                  <strong
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "5px",
+                      color:
+                        "#25343a",
+                    }}
+                  >
+                    {selectedAgreement.backendStatus ===
+                    "PENDING_VERIFICATION"
+                      ? "Waiting for landlord and tenant USSD consent."
+                      : selectedAgreement.backendStatus ===
+                          "PENDING_SERVICE_FEE"
+                        ? "USSD consent completed. Service fee is required."
+                        : selectedAgreement.backendStatus ===
+                            "APPROVED"
+                          ? "Agreement approved and awaiting activation workflow."
+                          : selectedAgreement.backendStatus ===
+                              "ACTIVE"
+                            ? "Agreement is active."
+                            : selectedAgreement.backendStatus ===
+                                "REJECTED"
+                              ? "Agreement was rejected."
+                              : "Agreement workflow in progress."}
+                  </strong>
+
+                </div>
+
+                {/* DETAILS */}
+
+                <div className="agreement-detail-grid">
+
+                  <div>
+
+                    <span>
+                      Reference Number
+                    </span>
+
+                    <strong>
+                      {
+                        selectedAgreement.referenceNumber
+                      }
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Monthly Rent
+                    </span>
+
+                    <strong>
+                      {formatMoney(
+                        selectedAgreement.monthlyRent
+                      )}{" "}
+                      ETB
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Landlord
+                    </span>
+
+                    <strong>
+                      {
+                        selectedAgreement.landlord
+                      }
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Landlord Phone
+                    </span>
+
+                    <strong>
+                      {
+                        selectedAgreement.landlordPhone ||
+                        "—"
+                      }
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Tenant
+                    </span>
+
+                    <strong>
+                      {
+                        selectedAgreement.tenant
+                      }
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Tenant Phone
+                    </span>
+
+                    <strong>
+                      {
+                        selectedAgreement.tenantPhone ||
+                        "—"
+                      }
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Property
+                    </span>
+
+                    <strong>
+                      {
+                        selectedAgreement.property
+                      }
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Location
+                    </span>
+
+                    <strong>
+                      {
+                        selectedAgreement.location
+                      }
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Duration
+                    </span>
+
+                    <strong>
+                      {selectedAgreement.durationValue
+                        ? `${selectedAgreement.durationValue} ${
+                            selectedAgreement.durationUnit ||
+                            ""
+                          }`
+                        : "—"}
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Start Date
+                    </span>
+
+                    <strong>
+                      {
+                        selectedAgreement.startDate ||
+                        "—"
+                      }
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      End Date
+                    </span>
+
+                    <strong>
+                      {
+                        selectedAgreement.endDate ||
+                        "—"
+                      }
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span>
+                      Created
+                    </span>
+
+                    <strong>
+                      {formatDateTime(
+                        selectedAgreement.createdAt
+                      )}
+                    </strong>
+
+                  </div>
+
+                  {selectedAgreement.createdByOfficerName && (
+
+                    <div>
+
+                      <span>
+                        Processed By
+                      </span>
+
+                      <strong>
+                        {
+                          selectedAgreement.createdByOfficerName
+                        }
+                      </strong>
+
+                    </div>
+
+                  )}
+
+                  {selectedAgreement.createdByOfficerEmployeeId && (
+
+                    <div>
+
+                      <span>
+                        Employee ID
+                      </span>
+
+                      <strong>
+                        {
+                          selectedAgreement.createdByOfficerEmployeeId
+                        }
+                      </strong>
+
+                    </div>
+
+                  )}
+
+                </div>
+
+                {/* USSD STATUS */}
+
+                <div
+                  style={{
+                    marginTop:
+                      "20px",
+                    padding:
+                      "16px",
+                    border:
+                      "1px solid #e4ebe8",
+                    borderRadius:
+                      "10px",
+                  }}
+                >
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      fontSize:
+                        "11px",
+                      fontWeight:
+                        700,
+                      color:
+                        "#788991",
+                      letterSpacing:
+                        "0.06em",
+                    }}
+                  >
+                    USSD CONSENT
+                  </span>
+
+                  <div
+                    style={{
+                      display:
+                        "grid",
+                      gridTemplateColumns:
+                        "repeat(2, minmax(0, 1fr))",
+                      gap:
+                        "12px",
+                      marginTop:
+                        "12px",
+                    }}
+                  >
+
+                    {/* LANDLORD */}
+
+                    <div
+                      style={{
+                        padding:
+                          "12px",
+                        border:
+                          "1px solid #edf1ef",
+                        borderRadius:
+                          "8px",
+                      }}
+                    >
+
+                      <strong>
+                        Landlord
+                      </strong>
+
+                      <span
+                        style={{
+                          display:
+                            "block",
+                          marginTop:
+                            "5px",
+                          fontSize:
+                            "12px",
+                          color:
+                            "#788991",
+                        }}
+                      >
+                        {
+                          selectedAgreement
+                            .verifications
+                            ?.landlord
+                            ?.status ||
+                          "Not available"
+                        }
+                      </span>
+
+                      {selectedAgreement.backendStatus ===
+                        "PENDING_VERIFICATION" && (
+
+                        <button
+                          type="button"
+                          className="agreement-secondary-button"
+                          style={{
+                            marginTop:
+                              "10px",
+                            height:
+                              "34px",
+                            padding:
+                              "0 10px",
+                          }}
+                          onClick={() => {
+                            setSelectedAgreement(
+                              null
+                            );
+
+                            openVerificationModal(
+                              selectedAgreement,
+                              "LANDLORD"
+                            );
+                          }}
+                        >
+                          <ShieldCheck
+                            size={
+                              14
+                            }
+                          />
+
+                          Verify
+                        </button>
+
+                      )}
+
+                    </div>
+
+                    {/* TENANT */}
+
+                    <div
+                      style={{
+                        padding:
+                          "12px",
+                        border:
+                          "1px solid #edf1ef",
+                        borderRadius:
+                          "8px",
+                      }}
+                    >
+
+                      <strong>
+                        Tenant
+                      </strong>
+
+                      <span
+                        style={{
+                          display:
+                            "block",
+                          marginTop:
+                            "5px",
+                          fontSize:
+                            "12px",
+                          color:
+                            "#788991",
+                        }}
+                      >
+                        {
+                          selectedAgreement
+                            .verifications
+                            ?.tenant
+                            ?.status ||
+                          "Not available"
+                        }
+                      </span>
+
+                      {selectedAgreement.backendStatus ===
+                        "PENDING_VERIFICATION" && (
+
+                        <button
+                          type="button"
+                          className="agreement-secondary-button"
+                          style={{
+                            marginTop:
+                              "10px",
+                            height:
+                              "34px",
+                            padding:
+                              "0 10px",
+                          }}
+                          onClick={() => {
+                            setSelectedAgreement(
+                              null
+                            );
+
+                            openVerificationModal(
+                              selectedAgreement,
+                              "TENANT"
+                            );
+                          }}
+                        >
+                          <ShieldCheck
+                            size={
+                              14
+                            }
+                          />
+
+                          Verify
+                        </button>
+
+                      )}
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+                {/* SERVICE FEE */}
+
+                <div
+                  style={{
+                    marginTop:
+                      "20px",
+                    padding:
+                      "16px",
+                    border:
+                      "1px solid #e4ebe8",
+                    borderRadius:
+                      "10px",
+                    background:
+                      "#fbfdfc",
+                  }}
+                >
+
+                  <div
+                    style={{
+                      display:
+                        "flex",
+                      justifyContent:
+                        "space-between",
+                      alignItems:
+                        "center",
+                      gap:
+                        "12px",
+                    }}
+                  >
+
+                    <div>
+
+                      <span
+                        style={{
+                          display:
+                            "block",
+                          fontSize:
+                            "11px",
+                          fontWeight:
+                            700,
+                          color:
+                            "#788991",
+                        }}
+                      >
+                        SERVICE FEE
+                      </span>
+
+                      <strong
+                        style={{
+                          display:
+                            "block",
+                          marginTop:
+                            "5px",
+                          fontSize:
+                            "18px",
+                          color:
+                            "#008f78",
+                        }}
+                      >
+                        {formatMoney(
+                          selectedAgreement.serviceFeeAmount ??
+                            50
+                        )}{" "}
+                        ETB
+                      </strong>
+
+                    </div>
+
+                    <span
+                      className={`agreement-status-badge ${
+                        selectedAgreement.serviceFeeStatus ===
+                        "PAID"
+                          ? "agreement-status-approved"
+                          : "agreement-status-pending"
+                      }`}
+                    >
+                      {
+                        selectedAgreement.serviceFeeStatus ||
+                        "N/A"
+                      }
+                    </span>
+
+                  </div>
+
+                  {selectedAgreement.backendStatus ===
+                    "PENDING_SERVICE_FEE" && (
+
+                    <button
+                      type="button"
+                      className="agreement-primary-button"
+                      style={{
+                        marginTop:
+                          "14px",
+                      }}
+                      onClick={() => {
+                        setSelectedAgreement(
+                          null
+                        );
+
+                        openPaymentModal(
+                          selectedAgreement
+                        );
+                      }}
+                    >
+                      <CreditCard
+                        size={
+                          16
+                        }
+                      />
+
+                      Process 50 ETB Service Fee
+                    </button>
+
+                  )}
+
+                </div>
+
+              </div>
+
+              <div className="agreement-modal-footer">
+
+                                <button
+                  type="button"
+                  className="agreement-secondary-button"
+                  onClick={() =>
+                    setSelectedAgreement(
+                      null
+                    )
+                  }
+                >
+                  Close
+                </button>
+
+              </div>
+
             </div>
 
-            <div className="agreement-modal-footer">
-              <button
-                type="button"
-                className="agreement-secondary-button"
-                onClick={() =>
-                  setSelectedAgreement(null)
-                }
-              >
-                Close
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
-};
+
+        )}
+
+        {/* =================================================
+            USSD VERIFICATION MODAL
+        ================================================= */}
+
+        {verificationModalOpen &&
+          verificationAgreement && (
+
+          <div
+            className="agreement-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(
+              event
+            ) => {
+              if (
+                event.target ===
+                event.currentTarget
+              ) {
+                closeVerificationModal();
+              }
+            }}
+          >
+
+            <div className="agreement-view-modal">
+
+              <div className="agreement-modal-header">
+
+                <div>
+
+                  <span className="agreement-modal-eyebrow">
+                    USSD CONSENT
+                  </span>
+
+                  <h2>
+                    Verify{" "}
+                    {
+                      verificationParty ===
+                      "LANDLORD"
+                        ? "Landlord"
+                        : "Tenant"
+                    }
+                  </h2>
+
+                  <p>
+                    {
+                      verificationAgreement.referenceNumber
+                    }
+                  </p>
+
+                </div>
+
+                <button
+                  type="button"
+                  className="modal-close-button"
+                  onClick={
+                    closeVerificationModal
+                  }
+                  disabled={
+                    verificationLoading
+                  }
+                >
+                  <X
+                    size={
+                      21
+                    }
+                  />
+                </button>
+
+              </div>
+
+              <div className="agreement-view-body">
+
+                <div
+                  style={{
+                    padding:
+                      "16px",
+                    border:
+                      "1px solid #dceae6",
+                    borderRadius:
+                      "10px",
+                    background:
+                      "#f8fcfb",
+                    marginBottom:
+                      "18px",
+                  }}
+                >
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      fontSize:
+                        "11px",
+                      fontWeight:
+                        700,
+                      color:
+                        "#788991",
+                    }}
+                  >
+                    REGISTERED PHONE
+                  </span>
+
+                  <strong
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "5px",
+                      color:
+                        "#25343a",
+                    }}
+                  >
+                    {verificationParty ===
+                    "LANDLORD"
+                      ? verificationAgreement.landlordPhone ||
+                        "Not available"
+                      : verificationAgreement.tenantPhone ||
+                        "Not available"}
+                  </strong>
+
+                  <p
+                    style={{
+                      margin:
+                        "8px 0 0",
+                      color:
+                        "#53636c",
+                      fontSize:
+                        "13px",
+                      lineHeight:
+                        1.6,
+                    }}
+                  >
+                    Enter the 6-digit USSD
+                    consent code provided to the{" "}
+                    {verificationParty.toLowerCase()}.
+                  </p>
+
+                </div>
+
+                <form
+                  onSubmit={
+                    handleVerifyConsent
+                  }
+                >
+
+                  <div className="form-group">
+
+                    <label htmlFor="ussd-code">
+                      Verification Code
+                    </label>
+
+                    <input
+                      id="ussd-code"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={
+                        6
+                      }
+                      autoFocus
+                      value={
+                        verificationCode
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setVerificationCode(
+                          event.target.value
+                            .replace(
+                              /\D/g,
+                              ""
+                            )
+                            .slice(
+                              0,
+                              6
+                            )
+                        )
+                      }
+                      placeholder="Enter 6-digit code"
+                      disabled={
+                        verificationLoading
+                      }
+                    />
+
+                  </div>
+
+                  {verificationError && (
+
+                    <div
+                      className="alert alert-error"
+                      role="alert"
+                    >
+                      {
+                        verificationError
+                      }
+                    </div>
+
+                  )}
+
+                  {verificationMessage && (
+
+                    <div
+                      className="alert alert-success"
+                      role="status"
+                    >
+                      {
+                        verificationMessage
+                      }
+                    </div>
+
+                  )}
+
+                  <div
+                    style={{
+                      display:
+                        "flex",
+                      justifyContent:
+                        "space-between",
+                      gap:
+                        "10px",
+                      marginTop:
+                        "20px",
+                    }}
+                  >
+
+                    <button
+                      type="button"
+                      className="agreement-secondary-button"
+                      onClick={handleResendConsent}
+                      disabled={verificationLoading}
+                    >
+                      {verificationLoading ? "Sending..." : "Resend code"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="agreement-secondary-button"
+                      onClick={
+                        closeVerificationModal
+                      }
+                      disabled={
+                        verificationLoading
+                      }
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="agreement-primary-button"
+                      disabled={
+                        verificationLoading ||
+                        verificationCode.length !==
+                          6
+                      }
+                    >
+                      <ShieldCheck
+                        size={
+                          16
+                        }
+                      />
+
+                      {verificationLoading
+                        ? "Verifying..."
+                        : "Verify Consent"}
+                    </button>
+
+                  </div>
+
+                </form>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
+
+        {/* =================================================
+            SERVICE FEE MODAL
+        ================================================= */}
+
+        {paymentModalOpen &&
+          paymentAgreement && (
+
+          <div
+            className="agreement-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(
+              event
+            ) => {
+              if (
+                event.target ===
+                event.currentTarget
+              ) {
+                closePaymentModal();
+              }
+            }}
+          >
+
+            <div className="agreement-view-modal">
+
+              <div className="agreement-modal-header">
+
+                <div>
+
+                  <span className="agreement-modal-eyebrow">
+                    SERVICE FEE
+                  </span>
+
+                  <h2>
+                    Process Payment
+                  </h2>
+
+                  <p>
+                    {
+                      paymentAgreement.referenceNumber
+                    }
+                  </p>
+
+                </div>
+
+                <button
+                  type="button"
+                  className="modal-close-button"
+                  onClick={
+                    closePaymentModal
+                  }
+                  disabled={
+                    paymentLoading
+                  }
+                >
+                  <X
+                    size={
+                      21
+                    }
+                  />
+                </button>
+
+              </div>
+
+              <div className="agreement-view-body">
+
+                <div
+                  style={{
+                    textAlign:
+                      "center",
+                    padding:
+                      "20px",
+                    border:
+                      "1px solid #dceae6",
+                    borderRadius:
+                      "12px",
+                    background:
+                      "#f8fcfb",
+                    marginBottom:
+                      "20px",
+                  }}
+                >
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      fontSize:
+                        "11px",
+                      fontWeight:
+                        700,
+                      color:
+                        "#788991",
+                    }}
+                  >
+                    GOVERNMENT SERVICE FEE
+                  </span>
+
+                  <strong
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "6px",
+                      fontSize:
+                        "32px",
+                      color:
+                        "#008f78",
+                    }}
+                  >
+                    {formatMoney(
+                      paymentAgreement.serviceFeeAmount ??
+                        50
+                    )}{" "}
+                    ETB
+                  </strong>
+
+                  <p
+                    style={{
+                      margin:
+                        "8px 0 0",
+                      color:
+                        "#53636c",
+                      fontSize:
+                        "13px",
+                    }}
+                  >
+                    Enter the payment PIN for the
+                    service-fee transaction.
+                  </p>
+
+                </div>
+
+                <div
+                  style={{
+                    marginBottom:
+                      "18px",
+                    padding:
+                      "14px 16px",
+                    border:
+                      "1px solid #e7ecea",
+                    borderRadius:
+                      "9px",
+                  }}
+                >
+
+                  <span
+                    style={{
+                      display:
+                        "block",
+                      fontSize:
+                        "11px",
+                      fontWeight:
+                        700,
+                      color:
+                        "#788991",
+                    }}
+                  >
+                    TENANT
+                  </span>
+
+                  <strong
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "5px",
+                    }}
+                  >
+                    {
+                      paymentAgreement.tenant
+                    }
+                  </strong>
+
+                  <small
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "4px",
+                      color:
+                        "#788991",
+                    }}
+                  >
+                    {
+                      paymentAgreement.tenantPhone ||
+                      "Phone not available"
+                    }
+                  </small>
+
+                </div>
+
+                <form
+                  onSubmit={
+                    handlePayServiceFee
+                  }
+                >
+
+                  <div className="form-group">
+
+                    <label htmlFor="payment-pin">
+                      Payment PIN
+                    </label>
+
+                    <input
+                      id="payment-pin"
+                      type="password"
+                      inputMode="numeric"
+                      value={
+                        paymentPin
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setPaymentPin(
+                          event.target.value
+                            .replace(
+                              /\D/g,
+                              ""
+                            )
+                            .slice(
+                              0,
+                              10
+                            )
+                        )
+                      }
+                      placeholder="Enter payment PIN"
+                      autoFocus
+                      disabled={
+                        paymentLoading
+                      }
+                    />
+
+                    <small
+                      style={{
+                        display:
+                          "block",
+                        marginTop:
+                          "6px",
+                        color:
+                          "#788991",
+                      }}
+                    >
+                      For your current development
+                      backend, the configured test
+                      PIN is 1234.
+                    </small>
+
+                  </div>
+
+                  {paymentError && (
+
+                    <div
+                      className="alert alert-error"
+                      role="alert"
+                    >
+                      {
+                        paymentError
+                      }
+                    </div>
+
+                  )}
+
+                  {paymentMessage && (
+
+                    <div
+                      className="alert alert-success"
+                      role="status"
+                    >
+                      {
+                        paymentMessage
+                      }
+                    </div>
+
+                  )}
+
+                  <div
+                    style={{
+                      display:
+                        "flex",
+                      justifyContent:
+                        "space-between",
+                      gap:
+                        "10px",
+                      marginTop:
+                        "20px",
+                    }}
+                  >
+
+                    <button
+                      type="button"
+                      className="agreement-secondary-button"
+                      onClick={
+                        closePaymentModal
+                      }
+                      disabled={
+                        paymentLoading
+                      }
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="agreement-primary-button"
+                      disabled={
+                        paymentLoading ||
+                        !paymentPin
+                      }
+                    >
+                      <CreditCard
+                        size={
+                          16
+                        }
+                      />
+
+                      {paymentLoading
+                        ? "Processing..."
+                        : "Pay 50 ETB"}
+                    </button>
+
+                  </div>
+
+                </form>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
+
+      </div>
+    );
+  };
 
 export default RentalAgreements;

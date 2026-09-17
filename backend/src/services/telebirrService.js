@@ -1,9 +1,6 @@
 const axios = require('axios');
 
-/**
- * Telebirr Provider Integration Layer
- * Connects to external Telebirr API (or Provider Simulator in development / staging)
- */
+// Telebirr provider integration layer
 const initiatePayment = async ({
     paymentId,
     amount,
@@ -61,7 +58,7 @@ const initiatePayment = async ({
         }
     }
 
-    // Fallback only if PROVIDER_SIMULATOR_URL is explicitly not configured
+    // Fallback offline mock response
     return {
         success: true,
         provider: 'TELEBIRR',

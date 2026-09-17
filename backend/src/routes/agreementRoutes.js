@@ -7,6 +7,7 @@ const { validate } = require('../middleware/validate');
 const {
   createAgreementSchema,
   verifyCodeSchema,
+  resendAgreementCodeSchema,
   paymentSchema
 } = require('../validations/schemas');
 
@@ -20,6 +21,13 @@ router.post(
   authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
   validate(createAgreementSchema),
   agreementController.createAgreement
+);
+
+router.post(
+  '/:id/resend-verification',
+  authorizeRoles('OFFICER', 'OFFICE_ADMIN'),
+  validate(resendAgreementCodeSchema),
+  agreementController.resendVerificationCode
 );
 
 // Verify USSD consent code

@@ -424,7 +424,7 @@ const createAgreement = async (data, userId, officerId, officeId) => {
   return {
     requiresVerification: false,
     agreement: agreementDTO({ ...agreement, verifications: [] }),
-    message: 'Agreement created. USSD verification codes sent to landlord and tenant.'
+    message: 'Agreement created. Verification codes sent by SMS to the landlord and tenant.'
   };
 };
 
@@ -449,8 +449,7 @@ const verifyAgreementCode = async (agreementId, phone, code) => {
   }
 
   if (verification.expiresAt <= new Date()) {
-    await rollbackAgreement(agreementId, 'USSD signature code expired');
-    throw new Error('USSD verification code expired. Please start over.');
+    throw new Error('USSD verification code expired. Request a new code and try again.');
   }
 
   const isMatch = await bcrypt.compare(code, verification.codeHash);
@@ -527,6 +526,42 @@ const verifyAgreementCode = async (agreementId, phone, code) => {
 // ============================================
 // PROCESS SERVICE FEE PAYMENT
 // ============================================
+
+const resendAgreementVerificationCode = async (agreementId, party) => {
+  const verification = await prisma.agreementVerification.findUnique({
+    where: {
+      agreementId_party: { agreementId, party }
+    }
+  });
+
+  if (!verification || verification.status !== 'PENDING') {
+    throw new Error('A pending verification code was not found for this party.');
+  }
+
+  const code = generateVerificationCode();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const smsResult = await afroSMSService.sendUSSDVerification(
+    verification.phoneNumber,
+    agreementId,
+    code,
+    expiresAt
+  );
+
+  await prisma.agreementVerification.update({
+    where: { verificationId: verification.verificationId },
+    data: {
+      codeHash: await hashCode(code),
+      expiresAt,
+      attempts: 0,
+      resendCount: { increment: 1 }
+    }
+  });
+
+  return {
+    message: `A new ${party.toLowerCase()} verification code was sent.`,
+    messageId: smsResult.messageId
+  };
+};
 
 const processServiceFeePayment = async (agreementId, phone, pin) => {
   console.log('=== PROCESS SERVICE FEE PAYMENT ===');
@@ -659,6 +694,7 @@ const autoApproveAgreement = async (agreementId, officerUserId, comments = null)
 module.exports = {
   createAgreement,
   verifyAgreementCode,
+  resendAgreementVerificationCode,
   processServiceFeePayment,
   getAgreementById,
   approveAgreement,

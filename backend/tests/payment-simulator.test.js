@@ -5,9 +5,7 @@ const prisma = require('../src/config/db');
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
 const SIMULATOR_URL = process.env.SIMULATOR_URL || process.env.BACKEND_URL || 'http://localhost:5000';
 
-/**
- * Poll payment status until expected status or timeout
- */
+// Poll payment status until expected status or timeout
 async function waitForPaymentStatus(paymentId, expectedStatus, timeoutMs = 8000) {
   const startTime = Date.now();
   while (Date.now() - startTime < timeoutMs) {

@@ -16,9 +16,7 @@ function logSimulation(entry) {
   }
 }
 
-/**
- * Dispatch the webhook HTTP request to SmartRent backend
- */
+// Send webhook HTTP request to backend
 async function sendWebhook(targetUrl, payload) {
   const signature = generateSignature(payload);
   
@@ -54,9 +52,7 @@ async function sendWebhook(targetUrl, payload) {
   }
 }
 
-/**
- * Schedule an asynchronous provider callback
- */
+// Schedule asynchronous simulated provider callback
 function scheduleCallback({
   paymentId,
   transactionReference,
