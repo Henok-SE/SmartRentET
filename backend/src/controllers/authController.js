@@ -1,3 +1,4 @@
+const jwt = require('jsonwebtoken');
 const authService = require('../services/authService');
 const { userDTO } = require('../utils/userUtils');
 
@@ -100,6 +101,47 @@ const verifyOTP = async (req, res) => {
 // ============================================
 // CHANGE PASSWORD
 // ============================================
+
+const refreshSession = async (req, res) => {
+  try {
+    const sessionId = req.session?.sessionId || req.user?.sessionId;
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    const result = await authService.refreshSession(sessionId);
+    const secret = process.env.JWT_SECRET || 'smartrent_fallback_secret';
+    const token = jwt.sign(
+      {
+        userId: req.user.userId,
+        username: req.user.username,
+        role: req.user.role,
+        sessionId: sessionId
+      },
+      secret,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Session refreshed successfully',
+      data: {
+        token,
+        sessionId: sessionId,
+        expiresAt: result.expiresAt
+      }
+    });
+  } catch (error) {
+    console.error('Refresh session error:', error);
+    res.status(401).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
 
 const changePassword = async (req, res) => {
   try {
@@ -380,6 +422,7 @@ const register = async (req, res) => {
 module.exports = {
   login,
   verifyOTP,
+  refreshSession,
   changePassword,
   createOfficeAdmin,
   createOfficer,

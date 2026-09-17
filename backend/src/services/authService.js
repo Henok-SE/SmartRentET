@@ -240,6 +240,18 @@ const verifyOTP = async (userId, code) => {
 // CHANGE PASSWORD
 // ============================================
 
+const refreshSession = async (sessionId) => {
+  if (!sessionId) {
+    throw new Error('Session ID is required');
+  }
+
+  const result = await sessionService.refreshSession(sessionId);
+  return {
+    sessionId: result.session.sessionId,
+    expiresAt: result.expiresAt
+  };
+};
+
 const changePassword = async (userId, currentPassword, newPassword) => {
   try {
     console.log('=== CHANGE PASSWORD ===');
@@ -908,6 +920,7 @@ const registerUser = async (userData) => {
 module.exports = {
   loginUser,
   verifyOTP,
+  refreshSession,
   changePassword,
   createOfficeAdmin,
   createOfficer,

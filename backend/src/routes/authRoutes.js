@@ -29,6 +29,7 @@ router.post('/verify-national-id', authController.verifyNationalId);
 // ============================================
 
 router.get('/me', authenticateToken, authController.getMe);
+router.post('/refresh-session', authenticateToken, authController.refreshSession);
 router.post('/update-username', authenticateToken, authController.updateUsername);
 
 // ============================================

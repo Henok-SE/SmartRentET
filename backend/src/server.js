@@ -25,6 +25,7 @@ const officeRoutes = require('./routes/officeRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const simulationRoutes = require('./simulator/routes/simulationRoutes');
 const errorHandler = require('./middleware/errorHandler');
+const { authenticateToken } = require('./middleware/auth');
 const ApiResponse = require('./utils/apiResponse');
 
 // ============================================
@@ -45,10 +46,10 @@ app.get('/', (req, res) => {
 
 // Mount core API routes
 app.use('/api/auth', authRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/agreements', agreementRoutes);
-app.use('/api/approvals', approvalRoutes);
-app.use('/api/offices', officeRoutes);
+app.use('/api/dashboard', authenticateToken, dashboardRoutes);
+app.use('/api/agreements', authenticateToken, agreementRoutes);
+app.use('/api/approvals', authenticateToken, approvalRoutes);
+app.use('/api/offices', authenticateToken, officeRoutes);
 app.use('/api/payments', paymentRoutes);
 
 // Mount provider simulator routes

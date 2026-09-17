@@ -578,7 +578,9 @@ const processServiceFeePayment = async (agreementId, phone, pin) => {
     throw new Error('Service fee already paid');
   }
 
-  if (pin !== '1234') {
+  const isValidSandboxPin = /^\d{6}$/.test(String(pin));
+
+  if (!isValidSandboxPin) {
     const attempts = await prisma.auditLog.count({
       where: {
         entityType: 'SERVICE_FEE_PAYMENT',
@@ -605,7 +607,7 @@ const processServiceFeePayment = async (agreementId, phone, pin) => {
       throw new Error('Too many failed PIN attempts. Agreement cancelled.');
     }
 
-    throw new Error(`Invalid PIN. ${MAX_PAYMENT_ATTEMPTS - attemptCount} attempts remaining.`);
+    throw new Error(`Invalid PIN. Must be 6 digits. ${MAX_PAYMENT_ATTEMPTS - attemptCount} attempts remaining.`);
   }
 
   await prisma.serviceFeePayment.update({

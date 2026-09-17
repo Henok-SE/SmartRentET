@@ -5,11 +5,10 @@ const jwt = require('jsonwebtoken');
 const createSession = async (userId, userData) => {
   const sessionId = crypto.randomUUID ? crypto.randomUUID() : require('uuid').v4();
   const secret = process.env.JWT_SECRET || 'smartrent_fallback_secret';
-  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+  const expiresIn = process.env.JWT_EXPIRES_IN || '1h';
 
   const expiresAt = new Date();
-  const days = parseInt(expiresIn) || 7;
-  expiresAt.setDate(expiresAt.getDate() + days);
+  expiresAt.setHours(expiresAt.getHours() + 1);
 
   const token = jwt.sign(
     {
@@ -58,6 +57,18 @@ const revokeSession = async (sessionId) => {
   });
 };
 
+const refreshSession = async (sessionId) => {
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 1);
+
+  const session = await prisma.session.update({
+    where: { sessionId: sessionId },
+    data: { expiresAt: expiresAt }
+  });
+
+  return { session, expiresAt };
+};
+
 const getActiveSessions = async (userId) => {
   return prisma.session.findMany({
     where: {
@@ -86,8 +97,8 @@ const cleanupExpiredSessions = async () => {
 
 module.exports = {
   createSession,
-  revokeSession, 
-  revokeSession, 
+  refreshSession,
+  revokeSession,
   revokeAllSessions,
   getActiveSessions,
   cleanupExpiredSessions

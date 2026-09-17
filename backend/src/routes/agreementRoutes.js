@@ -12,11 +12,6 @@ const {
 } = require('../validations/schemas');
 
 // ============================================
-// ALL ROUTES - Authentication required
-// ============================================
-router.use(authenticateToken);
-
-// ============================================
 // AGREEMENT OPERATIONS - Officers and Office Admins
 // ============================================
 

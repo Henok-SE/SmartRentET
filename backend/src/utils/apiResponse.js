@@ -39,10 +39,10 @@ class ApiResponse {
      * @param {string} options.code - Machine-readable error code
      * @param {any} options.details - Optional validation or error details
      */
-    static error(res, { message = 'An unexpected error occurred', statusCode = 500, code = 'INTERNAL_ERROR', details = null } = {}) {
+    static error(res, { message = 'Something went wrong. Please try again.', statusCode = 500, code = 'INTERNAL_ERROR', details = null } = {}) {
         const responsePayload = {
             success: false,
-            error: message, // Top-level string for client backward compatibility
+            error: message,
             errorDetails: {
                 code,
                 message,

@@ -5,11 +5,6 @@ const { authenticateToken } = require('../middleware/auth');
 const { authorizeRoles } = require('../middleware/role');
 
 // ============================================
-// ALL ROUTES - Authentication required
-// ============================================
-router.use(authenticateToken);
-
-// ============================================
 // ROUTES - Officers, Office Admins, Super Admins
 // ============================================
 

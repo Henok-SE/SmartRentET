@@ -27,15 +27,15 @@ const errorHandler = (err, req, res, next) => {
     if (err.code === 'P2002') {
         const target = err.meta?.target || ['field'];
         const field = Array.isArray(target) ? target[0] : target;
-        
+
         const friendlyMessages = {
-            'username': 'Username already taken',
-            'officeCode': 'Office code already exists',
-            'referenceNumber': 'Reference number already exists',
-            'payment_provider_transactionReference_key': 'Transaction reference already recorded for this provider'
+            username: 'This username is already in use.',
+            officeCode: 'This office code is already in use.',
+            referenceNumber: 'This reference number has already been used.',
+            payment_provider_transactionReference_key: 'This payment reference was already recorded.'
         };
 
-        const message = friendlyMessages[field] || `${field} already exists`;
+        const message = friendlyMessages[field] || 'This information is already in use.';
         return ApiResponse.error(res, {
             message,
             statusCode: 409,
@@ -46,7 +46,7 @@ const errorHandler = (err, req, res, next) => {
 
     if (err.code === 'P2025') {
         return ApiResponse.error(res, {
-            message: 'Requested record was not found in the database',
+            message: 'The requested record could not be found.',
             statusCode: 404,
             code: 'RESOURCE_NOT_FOUND'
         });
@@ -54,7 +54,7 @@ const errorHandler = (err, req, res, next) => {
 
     if (err.code === 'P2003') {
         return ApiResponse.error(res, {
-            message: 'Referenced foreign record does not exist or relation constraint failed',
+            message: 'The selected record is linked to something that cannot be changed right now.',
             statusCode: 400,
             code: 'FOREIGN_KEY_CONSTRAINT_VIOLATION'
         });
@@ -68,7 +68,7 @@ const errorHandler = (err, req, res, next) => {
         })) || [];
 
         return ApiResponse.error(res, {
-            message: err.details?.[0]?.message || 'Input validation failed',
+            message: err.details?.[0]?.message || 'Please check your information and try again.',
             statusCode: 400,
             code: 'VALIDATION_ERROR',
             details
@@ -78,7 +78,7 @@ const errorHandler = (err, req, res, next) => {
     // 4. JWT Errors
     if (err.name === 'JsonWebTokenError') {
         return ApiResponse.error(res, {
-            message: 'Invalid authentication token. Please login again.',
+            message: 'Your login session is invalid. Please sign in again.',
             statusCode: 401,
             code: 'INVALID_TOKEN'
         });
@@ -86,7 +86,7 @@ const errorHandler = (err, req, res, next) => {
 
     if (err.name === 'TokenExpiredError') {
         return ApiResponse.error(res, {
-            message: 'Your session has expired. Please login again.',
+            message: 'Your session has expired. Please sign in again.',
             statusCode: 401,
             code: 'TOKEN_EXPIRED'
         });
@@ -95,7 +95,7 @@ const errorHandler = (err, req, res, next) => {
     // 5. Common Express/Node Errors
     if (err.type === 'entity.parse.failed') {
         return ApiResponse.error(res, {
-            message: 'Malformed JSON payload received',
+            message: 'The information you sent is not in the correct format.',
             statusCode: 400,
             code: 'INVALID_JSON_BODY'
         });
@@ -103,7 +103,7 @@ const errorHandler = (err, req, res, next) => {
 
     // 6. Generic Fallback
     const statusCode = err.statusCode || 500;
-    const message = err.message || 'An unexpected internal server error occurred';
+    const message = err.message || 'Something went wrong. Please try again later.';
 
     return ApiResponse.error(res, {
         message,
