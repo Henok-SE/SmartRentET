@@ -73,6 +73,24 @@ export async function register(
 }
 
   
+export async function refreshSession(token: string) {
+  const response = await fetch(`${API_URL}/auth/refresh-session`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Session refresh failed");
+  }
+
+  return data;
+}
+
 export async function changePassword(
   userId: number,
   currentPassword: string,

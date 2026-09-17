@@ -24,12 +24,15 @@ import RentalAgreements from "./pages/officer/RentalAgreements";
 import PaymentRecords from "./pages/officer/PaymentRecords";
 import PaymentHistory from "./pages/officer/PaymentHistory";
 import ProtectedRoute from "./components/ProtectedRoute";
+import SessionMonitor from "./components/SessionMonitor";
 
 
 
 function App() {
   return (
-    <Routes>
+    <>
+      <SessionMonitor />
+      <Routes>
 
       {/* =========================
           AUTHENTICATION
@@ -180,7 +183,8 @@ function App() {
         }
       />
 
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

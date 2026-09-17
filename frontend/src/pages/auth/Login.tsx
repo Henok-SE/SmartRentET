@@ -70,6 +70,7 @@ function Login() {
       }
 
       localStorage.setItem("token", token);
+      localStorage.setItem("sessionExpiry", String(Date.now() + 60 * 60 * 1000));
       localStorage.setItem(
         "user",
         JSON.stringify(user)
@@ -224,6 +225,7 @@ const handleOtpPaste = (
       }
 
       localStorage.setItem("token", token);
+      localStorage.setItem("sessionExpiry", String(Date.now() + 60 * 60 * 1000));
       localStorage.setItem(
         "user",
         JSON.stringify(user)
