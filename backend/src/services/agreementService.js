@@ -2,6 +2,7 @@ const prisma = require('../config/db');
 const afroSMSService = require('./afroSMSService');
 const bcrypt = require('bcryptjs');
 const approvalService = require('./approvalService');
+const starpayService = require('./starpayService');
 const { generateReferenceNumber } = require('../utils/agreementReferenceNumber');
 const { agreementDTO, generateUsername, generateSecurePassword } = require('../utils/userUtils');
 
@@ -563,11 +564,19 @@ const resendAgreementVerificationCode = async (agreementId, party) => {
   };
 };
 
-const processServiceFeePayment = async (agreementId, phone, pin) => {
+const processServiceFeePayment = async (agreementId, phone, pin = null) => {
   console.log('=== PROCESS SERVICE FEE PAYMENT ===');
 
   const serviceFee = await prisma.serviceFeePayment.findUnique({
-    where: { agreementId: agreementId }
+    where: { agreementId: agreementId },
+    include: {
+      agreement: {
+        include: {
+          tenant: { include: { user: true } },
+          landlord: { include: { user: true } }
+        }
+      }
+    }
   });
 
   if (!serviceFee) {
@@ -578,57 +587,51 @@ const processServiceFeePayment = async (agreementId, phone, pin) => {
     throw new Error('Service fee already paid');
   }
 
-  const isValidSandboxPin = /^\d{6}$/.test(String(pin));
-
-  if (!isValidSandboxPin) {
-    const attempts = await prisma.auditLog.count({
-      where: {
-        entityType: 'SERVICE_FEE_PAYMENT',
-        entityId: agreementId,
-        action: 'UPDATE',
-        description: { startsWith: 'Invalid PIN attempt' }
-      }
-    });
-
-    const attemptCount = attempts + 1;
-
-    await prisma.auditLog.create({
-      data: {
-        userId: null,
-        action: 'UPDATE',
-        entityType: 'SERVICE_FEE_PAYMENT',
-        entityId: agreementId,
-        description: `Invalid PIN attempt ${attemptCount}`
-      }
-    });
-
-    if (attemptCount >= MAX_PAYMENT_ATTEMPTS) {
-      await rollbackAgreement(agreementId, `Too many failed PIN attempts (${attemptCount})`);
-      throw new Error('Too many failed PIN attempts. Agreement cancelled.');
-    }
-
-    throw new Error(`Invalid PIN. Must be 6 digits. ${MAX_PAYMENT_ATTEMPTS - attemptCount} attempts remaining.`);
+  if (serviceFee.status === 'INITIATED') {
+    throw new Error('A StarPay service-fee request is already in progress for this agreement.');
   }
+
+  const tenantPhone = phone || serviceFee.agreement.tenant?.user?.phone;
+  if (!tenantPhone) {
+    throw new Error('Tenant phone number is required to initiate the StarPay service-fee USSD push.');
+  }
+
+  const tenantName = [
+    serviceFee.agreement.tenant?.user?.firstName,
+    serviceFee.agreement.tenant?.user?.lastName
+  ].filter(Boolean).join(' ') || 'SmartRent Tenant';
+
+  const providerResult = await starpayService.initiatePayment({
+    paymentId: `SERVICE-FEE-${agreementId}`,
+    amount: Number(serviceFee.amount || 50),
+    customerName: tenantName,
+    customerPhoneNumber: tenantPhone,
+    referenceNumber: serviceFee.agreement.referenceNumber,
+    description: `SmartRent service fee for ${serviceFee.agreement.referenceNumber}`,
+    callbackUrl: process.env.STARPAY_CALLBACK_URL,
+    redirectUrl: process.env.STARPAY_RETURN_URL
+  });
 
   await prisma.serviceFeePayment.update({
     where: { agreementId: agreementId },
     data: {
-      status: 'PAID',
-      transactionReference: 'TXN-' + Date.now(),
-      externalRequestId: 'REQ-' + Date.now(),
+      status: 'INITIATED',
+      provider: 'STARPAY',
+      paymentMethod: 'MOBILE_MONEY',
+      transactionReference: providerResult.transactionReference,
+      externalRequestId: providerResult.raw?.request_id || providerResult.raw?.order_id || `SERVICE-FEE-${agreementId}`,
       initiatedAt: new Date(),
-      paidAt: new Date()
+      failureReason: null
     }
-  });
-
-  await prisma.rentalAgreement.update({
-    where: { agreementId: agreementId },
-    data: { status: 'APPROVED' }
   });
 
   return {
     success: true,
-    message: '50 Birr service fee paid successfully.'
+    message: 'StarPay USSD payment request sent to the tenant.',
+    provider: 'STARPAY',
+    transactionReference: providerResult.transactionReference,
+    checkoutUrl: providerResult.checkoutUrl,
+    status: 'INITIATED'
   };
 };
 

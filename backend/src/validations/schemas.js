@@ -199,7 +199,7 @@ const resendAgreementCodeSchema = Joi.object({
 const paymentSchema = Joi.object({
   agreementId: Joi.string().required().uuid().messages(baseMessages),
   phone: phoneSchema.required(),
-  pin: Joi.string().required().length(4).pattern(/^\d{4}$/).messages({
+  pin: Joi.string().optional().length(4).pattern(/^\d{4}$/).messages({
     'string.empty': 'PIN is required.',
     'string.length': 'PIN must be exactly 4 digits.',
     'string.pattern.base': 'PIN must contain only numbers.'
