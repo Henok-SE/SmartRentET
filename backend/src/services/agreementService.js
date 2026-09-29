@@ -6,7 +6,6 @@ const { generateReferenceNumber } = require('../utils/agreementReferenceNumber')
 const { agreementDTO, generateUsername, generateSecurePassword } = require('../utils/userUtils');
 
 const MAX_VERIFICATION_ATTEMPTS = 3;
-const MAX_PAYMENT_ATTEMPTS = 3;
 
 // ============================================
 // VALIDATE NATIONAL ID
@@ -506,14 +505,9 @@ const verifyAgreementCode = async (agreementId, phone, code) => {
       include: { tenant: { include: { user: true } } }
     });
 
-    await afroSMSService.sendUSSD50BirrPayment(
-      agreement.tenant.user.phone,
-      agreement.agreementId
-    );
-
     return {
       success: true,
-      message: 'Both parties verified. Service fee payment request sent to tenant.'
+      message: 'Both parties verified. The 50 ETB demo service fee is ready for recording with test PIN 1234.'
     };
   }
 
@@ -567,7 +561,15 @@ const processServiceFeePayment = async (agreementId, phone, pin) => {
   console.log('=== PROCESS SERVICE FEE PAYMENT ===');
 
   const serviceFee = await prisma.serviceFeePayment.findUnique({
-    where: { agreementId: agreementId }
+    where: { agreementId: agreementId },
+    include: {
+      agreement: {
+        include: {
+          tenant: { include: { user: true } },
+          landlord: { include: { user: true } }
+        }
+      }
+    }
   });
 
   if (!serviceFee) {
@@ -578,57 +580,42 @@ const processServiceFeePayment = async (agreementId, phone, pin) => {
     throw new Error('Service fee already paid');
   }
 
-  const isValidSandboxPin = /^\d{6}$/.test(String(pin));
-
-  if (!isValidSandboxPin) {
-    const attempts = await prisma.auditLog.count({
-      where: {
-        entityType: 'SERVICE_FEE_PAYMENT',
-        entityId: agreementId,
-        action: 'UPDATE',
-        description: { startsWith: 'Invalid PIN attempt' }
-      }
-    });
-
-    const attemptCount = attempts + 1;
-
-    await prisma.auditLog.create({
-      data: {
-        userId: null,
-        action: 'UPDATE',
-        entityType: 'SERVICE_FEE_PAYMENT',
-        entityId: agreementId,
-        description: `Invalid PIN attempt ${attemptCount}`
-      }
-    });
-
-    if (attemptCount >= MAX_PAYMENT_ATTEMPTS) {
-      await rollbackAgreement(agreementId, `Too many failed PIN attempts (${attemptCount})`);
-      throw new Error('Too many failed PIN attempts. Agreement cancelled.');
-    }
-
-    throw new Error(`Invalid PIN. Must be 6 digits. ${MAX_PAYMENT_ATTEMPTS - attemptCount} attempts remaining.`);
+  if (!['PENDING', 'INITIATED', 'FAILED'].includes(serviceFee.status)) {
+    throw new Error(`Service fee cannot be paid while its status is ${serviceFee.status}.`);
   }
+
+  if (String(pin || '') !== '1234') {
+    throw new Error('Invalid test PIN. Enter 1234 to record the demo service-fee payment.');
+  }
+
+  const now = new Date();
+  const transactionReference = `DEMO-SERVICE-FEE-${Date.now()}`;
 
   await prisma.serviceFeePayment.update({
     where: { agreementId: agreementId },
     data: {
       status: 'PAID',
-      transactionReference: 'TXN-' + Date.now(),
-      externalRequestId: 'REQ-' + Date.now(),
-      initiatedAt: new Date(),
-      paidAt: new Date()
+      provider: 'NONE',
+      paymentMethod: 'MOBILE_MONEY',
+      transactionReference,
+      externalRequestId: transactionReference,
+      initiatedAt: now,
+      paidAt: now,
+      failureReason: null
     }
   });
 
   await prisma.rentalAgreement.update({
-    where: { agreementId: agreementId },
+    where: { agreementId },
     data: { status: 'APPROVED' }
   });
 
   return {
     success: true,
-    message: '50 Birr service fee paid successfully.'
+    message: 'Demo service-fee payment recorded with the test PIN. No real USSD or payment was initiated.',
+    provider: 'NONE',
+    transactionReference,
+    status: 'PAID'
   };
 };
 

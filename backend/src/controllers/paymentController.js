@@ -1,3 +1,4 @@
+const prisma = require('../config/db');
 const paymentService = require('../services/paymentServices');
 const starpayService = require('../services/starpayService');
 const ApiResponse = require('../utils/apiResponse');
@@ -197,10 +198,45 @@ const handleStarPayWebhook = async (req, res, next) => {
         const payload = req.body || {};
         const transactionReference = payload.order_id || payload.orderId || payload.transactionId || payload.data?.order_id;
         const paymentId = payload.metadata?.paymentId || payload.paymentId || payload.data?.metadata?.paymentId;
+        const serviceFeePaymentId = payload.metadata?.serviceFeePaymentId || payload.serviceFeePaymentId || payload.data?.metadata?.serviceFeePaymentId;
+        const agreementId = payload.metadata?.agreementId || payload.agreementId || payload.data?.metadata?.agreementId;
         const rawStatus = payload.status || payload.order_status || payload.data?.status || 'SUCCESS';
 
         const isSuccess = ['PAID', 'SUCCESS', 'COMPLETED', 'APPROVED'].includes(String(rawStatus).toUpperCase());
         const status = isSuccess ? 'SUCCESS' : 'FAILED';
+
+        if (serviceFeePaymentId || agreementId) {
+            const fee = serviceFeePaymentId
+                ? await prisma.serviceFeePayment.findUnique({ where: { serviceFeePaymentId } })
+                : await prisma.serviceFeePayment.findFirst({ where: { agreementId } });
+
+            if (!fee) {
+                throw new Error('Service fee payment record not found for StarPay callback');
+            }
+
+            const updated = await prisma.serviceFeePayment.update({
+                where: { serviceFeePaymentId: fee.serviceFeePaymentId },
+                data: {
+                    status: isSuccess ? 'PAID' : 'FAILED',
+                    transactionReference: transactionReference || fee.transactionReference,
+                    paidAt: isSuccess ? new Date() : null,
+                    failureReason: isSuccess ? null : `StarPay callback failed: ${rawStatus}`
+                }
+            });
+
+            if (isSuccess) {
+                await prisma.rentalAgreement.update({
+                    where: { agreementId: updated.agreementId },
+                    data: { status: 'APPROVED' }
+                });
+            }
+
+            return ApiResponse.success(res, {
+                data: updated,
+                isDuplicate: false,
+                message: isSuccess ? 'Service fee paid successfully via StarPay' : 'Service fee payment status updated via StarPay callback'
+            });
+        }
 
         const result = await paymentService.handleProviderWebhook({
             paymentId,
