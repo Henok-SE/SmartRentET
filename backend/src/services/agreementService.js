@@ -2,12 +2,10 @@ const prisma = require('../config/db');
 const afroSMSService = require('./afroSMSService');
 const bcrypt = require('bcryptjs');
 const approvalService = require('./approvalService');
-const starpayService = require('./starpayService');
 const { generateReferenceNumber } = require('../utils/agreementReferenceNumber');
 const { agreementDTO, generateUsername, generateSecurePassword } = require('../utils/userUtils');
 
 const MAX_VERIFICATION_ATTEMPTS = 3;
-const MAX_PAYMENT_ATTEMPTS = 3;
 
 // ============================================
 // VALIDATE NATIONAL ID
@@ -507,14 +505,9 @@ const verifyAgreementCode = async (agreementId, phone, code) => {
       include: { tenant: { include: { user: true } } }
     });
 
-    await afroSMSService.sendUSSD50BirrPayment(
-      agreement.tenant.user.phone,
-      agreement.agreementId
-    );
-
     return {
       success: true,
-      message: 'Both parties verified. Service fee payment request sent to tenant.'
+      message: 'Both parties verified. The 50 ETB demo service fee is ready for recording with test PIN 1234.'
     };
   }
 
@@ -564,7 +557,7 @@ const resendAgreementVerificationCode = async (agreementId, party) => {
   };
 };
 
-const processServiceFeePayment = async (agreementId, phone, pin = null) => {
+const processServiceFeePayment = async (agreementId, phone, pin) => {
   console.log('=== PROCESS SERVICE FEE PAYMENT ===');
 
   const serviceFee = await prisma.serviceFeePayment.findUnique({
@@ -587,51 +580,42 @@ const processServiceFeePayment = async (agreementId, phone, pin = null) => {
     throw new Error('Service fee already paid');
   }
 
-  if (serviceFee.status === 'INITIATED') {
-    throw new Error('A StarPay service-fee request is already in progress for this agreement.');
+  if (!['PENDING', 'INITIATED', 'FAILED'].includes(serviceFee.status)) {
+    throw new Error(`Service fee cannot be paid while its status is ${serviceFee.status}.`);
   }
 
-  const tenantPhone = phone || serviceFee.agreement.tenant?.user?.phone;
-  if (!tenantPhone) {
-    throw new Error('Tenant phone number is required to initiate the StarPay service-fee USSD push.');
+  if (String(pin || '') !== '1234') {
+    throw new Error('Invalid test PIN. Enter 1234 to record the demo service-fee payment.');
   }
 
-  const tenantName = [
-    serviceFee.agreement.tenant?.user?.firstName,
-    serviceFee.agreement.tenant?.user?.lastName
-  ].filter(Boolean).join(' ') || 'SmartRent Tenant';
-
-  const providerResult = await starpayService.initiatePayment({
-    paymentId: `SERVICE-FEE-${agreementId}`,
-    amount: Number(serviceFee.amount || 50),
-    customerName: tenantName,
-    customerPhoneNumber: tenantPhone,
-    referenceNumber: serviceFee.agreement.referenceNumber,
-    description: `SmartRent service fee for ${serviceFee.agreement.referenceNumber}`,
-    callbackUrl: process.env.STARPAY_CALLBACK_URL,
-    redirectUrl: process.env.STARPAY_RETURN_URL
-  });
+  const now = new Date();
+  const transactionReference = `DEMO-SERVICE-FEE-${Date.now()}`;
 
   await prisma.serviceFeePayment.update({
     where: { agreementId: agreementId },
     data: {
-      status: 'INITIATED',
-      provider: 'STARPAY',
+      status: 'PAID',
+      provider: 'NONE',
       paymentMethod: 'MOBILE_MONEY',
-      transactionReference: providerResult.transactionReference,
-      externalRequestId: providerResult.raw?.request_id || providerResult.raw?.order_id || `SERVICE-FEE-${agreementId}`,
-      initiatedAt: new Date(),
+      transactionReference,
+      externalRequestId: transactionReference,
+      initiatedAt: now,
+      paidAt: now,
       failureReason: null
     }
   });
 
+  await prisma.rentalAgreement.update({
+    where: { agreementId },
+    data: { status: 'APPROVED' }
+  });
+
   return {
     success: true,
-    message: 'StarPay USSD payment request sent to the tenant.',
-    provider: 'STARPAY',
-    transactionReference: providerResult.transactionReference,
-    checkoutUrl: providerResult.checkoutUrl,
-    status: 'INITIATED'
+    message: 'Demo service-fee payment recorded with the test PIN. No real USSD or payment was initiated.',
+    provider: 'NONE',
+    transactionReference,
+    status: 'PAID'
   };
 };
 
